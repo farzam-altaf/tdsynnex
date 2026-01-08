@@ -2,7 +2,7 @@
 
 import { supabase } from "@/lib/supabase/client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -21,6 +21,7 @@ export default function Page() {
   const [submitted, setSubmitted] = useState(false);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoggedIn, setIsLoggedIn] = useState(false)
 
 
@@ -87,7 +88,6 @@ export default function Page() {
 
   const signin = async (e: React.FormEvent) => {
     e.preventDefault();
-
     setSubmitted(true);
 
     if (!validateForm()) {
@@ -99,17 +99,46 @@ export default function Page() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
-      toast.error(error.message, {
-        style: { background: "black", color: "white" },
-      });
+      if (error.message === "Email not confirmed") {
+        toast.error(
+          "Your email address has not been confirmed yet. Please check your inbox and confirm your email to continue.",
+          { style: { background: "black", color: "white" } }
+        );
+      } else {
+        toast.error(error.message, {
+          style: { background: "black", color: "white" },
+        });
+      }
       setLoading(false);
       return;
+    }
+
+    // ✅ USER LOGIN SUCCESS
+    const userId = data.user?.id;
+
+    if (userId) {
+      // 1️⃣ Get previous login_count
+      const { data: userRow, error: fetchError } = await supabase
+        .from("users")
+        .select("login_count")
+        .eq("userId", userId)
+        .single();
+
+      if (!fetchError) {
+        const previousCount = parseInt(userRow?.login_count || "0", 10);
+
+        // 2️⃣ Update login_at & login_count
+        await supabase.from("users").update({
+          login_at: new Date().toISOString().split("T")[0], // today
+          login_count: String(previousCount + 1), // varchar +1
+        }).eq("userId", userId);
+      }
     }
 
     toast.success("Login successful!", {
@@ -118,8 +147,8 @@ export default function Page() {
 
     setEmail("");
     setPassword("");
-
-    router.push("/");
+    const redirectTo = searchParams.get("redirect_to");
+    router.push(redirectTo ? `/${redirectTo}` : "/");
   };
 
 
@@ -188,7 +217,7 @@ export default function Page() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full rounded-md bg-[#3ba1da] px-6 py-3 font-semibold text-white transition-colors hover:bg-[#41abd6] disabled:opacity-50"
+                  className="w-full rounded-md bg-[#3ba1da] px-6 py-3 cursor-pointer font-semibold text-white transition-colors hover:bg-[#41abd6] disabled:opacity-50"
                 >
                   {loading ? "Please wait..." : "Login"}
                 </button>

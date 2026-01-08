@@ -1,160 +1,72 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { Filter, X, ChevronDown, ChevronUp } from "lucide-react";
 import { Drawer } from "antd";
 import { FaFilter } from "react-icons/fa";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-// Sample product data - replace with API data
-const PRODUCTS = [
-    {
-        id: 1,
-        name: "Surface Pro 11",
-        description: "Surface Pro 11 – Snapdragon X Plus – 16GB – 256GB SSD – 12″ w/Type Cover",
-        sku: "#EP2-33681",
-        category: "2in1s",
-        processor: "Snapdragon X Plus",
-        screenSize: '12"',
-        memory: "24GB",
-        storage: "1TB",
-        copilotPC: true,
-        fiveG: true,
-        image: "/pro-laptop-1.png",
-    },
-    {
-        id: 2,
-        name: "Surface Laptop 7",
-        description: "Surface Pro 11 – Snapdragon X Plus – 16GB – 256GB SSD – 12″ w/Type Cover",
-        sku: "#EP2-33682",
-        category: "Notebooks",
-        processor: "Snapdragon X Elite",
-        screenSize: '13.8"',
-        memory: "32GB",
-        storage: "1TB",
-        copilotPC: true,
-        fiveG: true,
-        image: "/pro-laptop-1.png",
-    },
-    {
-        id: 3,
-        name: "Surface Pro Keyboard",
-        description: "Surface Pro 11 – Snapdragon X Plus – 16GB – 256GB SSD – 12″ w/Type Cover",
-        sku: "#EP2-33683",
-        category: "Accessories",
-        processor: "N/A",
-        screenSize: "N/A",
-        memory: "N/A",
-        storage: "N/A",
-        copilotPC: false,
-        fiveG: false,
-        image: "/pro-laptop-1.png",
-    },
-    {
-        id: 4,
-        name: "Surface Laptop Studio 2",
-        description: "Surface Pro 11 – Snapdragon X Plus – 16GB – 256GB SSD – 12″ w/Type Cover",
-        sku: "#EP2-33684",
-        category: "Notebooks",
-        processor: "Intel® Core™ Ultra 7",
-        screenSize: '14.4"',
-        memory: "32GB",
-        storage: "2TB",
-        copilotPC: true,
-        fiveG: false,
-        image: "/pro-laptop-1.png",
-    },
-    {
-        id: 5,
-        name: "Surface Dock 2",
-        description: "Surface Pro 11 – Snapdragon X Plus – 16GB – 256GB SSD – 12″ w/Type Cover",
-        sku: "#EP2-33685",
-        category: "Accessories",
-        processor: "N/A",
-        screenSize: "N/A",
-        memory: "N/A",
-        storage: "N/A",
-        copilotPC: false,
-        fiveG: false,
-        image: "/pro-laptop-1.png",
-    },
-    {
-        id: 6,
-        name: "Surface Pro 9",
-        description: "Surface Pro 11 – Snapdragon X Plus – 16GB – 256GB SSD – 12″ w/Type Cover",
-        sku: "#EP2-33686",
-        category: "2in1s",
-        processor: "Intel® Core™ Ultra 5",
-        screenSize: '13"',
-        memory: "16GB",
-        storage: "256GB",
-        copilotPC: true,
-        fiveG: true,
-        image: "/pro-laptop-1.png",
-    },
-    {
-        id: 7,
-        name: "Surface Slim Pen 2",
-        description: "Surface Pro 11 – Snapdragon X Plus – 16GB – 256GB SSD – 12″ w/Type Cover",
-        sku: "#EP2-33687",
-        category: "Accessories",
-        processor: "N/A",
-        screenSize: "N/A",
-        memory: "N/A",
-        storage: "N/A",
-        copilotPC: false,
-        fiveG: false,
-        image: "/pro-laptop-1.png",
-    },
-    {
-        id: 8,
-        name: "Surface Laptop Go 3",
-        description: "Surface Pro 11 – Snapdragon X Plus – 16GB – 256GB SSD – 12″ w/Type Cover",
-        sku: "#EP2-33689",
-        category: "Notebooks",
-        processor: "Intel® Core™ Ultra 5",
-        screenSize: '12.4"',
-        memory: "8GB",
-        storage: "256GB",
-        copilotPC: true,
-        fiveG: false,
-        image: "/pro-laptop-1.png",
-    },
-    {
-        id: 9,
-        name: "Surface Headphones 2+",
-        description: "Surface Pro 11 – Snapdragon X Plus – 16GB – 256GB SSD – 12″ w/Type Cover",
-        sku: "#EP2-33690",
-        category: "Accessories",
-        processor: "N/A",
-        screenSize: "N/A",
-        memory: "N/A",
-        storage: "N/A",
-        copilotPC: false,
-        fiveG: false,
-        image: "/pro-laptop-1.png",
-    },
-];
+// Filter types to fetch from database
+const FILTER_TYPES = ["form_factor", "processor", "screen_size", "memory", "storage"];
 
-// Filter options
-const FILTERS = {
-    formFactor: ["2in1s", "Notebooks", "Accessories"],
-    processor: ["Snapdragon X Elite", "Snapdragon X Plus", "Intel® Core™ Ultra 7", "Intel® Core™ Ultra 5"],
-    screenSize: ['12"', '13.8"', '13"', '15"'],
-    memory: ["24GB", "16GB", "32GB", "8GB"],
-    storage: ["1TB", "256GB", "512GB", "2TB"],
+// Hardcoded filters (not from database)
+const HARDCODED_FILTERS = {
     copilotPC: ["Yes"],
     fiveGEnabled: ["Yes"],
 };
 
 // Get all filter keys
-const FILTER_KEYS = Object.keys(FILTERS);
+const HARDCODED_FILTER_KEYS = Object.keys(HARDCODED_FILTERS);
+
+// Interface for product from database
+interface Product {
+    id: string;
+    product_name: string;
+    slug: string;
+    sku: string;
+    form_factor: string; // This is the ID, not the title
+    processor: string; // This is the ID, not the title
+    memory: string; // This is the ID, not the title
+    storage: string; // This is the ID, not the title
+    screen_size: string; // This is the ID, not the title
+    technologies: string;
+    inventory_type: string;
+    total_inventory: number;
+    stock_quantity: number;
+    date: string;
+    copilot: boolean;
+    five_g_Enabled: boolean;
+    post_status: string;
+    description: string;
+    isBundle: boolean;
+    isInStock: boolean;
+    thumbnail: string;
+    gallery: string[];
+    user_id: string;
+    created_at: string;
+    // We'll map these to titles from filters
+    formFactorTitle?: string;
+    processorTitle?: string;
+    memoryTitle?: string;
+    storageTitle?: string;
+    screenSizeTitle?: string;
+}
 
 export default function Page() {
-    const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
-    const router = useRouter()
+    const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+    const router = useRouter();
+
+    // State for database filters
+    const [databaseFilters, setDatabaseFilters] = useState<Record<string, string[]>>({});
+    // State for filter mappings (ID to Title)
+    const [filterMappings, setFilterMappings] = useState<Record<string, Record<string, string>>>({});
+    // State for products
+    const [products, setProducts] = useState<Product[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Combined filters state
     const [filters, setFilters] = useState<Record<string, string[]>>({
         formFactor: [],
         processor: [],
@@ -167,64 +79,142 @@ export default function Page() {
 
     const [showFilters, setShowFilters] = useState(false);
     // Set all filters to be open by default
-    const [openFilters, setOpenFilters] = useState<string[]>(FILTER_KEYS);
+    const [openFilters, setOpenFilters] = useState<string[]>([]);
 
     useEffect(() => {
         const checkAuth = async () => {
-            const { data } = await supabase.auth.getSession()
+            const { data } = await supabase.auth.getSession();
 
             if (!data.session) {
-                router.replace('/login/?redirect_to=product-category/alldevices')
-                return
+                router.replace('/login/?redirect_to=product-category/alldevices');
+                return;
             }
 
-            setIsLoggedIn(true)
-        }
+            setIsLoggedIn(true);
+        };
 
-        checkAuth()
+        checkAuth();
 
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
             if (!session) {
-                router.replace('/login')
+                router.replace('/login');
             } else {
-                setIsLoggedIn(true)
+                setIsLoggedIn(true);
             }
-        })
+        });
 
-        return () => subscription.unsubscribe()
-    }, [router])
+        // Fetch data from database
+        fetchDataFromDatabase();
+
+        return () => subscription.unsubscribe();
+    }, [router]);
+
+    // Fetch all data from database
+    const fetchDataFromDatabase = async () => {
+        try {
+            setIsLoading(true);
+
+            // 1. Fetch filters from database
+            const allFilters: Record<string, string[]> = {};
+            const mappings: Record<string, Record<string, string>> = {};
+
+            // Fetch each filter type
+            for (const type of FILTER_TYPES) {
+                const { data, error } = await supabase
+                    .from("filters")
+                    .select("id, title")
+                    .eq("type", type)
+                    .order("title");
+
+                if (error) {
+                    console.error(`Error fetching ${type} filters:`, error);
+                    allFilters[type] = [];
+                    mappings[type] = {};
+                } else {
+                    // Map database type names to frontend names
+                    const frontendKey = type === "form_factor" ? "formFactor" :
+                        type === "screen_size" ? "screenSize" : type;
+
+                    // Store titles for display
+                    allFilters[frontendKey] = data?.map(item => item.title) || [];
+
+                    // Create ID to title mapping for this filter type
+                    const idToTitle: Record<string, string> = {};
+                    data?.forEach(item => {
+                        idToTitle[item.id] = item.title;
+                    });
+
+                    mappings[frontendKey] = idToTitle;
+                }
+            }
+
+            setDatabaseFilters(allFilters);
+            setFilterMappings(mappings);
+
+            // 2. Fetch products from database
+            const { data: productsData, error: productsError } = await supabase
+                .from("products")
+                .select("*")
+                .order("date", { ascending: false });
+
+            if (productsError) {
+                console.error("Error fetching products:", productsError);
+                setProducts([]);
+            } else if (productsData) {
+                // Now that mappings are set, we need to map products with the correct mappings
+                // Since state updates are async, we need to use the local mappings variable
+                const productsWithTitles = productsData.map(product => ({
+                    ...product,
+                    // Map filter IDs to titles using the local mappings variable
+                    formFactorTitle: mappings.formFactor?.[product.form_factor] || product.form_factor,
+                    processorTitle: mappings.processor?.[product.processor] || product.processor,
+                    memoryTitle: mappings.memory?.[product.memory] || product.memory,
+                    storageTitle: mappings.storage?.[product.storage] || product.storage,
+                    screenSizeTitle: mappings.screenSize?.[product.screen_size] || product.screen_size,
+                }));
+
+                setProducts(productsWithTitles);
+            }
+
+            // Initialize open filters with all available keys
+            const allFilterKeys = [...Object.keys(allFilters), ...HARDCODED_FILTER_KEYS];
+            setOpenFilters(allFilterKeys);
+
+        } catch (error) {
+            console.error("Error fetching data:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     // Toggle individual filter open/close state
     const toggleFilter = (filterType: string) => {
-        setOpenFilters(prev => 
+        setOpenFilters(prev =>
             prev.includes(filterType)
                 ? prev.filter(f => f !== filterType)
                 : [...prev, filterType]
         );
     };
 
-    // Optional: prevent UI flicker
-    if (isLoggedIn === null) return null
-
     // Filter products based on selected filters
-    const filteredProducts = PRODUCTS.filter(product => {
+    const filteredProducts = products.filter(product => {
         return Object.entries(filters).every(([key, values]) => {
             if (values.length === 0) return true;
 
             // Map filter keys to product property names
-            const keyMapping: Record<string, keyof typeof product> = {
-                formFactor: "category",
-                fiveGEnabled: "fiveG",
-                copilotPC: "copilotPC",
-                processor: "processor",
-                screenSize: "screenSize",
-                memory: "memory",
-                storage: "storage"
+            const keyMapping: Record<string, keyof Product> = {
+                formFactor: "formFactorTitle",
+                fiveGEnabled: "five_g_Enabled",
+                copilotPC: "copilot",
+                processor: "processorTitle",
+                screenSize: "screenSizeTitle",
+                memory: "memoryTitle",
+                storage: "storageTitle"
             };
 
-            const productKey = keyMapping[key] || key as keyof typeof product;
+            const productKey = keyMapping[key] || key as keyof Product;
             const productValue = product[productKey];
 
             // Handle undefined/null values
@@ -237,10 +227,35 @@ export default function Page() {
                 return values.includes("Yes") ? productValue === true : true;
             }
 
-            // Handle string values
+            // Handle string values (for filter titles)
             return values.includes(productValue.toString());
         });
     });
+
+    // Debug function to see what's happening - MUST BE BEFORE ANY CONDITIONAL RETURNS
+    useEffect(() => {
+        console.log("Filters state:", filters);
+        console.log("Products count:", products.length);
+        console.log("Filtered products count:", filteredProducts.length);
+
+        // Log a sample product to see its titles
+        if (products.length > 0) {
+            console.log("Sample product:", {
+                id: products[0].id,
+                name: products[0].product_name,
+                formFactorTitle: products[0].formFactorTitle,
+                processorTitle: products[0].processorTitle,
+                memoryTitle: products[0].memoryTitle,
+                storageTitle: products[0].storageTitle,
+                screenSizeTitle: products[0].screenSizeTitle,
+                copilot: products[0].copilot,
+                five_g_Enabled: products[0].five_g_Enabled,
+            });
+        }
+
+        // Log available filter options
+        console.log("Available filter options:", databaseFilters);
+    }, [filters, products, filteredProducts, databaseFilters]);
 
     const handleFilterChange = (filterType: string, value: string) => {
         setFilters(prev => {
@@ -269,37 +284,96 @@ export default function Page() {
         return Object.values(filters).reduce((total, values) => total + values.length, 0);
     };
 
-    // Helper component for filter section
-    const FilterSection = ({ filterKey, title }: { filterKey: string, title: string }) => (
-        <div className="border-b pb-4">
-            <button
-                onClick={() => toggleFilter(filterKey)}
-                className="flex items-center justify-between w-full text-left font-semibold text-gray-800 hover:text-[#3ba1da]"
-            >
-                {title}
-                {openFilters.includes(filterKey) ? (
-                    <ChevronUp className="h-4 w-4" />
-                ) : (
-                    <ChevronDown className="h-4 w-4" />
+    // Helper component for database filter section
+    const DatabaseFilterSection = ({ filterKey, title }: { filterKey: string, title: string }) => {
+        const filterOptions = databaseFilters[filterKey] || [];
+
+        if (filterOptions.length === 0) return null;
+
+        return (
+            <div className="border-b pb-4">
+                <button
+                    onClick={() => toggleFilter(filterKey)}
+                    className="flex items-center justify-between w-full text-left font-semibold text-gray-800 hover:text-[#3ba1da]"
+                >
+                    {title}
+                    {openFilters.includes(filterKey) ? (
+                        <ChevronUp className="h-4 w-4" />
+                    ) : (
+                        <ChevronDown className="h-4 w-4" />
+                    )}
+                </button>
+                {openFilters.includes(filterKey) && (
+                    <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
+                        {filterOptions.map(item => (
+                            <label key={item} className="flex items-center space-x-3 cursor-pointer py-1">
+                                <input
+                                    type="checkbox"
+                                    checked={filters[filterKey]?.includes(item) || false}
+                                    onChange={() => handleFilterChange(filterKey, item)}
+                                    className="h-4 w-4 text-[#3ba1da] rounded border-gray-300 focus:ring-[#3ba1da]"
+                                />
+                                <span className="text-gray-700 text-sm">{item}</span>
+                            </label>
+                        ))}
+                    </div>
                 )}
-            </button>
-            {openFilters.includes(filterKey) && (
-                <div className="mt-3 space-y-2">
-                    {FILTERS[filterKey as keyof typeof FILTERS].map(item => (
-                        <label key={item} className="flex items-center space-x-3 cursor-pointer py-1">
-                            <input
-                                type="checkbox"
-                                checked={filters[filterKey].includes(item)}
-                                onChange={() => handleFilterChange(filterKey, item)}
-                                className="h-4 w-4 text-[#3ba1da] rounded border-gray-300 focus:ring-[#3ba1da]"
-                            />
-                            <span className="text-gray-700 text-sm">{item}</span>
-                        </label>
-                    ))}
+            </div>
+        );
+    };
+
+    // Helper component for hardcoded filter section
+    const HardcodedFilterSection = ({ filterKey, title }: { filterKey: string, title: string }) => {
+        const filterOptions = HARDCODED_FILTERS[filterKey as keyof typeof HARDCODED_FILTERS] || [];
+
+        if (filterOptions.length === 0) return null;
+
+        return (
+            <div className="border-b pb-4">
+                <button
+                    onClick={() => toggleFilter(filterKey)}
+                    className="flex items-center justify-between w-full text-left font-semibold text-gray-800 hover:text-[#3ba1da]"
+                >
+                    {title}
+                    {openFilters.includes(filterKey) ? (
+                        <ChevronUp className="h-4 w-4" />
+                    ) : (
+                        <ChevronDown className="h-4 w-4" />
+                    )}
+                </button>
+                {openFilters.includes(filterKey) && (
+                    <div className="mt-3 space-y-2">
+                        {filterOptions.map(item => (
+                            <label key={item} className="flex items-center space-x-3 cursor-pointer py-1">
+                                <input
+                                    type="checkbox"
+                                    checked={filters[filterKey]?.includes(item) || false}
+                                    onChange={() => handleFilterChange(filterKey, item)}
+                                    className="h-4 w-4 text-[#3ba1da] rounded border-gray-300 focus:ring-[#3ba1da]"
+                                />
+                                <span className="text-gray-700 text-sm">{item}</span>
+                            </label>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // Get all filter keys for rendering
+    const allFilterKeys = [...Object.keys(databaseFilters), ...HARDCODED_FILTER_KEYS];
+
+    // Optional: prevent UI flicker - MUST BE AFTER ALL HOOKS
+    if (isLoggedIn === null || isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3ba1da] mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading...</p>
                 </div>
-            )}
-        </div>
-    );
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen ">
@@ -319,26 +393,28 @@ export default function Page() {
                         </div>
 
                         <div className="space-y-4">
-                            {/* Form Factor */}
-                            <FilterSection filterKey="formFactor" title="Form Factor" />
-                            
-                            {/* Processor */}
-                            <FilterSection filterKey="processor" title="Processor" />
-                            
-                            {/* Screen Size */}
-                            <FilterSection filterKey="screenSize" title="Screen Size" />
-                            
-                            {/* Memory */}
-                            <FilterSection filterKey="memory" title="Memory" />
-                            
-                            {/* Storage */}
-                            <FilterSection filterKey="storage" title="Storage" />
-                            
-                            {/* Copilot + PC */}
-                            <FilterSection filterKey="copilotPC" title="Copilot + PC" />
-                            
-                            {/* 5G Enabled */}
-                            <FilterSection filterKey="fiveGEnabled" title="5G Enabled" />
+                            {/* Database Filters */}
+                            {Object.keys(databaseFilters).map(key => {
+                                const titleMap: Record<string, string> = {
+                                    formFactor: "Form Factor",
+                                    processor: "Processor",
+                                    screenSize: "Screen Size",
+                                    memory: "Memory",
+                                    storage: "Storage"
+                                };
+
+                                return (
+                                    <DatabaseFilterSection
+                                        key={key}
+                                        filterKey={key}
+                                        title={titleMap[key] || key}
+                                    />
+                                );
+                            })}
+
+                            {/* Hardcoded Filters */}
+                            <HardcodedFilterSection filterKey="copilotPC" title="Copilot + PC" />
+                            <HardcodedFilterSection filterKey="fiveGEnabled" title="5G Enabled" />
                         </div>
                     </div>
                 </div>
@@ -349,7 +425,7 @@ export default function Page() {
                     <div className="lg:hidden p-4 flex items-center justify-between gap-3">
                         {/* Mobile Heading */}
                         <div className=""></div>
-                        <h1 className="text-4xl  text-gray-900">
+                        <h1 className="text-4xl text-gray-900">
                             All Devices
                         </h1>
 
@@ -411,51 +487,84 @@ export default function Page() {
                             {filteredProducts.length > 0 ? (
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-10">
                                     {filteredProducts.map(product => (
-                                        <div
-                                            key={product.id}
-                                            className="bg-white border border-gray-300 sm:p-5 p-3 overflow-hidden hover:shadow-md transition-shadow duration-300 group"
-                                        >
-                                            {/* Image */}
-                                            <div className="flex items-center justify-center bg-gray-50 group-hover:bg-gray-100 transition-colors">
-                                                <Image
-                                                    src={product.image}
-                                                    alt={product.name}
-                                                    width={230}
-                                                    height={230}
-                                                    className="object-cover"
-                                                />
-                                            </div>
+                                        <Link href={`/product/${product.slug}`} key={product.id}>
+                                            <div className="bg-white border border-gray-300 sm:p-5 p-3 overflow-hidden hover:shadow-md transition-shadow duration-300 group relative"
+                                            >
+                                                {!product.isInStock && (
+                                                    <div className="absolute top-4 left-0 z-10 flex items-center gap-1 bg-red-500 text-white text-sm font-semibold px-4 py-2 rounded-br-full rounded-tr-full">
+                                                        Out of stock
+                                                    </div>
+                                                )}
+                                                {/* 5G Logo - Top Right Corner */}
+                                                {product.five_g_Enabled && (
+                                                    <div className="absolute top-4 right-3 z-10">
+                                                        <img
+                                                            src="/5g-logo.png"
+                                                            alt="5G Enabled"
+                                                            className="w-10 h-10 object-contain"
+                                                        />
+                                                    </div>
+                                                )}
 
-                                            {/* Product Info */}
-                                            <div className="space-y-2 text-center">
-                                                <p className="text-gray-600 sm:text-md sm:font-semibold sm:text-md text-sm">
-                                                    {product.description}
-                                                </p>
+                                                {/* Image */}
+                                                <div className="flex items-center justify-center bg-gray-50 group-hover:bg-gray-100 transition-colors h-48 relative">
+                                                    {product.thumbnail ? (
+                                                        // Use img tag instead of Image component to avoid Next.js config issues
+                                                        <img
+                                                            src={product.thumbnail}
+                                                            alt={product.product_name}
+                                                            className="object-cover h-full w-full"
+                                                        />
+                                                    ) : (
+                                                        <div className="flex items-center justify-center h-full w-full text-gray-400">
+                                                            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                            </svg>
+                                                        </div>
+                                                    )}
+                                                </div>
 
-                                                <p className="text-gray-500 text-sm py-4">
-                                                    <b>SKU</b> {product.sku}
-                                                </p>
+                                                {/* Product Info */}
+                                                <div className="space-y-2 text-center mt-4">
+                                                    <h3 className="text-gray-800 font-semibold text-md">
+                                                        {product.product_name}
+                                                    </h3>
 
-                                                <div className="flex justify-center pt-2">
-                                                    <button className="px-4 py-1.5 text-xs font-medium text-[#0a4647] border border-[#0a4647] rounded hover:bg-[#0a4647] hover:text-white transition-colors">
-                                                        Add to cart
-                                                    </button>
+                                                    <div className="text-gray-500 text-xs py-2 space-y-1">
+                                                        <p><b>SKU:</b> {product.sku}</p>
+                                                    </div>
+                                                    {product.isInStock ? (
+                                                        <div className="flex justify-center pt-2">
+                                                            <button className="px-6 py-2.5 text-sm font-medium text-[#0a4647] border border-[#0a4647] rounded-sm cursor-pointer hover:bg-[#0a4647] hover:text-white transition-colors">
+                                                                Add to Cart
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex justify-center pt-2">
+                                                            <button className="px-6 py-2.5 text-sm font-medium text-[#4e5050] border border-[#484a4a] rounded-sm cursor-pointer hover:bg-[#c7caca] transition-colors">
+                                                                Read More
+                                                            </button>
+                                                        </div>
+                                                    )}
+
                                                 </div>
                                             </div>
-                                        </div>
+                                        </Link>
                                     ))}
                                 </div>
                             ) : (
                                 <div className="text-center py-12">
                                     <p className="text-gray-600 text-lg">
-                                        No products found matching your filters.
+                                        {products.length === 0 ? "No products found." : "No products found matching your filters."}
                                     </p>
-                                    <button
-                                        onClick={clearFilters}
-                                        className="mt-4 text-[#3ba1da] hover:text-[#41abd6] font-medium"
-                                    >
-                                        Clear all filters
-                                    </button>
+                                    {products.length > 0 && (
+                                        <button
+                                            onClick={clearFilters}
+                                            className="mt-4 text-[#3ba1da] hover:text-[#41abd6] font-medium"
+                                        >
+                                            Clear all filters
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -485,26 +594,28 @@ export default function Page() {
                 className="filter-drawer"
             >
                 <div className="space-y-6">
-                    {/* Form Factor */}
-                    <FilterSection filterKey="formFactor" title="Form Factor" />
-                    
-                    {/* Processor */}
-                    <FilterSection filterKey="processor" title="Processor" />
-                    
-                    {/* Screen Size */}
-                    <FilterSection filterKey="screenSize" title="Screen Size" />
-                    
-                    {/* Memory */}
-                    <FilterSection filterKey="memory" title="Memory" />
-                    
-                    {/* Storage */}
-                    <FilterSection filterKey="storage" title="Storage" />
-                    
-                    {/* Copilot + PC */}
-                    <FilterSection filterKey="copilotPC" title="Copilot + PC" />
-                    
-                    {/* 5G Enabled */}
-                    <FilterSection filterKey="fiveGEnabled" title="5G Enabled" />
+                    {/* Database Filters */}
+                    {Object.keys(databaseFilters).map(key => {
+                        const titleMap: Record<string, string> = {
+                            formFactor: "Form Factor",
+                            processor: "Processor",
+                            screenSize: "Screen Size",
+                            memory: "Memory",
+                            storage: "Storage"
+                        };
+
+                        return (
+                            <DatabaseFilterSection
+                                key={key}
+                                filterKey={key}
+                                title={titleMap[key] || key}
+                            />
+                        );
+                    })}
+
+                    {/* Hardcoded Filters */}
+                    <HardcodedFilterSection filterKey="copilotPC" title="Copilot + PC" />
+                    <HardcodedFilterSection filterKey="fiveGEnabled" title="5G Enabled" />
                 </div>
             </Drawer>
         </div>

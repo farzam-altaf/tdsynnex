@@ -11,6 +11,12 @@ import { CiCircleChevDown, CiUser } from 'react-icons/ci'
 import { IoCartOutline } from 'react-icons/io5'
 import { Badge } from 'antd'
 import { Bell } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+
+
+
+const shopManager = process.env.NEXT_PUBLIC_SHOPMANAGER;
+const admin = process.env.NEXT_PUBLIC_ADMINISTRATOR;
 
 type NavigationItem = { name: string; href: string }
 
@@ -22,7 +28,7 @@ const publicNavigation: NavigationItem[] = [
 
 const authNavigation: NavigationItem[] = [
   { name: 'Report a Win', href: '/wins' },
-  { name: '360Dashboard', href: '/dashboard' },
+  { name: '360Dashboard', href: '/360dashboard' },
 ]
 
 const menuItems = [
@@ -49,6 +55,7 @@ export default function Navbar() {
 
 
   const router = useRouter()
+  const { user, profile, loading } = useAuth();
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -70,9 +77,17 @@ export default function Navbar() {
     return () => subscription.unsubscribe()
   }, [])
 
-  const navigation = isLoggedIn
-    ? [...publicNavigation, ...authNavigation]
-    : publicNavigation
+
+  // Check if user role matches allowed roles
+  const showAuthNavigation =
+    profile && (profile.role === admin || profile.role === shopManager);
+
+  const navigation =
+    !loading && isLoggedIn && showAuthNavigation
+      ? [...publicNavigation, ...authNavigation]
+      : publicNavigation;
+
+
 
   const handleUserMenuMouseEnter = () => {
     if (userMenuTimeoutRef.current) {
@@ -114,7 +129,7 @@ export default function Navbar() {
                   {navigation.map((item) => {
                     const isProducts = item.name === 'Products'
                     const finalHref =
-                      isProducts && !isLoggedIn ? '/login/?redirect_to=products' : item.href
+                      isProducts && !isLoggedIn ? '/login/?redirect_to=product-category/alldevices' : item.href
 
                     const isActive = pathname === finalHref
 

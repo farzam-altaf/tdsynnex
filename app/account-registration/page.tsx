@@ -1,6 +1,7 @@
 "use client";
 
 import { supabase } from "@/lib/supabase/client";
+import { register } from "module";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -112,6 +113,7 @@ export default function Page() {
       }
 
       const userId = authData.user?.id;
+      
       if (!userId) {
         toast.error("Signup failed: No user ID returned.", {
           style: { background: "black", color: "white" }
@@ -119,6 +121,8 @@ export default function Page() {
         setLoading(false);
         return;
       }
+
+      const today = new Date().toISOString().split("T")[0];
 
       // 3️⃣ Insert user details into users table
       const { error: dbError } = await supabase.from("users").insert({
@@ -128,6 +132,9 @@ export default function Page() {
         email,
         role: "subscriber",
         reseller,
+        registered_at: today,
+        login_at: today,
+        login_count: 1,
       });
 
       if (dbError) {
@@ -257,7 +264,7 @@ export default function Page() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-56 rounded-md bg-[#3ba1da] px-6 py-3 font-semibold text-white transition-colors hover:bg-[#41abd6] disabled:opacity-50"
+                  className="w-56 rounded-md bg-[#3ba1da] px-6 py-3 font-semibold cursor-pointer text-white transition-colors hover:bg-[#41abd6] disabled:opacity-50"
                 >
                   {loading ? "Signing up..." : "Sign up"}
                 </button>
