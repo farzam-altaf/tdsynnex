@@ -5,7 +5,7 @@ import { Filter, X, ChevronDown, ChevronUp } from "lucide-react";
 import { Drawer, Skeleton } from "antd";
 import { FaFilter } from "react-icons/fa";
 import { supabase } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/context/AuthContext";
 import { FaPlus } from "react-icons/fa6";
@@ -78,7 +78,7 @@ const ProductsGridSkeleton = () => {
 
     return (
         <div className="w-full lg:max-w-7xl lg:mx-auto lg:px-6">
-            <div className="flex items-center justify-between sm:my-10 my-5">
+            <div className="flex items-center justify-between sm:my-10 my-1">
                 <div className="text-3xl font-semibold">Devices</div>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-10">
@@ -128,6 +128,10 @@ export default function Page() {
     const shopManager = process.env.NEXT_PUBLIC_SHOPMANAGER;
     const superSubscriber = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
     const subscriber = process.env.NEXT_PUBLIC_SUBSCRIBER;
+    const pathname = usePathname();
+
+    // Extract the last part of the path
+    const slug = pathname.split('/').pop() || '';
 
     // State for database filters
     const [databaseFilters, setDatabaseFilters] = useState<Record<string, string[]>>({});
@@ -136,7 +140,8 @@ export default function Page() {
     // State for products
     const [products, setProducts] = useState<Product[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-
+    const searchParams = useSearchParams();
+    const q = searchParams.get("q");
     // Combined filters state
     const [filters, setFilters] = useState<Record<string, string[]>>({
         formFactor: [],
@@ -182,10 +187,92 @@ export default function Page() {
         return () => subscription.unsubscribe();
     }, [router]);
 
+    // Function to fetch products based on slug
+    const fetchProductsBySlug = async (categorySlug: string, mappings: Record<string, Record<string, string>>) => {
+        try {
+            // Decode URL slug if it contains special characters
+            const decodedSlug = decodeURIComponent(categorySlug).toLowerCase();
+            console.log("Searching for products matching slug:", decodedSlug);
+
+            // First, try to find if this slug matches any filter
+            let filterId = null;
+            let filterType = null;
+
+            // Check all filter types to see if slug matches any filter title
+            for (const type of FILTER_TYPES) {
+                const { data: filterData, error: filterError } = await supabase
+                    .from("filters")
+                    .select("id, title")
+                    .eq("type", type)
+                    .ilike("title", `%${decodedSlug}%`); // Case-insensitive search
+
+                if (filterError) {
+                    console.error(`Error checking ${type} filters:`, filterError);
+                    continue;
+                }
+
+                if (filterData && filterData.length > 0) {
+                    console.log(`Found matching filter in ${type}:`, filterData[0]);
+                    filterId = filterData[0].id;
+                    filterType = type;
+                    break;
+                }
+            }
+
+            let productsQuery = supabase
+                .from("products")
+                .select("*")
+                .order("date", { ascending: false });
+
+            // If we found a matching filter, query products by that filter
+            if (filterId && filterType) {
+                const filterColumn = filterType === "form_factor" ? "form_factor" :
+                    filterType === "screen_size" ? "screen_size" : filterType;
+
+                console.log(`Filtering products by ${filterType} with ID:`, filterId);
+                productsQuery = productsQuery.eq(filterColumn, filterId);
+            } else {
+                // If no filter match, search across multiple product fields
+                console.log("No filter match, searching across product fields");
+                console.log("DS = ", decodedSlug)
+                productsQuery = productsQuery.or(`product_name.ilike.%${decodedSlug}%,sku.ilike.%${decodedSlug}%`);
+            }
+
+            const { data: productsData, error: productsError } = await productsQuery;
+
+            if (productsError) {
+                setProducts([]);
+            } else {
+                console.log("Products fetched successfully:", productsData?.length || 0);
+                if (productsData && productsData.length > 0) {
+                    // Use the mappings passed as parameter
+                    const productsWithTitles = productsData.map(product => ({
+                        ...product,
+                        formFactorTitle: mappings.formFactor?.[product.form_factor] || product.form_factor,
+                        processorTitle: mappings.processor?.[product.processor] || product.processor,
+                        memoryTitle: mappings.memory?.[product.memory] || product.memory,
+                        storageTitle: mappings.storage?.[product.storage] || product.storage,
+                        screenSizeTitle: mappings.screenSize?.[product.screen_size] || product.screen_size,
+                    }));
+
+                    setProducts(productsWithTitles);
+                } else {
+                    console.log("No products found matching the search");
+                    setProducts([]);
+                }
+            }
+
+        } catch (error) {
+            console.error("Error in fetchProductsBySlug:", error);
+            setProducts([]);
+        }
+    };
+
     // Fetch all data from database
     const fetchDataFromDatabase = async () => {
         try {
             setIsLoading(true);
+            console.log("Fetching data from database...");
 
             // 1. Fetch filters from database
             const allFilters: Record<string, string[]> = {};
@@ -200,7 +287,11 @@ export default function Page() {
                     .order("title");
 
                 if (error) {
-                    console.error(`Error fetching ${type} filters:`, error);
+                    console.error(`Error fetching ${type} filters:`, {
+                        message: error.message,
+                        code: error.code,
+                        details: error.details
+                    });
                     allFilters[type] = [];
                     mappings[type] = {};
                 } else {
@@ -218,43 +309,51 @@ export default function Page() {
                     });
 
                     mappings[frontendKey] = idToTitle;
+
+                    console.log(`Loaded ${data?.length || 0} ${frontendKey} filters`);
                 }
             }
 
             setDatabaseFilters(allFilters);
             setFilterMappings(mappings);
 
-            // 2. Fetch products from database
-            const { data: productsData, error: productsError } = await supabase
-                .from("products")
-                .select("*")
-                .order("date", { ascending: false });
+            // 2. Fetch products based on slug
+            console.log("Current slug:", slug);
+            if (slug) {
+                await fetchProductsBySlug(slug, mappings);
+            } else {
+                console.log("No slug provided, fetching all products");
+                // Fallback to fetching all products if no slug
+                const { data: productsData, error: productsError } = await supabase
+                    .from("products")
+                    .select("*")
+                    .order("date", { ascending: false });
 
-            if (productsError) {
-                console.error("Error fetching products:", productsError);
-                setProducts([]);
-            } else if (productsData) {
-                // Now that mappings are set, we need to map products with the correct mappings
-                // Since state updates are async, we need to use the local mappings variable
-                const productsWithTitles = productsData.map(product => ({
-                    ...product,
-                    // Map filter IDs to titles using the local mappings variable
-                    formFactorTitle: mappings.formFactor?.[product.form_factor] || product.form_factor,
-                    processorTitle: mappings.processor?.[product.processor] || product.processor,
-                    memoryTitle: mappings.memory?.[product.memory] || product.memory,
-                    storageTitle: mappings.storage?.[product.storage] || product.storage,
-                    screenSizeTitle: mappings.screenSize?.[product.screen_size] || product.screen_size,
-                }));
+                if (productsError) {
+                    console.error("Error fetching all products:", productsError);
+                    setProducts([]);
+                } else if (productsData) {
+                    const productsWithTitles = productsData.map(product => ({
+                        ...product,
+                        formFactorTitle: mappings.formFactor?.[product.form_factor] || product.form_factor,
+                        processorTitle: mappings.processor?.[product.processor] || product.processor,
+                        memoryTitle: mappings.memory?.[product.memory] || product.memory,
+                        storageTitle: mappings.storage?.[product.storage] || product.storage,
+                        screenSizeTitle: mappings.screenSize?.[product.screen_size] || product.screen_size,
+                    }));
 
-                setProducts(productsWithTitles);
+                    setProducts(productsWithTitles);
+                }
             }
 
             // Initialize open filters with all available keys
             const allFilterKeys = [...Object.keys(allFilters), ...HARDCODED_FILTER_KEYS];
             setOpenFilters(allFilterKeys);
 
+            console.log("Data fetching completed");
+
         } catch (error) {
-            console.error("Error fetching data:", error);
+            console.error("Error in fetchDataFromDatabase:", error);
         } finally {
             setIsLoading(false);
         }
@@ -325,37 +424,6 @@ export default function Page() {
 
         return dateB - dateA; // Descending order (latest first)
     });
-
-    // Alternative: More explicit sorting with numeric priorities
-    // filteredProducts.sort((a, b) => {
-    //     // Create priority score for each product
-    //     const getPriority = (product) => {
-    //         let priority = 0;
-
-    //         // Post Status: Publish = 2, others = 1
-    //         priority += product.post_status === "Publish" ? 2 : 1;
-
-    //         // Stock Quantity: Has stock = 2, no stock = 1
-    //         priority += product.stock_quantity > 0 ? 2 : 1;
-
-    //         // Date: Convert to timestamp (milliseconds)
-    //         const dateScore = product.date ? new Date(product.date).getTime() : 0;
-
-    //         return { priority, dateScore };
-    //     };
-
-    //     const priorityA = getPriority(a);
-    //     const priorityB = getPriority(b);
-
-    //     // Compare priority scores first
-    //     if (priorityA.priority !== priorityB.priority) {
-    //         return priorityB.priority - priorityA.priority; // Higher priority first
-    //     }
-
-    //     // If same priority, compare dates
-    //     return priorityB.dateScore - priorityA.dateScore; // Latest date first
-    // });
-
 
     const handleFilterChange = (filterType: string, value: string) => {
         setFilters(prev => {
@@ -523,16 +591,13 @@ export default function Page() {
                         )}
                     </div>
                 </div>
-
                 {/* Main Content Area (right side of sidebar) */}
                 <div className="flex-1 min-h-screen sm:px-0 px-6">
                     {/* Mobile filter button */}
-                    <div className="lg:hidden p-4 flex items-center justify-between gap-3 px-7">
+                    <div className="lg:hidden py-4 px-8 flex items-center justify-between gap-3">
                         {/* Mobile Heading */}
-                        <div className="w-6 h-6">
-                        </div>
-                        <h1 className="text-2xl font-bold text-gray-900">
-                            All Devices
+                        <h1 className="text-4xl text-gray-900">
+                            <span className="capitalize">{slug == "notebooks" ? "Laptops" : slug}</span>
                         </h1>
 
                         {/* Filter Button */}
@@ -544,20 +609,8 @@ export default function Page() {
                         </button>
                     </div>
 
-
-                    {/* Full Width Banner - Only on Large Screens */}
-                    <div className="relative h-[60vh] w-full overflow-hidden hidden lg:block">
-                        <div
-                            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-                            style={{
-                                backgroundImage: "url('/products-panel.png')",
-                            }}
-                        />
-                    </div>
-
-
                     {/* Products Section */}
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-14">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-2">
                         {/* Results header - Only show when not loading */}
                         {!isLoading && getActiveFilterCount() > 0 && (
                             <div className="mb-8">
@@ -596,7 +649,7 @@ export default function Page() {
                                 <>
                                     {admin === profile?.role || shopManager === profile?.role && (
                                         <div className="flex items-center justify-between sm:my-10 my-5">
-                                            <div className="text-3xl font-semibold">Devices</div>
+                                            <div className="text-3xl font-semibold"><span className="capitalize">{slug == "notebooks" ? "Laptops" : slug}</span> {q !== "search" && "Devices"}</div>
                                             <div className="">
                                                 <div className="flex justify-center md:justify-start">
                                                     <Link
@@ -618,7 +671,6 @@ export default function Page() {
                                                     return null; // Don't render this product for non-admin users
                                                 }
                                             }
-
                                             return (
                                                 <Link href={`/product/${product.slug}`} key={product.id}>
                                                     <div className="bg-white border border-gray-300 sm:py-5 p-3 overflow-hidden hover:shadow-md transition-shadow duration-300 group relative h-full flex flex-col"
@@ -701,7 +753,7 @@ export default function Page() {
                             ) : (
                                 <div className="text-center py-12">
                                     <p className="text-gray-600 text-lg">
-                                        {products.length === 0 ? "No products found." : "No products found matching your filters."}
+                                        No products found matching "{slug}".
                                     </p>
                                     {products.length > 0 && (
                                         <button

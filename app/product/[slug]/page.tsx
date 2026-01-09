@@ -12,56 +12,86 @@ import {
     Truck,
     Shield,
     ArrowLeft,
-    Clock
+    Clock,
+    Delete
 } from "lucide-react";
-import { Carousel, Skeleton } from "antd";
+import { Carousel, Popconfirm, Skeleton } from "antd";
 import { supabase } from "@/lib/supabase/client";
+import { FaEdit } from "react-icons/fa";
+import { FaDeleteLeft } from "react-icons/fa6";
+import { MdDelete } from "react-icons/md";
+import { useAuth } from "@/app/context/AuthContext";
+import Link from "next/link";
+import { useRef } from "react";
+import type { CarouselRef } from "antd/es/carousel";
+import { toast } from "sonner";
+import { BiRadioCircle } from "react-icons/bi";
 
 // Loading skeleton component
-const ProductSkeleton = () => (
-    <div className="min-h-screen">
-        {/* Back Navigation Skeleton */}
-        <div className="bg-white border-b">
-            <div className="max-w-7xl mx-auto px-4 py-3">
-                <Skeleton.Button active size="small" style={{ width: 100 }} />
+const ProductSkeleton = () => {
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        // Check on mount and on resize
+        const checkIfMobile = () => {
+            setIsMobile(window.innerWidth < 640);
+        };
+
+        // Initial check
+        checkIfMobile();
+
+        // Add event listener for resize
+        window.addEventListener('resize', checkIfMobile);
+
+        // Cleanup
+        return () => window.removeEventListener('resize', checkIfMobile);
+    }, []);
+
+    return (
+        <div className="min-h-screen">
+            {/* Back Navigation Skeleton */}
+            <div className="bg-white border-b">
+                <div className="max-w-7xl mx-auto px-4 py-3">
+                    <Skeleton.Button active size="small" style={{ width: 100 }} />
+                </div>
             </div>
-        </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {/* Main Product Section Skeleton */}
-            <div className="bg-white rounded-xl overflow-hidden">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-6 md:p-8">
-                    {/* Left Column - Images Skeleton */}
-                    <div>
-                        <Skeleton.Image
-                            active
-                            style={{
-                                width: '100%',
-                                height: '500px',
-                                borderRadius: '8px'
-                            }}
-                        />
-                        <div className="mt-4">
-                            <Skeleton active paragraph={{ rows: 0 }} />
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* Main Product Section Skeleton */}
+                <div className="bg-white rounded-xl overflow-hidden">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-6 md:p-8">
+                        {/* Left Column - Images Skeleton */}
+                        <div>
+                            <Skeleton.Image
+                                active
+                                style={{
+                                    width: isMobile ? "340px" : "500px",
+                                    height: isMobile ? "340px" : "500px",
+                                    marginBottom: "16px",
+                                }}
+                            />
+                            <div className="mt-4">
+                                <Skeleton active paragraph={{ rows: 0 }} />
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Right Column - Info Skeleton */}
-                    <div>
-                        <Skeleton active paragraph={{ rows: 2 }} />
-                        <div className="my-8">
-                            <Skeleton active paragraph={{ rows: 1 }} />
+                        {/* Right Column - Info Skeleton */}
+                        <div>
+                            <Skeleton active paragraph={{ rows: 2 }} />
+                            <div className="my-8">
+                                <Skeleton active paragraph={{ rows: 1 }} />
+                            </div>
+                            <div className="mb-8">
+                                <Skeleton active title={false} paragraph={{ rows: 6 }} />
+                            </div>
+                            <Skeleton.Button active size="large" style={{ width: '100%' }} />
                         </div>
-                        <div className="mb-8">
-                            <Skeleton active title={false} paragraph={{ rows: 6 }} />
-                        </div>
-                        <Skeleton.Button active size="large" style={{ width: '100%' }} />
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-);
+    )
+};
 
 // Interface for product data
 interface Product {
@@ -100,14 +130,43 @@ interface Product {
 interface RelatedProduct {
     id: string;
     product_name: string;
+    slug: string;
+    sku: string;
+    form_factor: string;
+    processor: string;
+    memory: string;
+    storage: string;
+    screen_size: string;
+    technologies: string;
+    inventory_type: string;
+    total_inventory: number;
+    stock_quantity: number;
+    date: string;
+    copilot: boolean;
+    five_g_Enabled: boolean;
+    post_status: string;
+    description: string;
+    isBundle: boolean;
+    isInStock: boolean;
     thumbnail: string;
-    price?: number;
+    gallery: string[] | string; // Changed to accept both array and string
+    user_id: string;
+    created_at: string;
+    formFactorTitle?: string;
+    processorTitle?: string;
+    memoryTitle?: string;
+    storageTitle?: string;
+    screenSizeTitle?: string;
 }
 
-export default function ProductPage() {
+export default function Page() {
     const params = useParams();
     const router = useRouter();
     const slug = params.slug as string;
+
+    const { profile } = useAuth();
+    const admin = process.env.NEXT_PUBLIC_ADMINISTRATOR;
+    const shopManager = process.env.NEXT_PUBLIC_SHOPMANAGER;
 
     const [product, setProduct] = useState<Product | null>(null);
     const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([]);
@@ -116,7 +175,6 @@ export default function ProductPage() {
     const [selectedImage, setSelectedImage] = useState(0);
     const [quantity, setQuantity] = useState(1);
     const [isWishlisted, setIsWishlisted] = useState(false);
-
     // Function to parse gallery images from text/string to array
     const parseGalleryImages = (galleryData: string | string[] | null): string[] => {
         if (!galleryData) return [];
@@ -258,7 +316,7 @@ export default function ProductPage() {
 
                 const { data: relatedData, error: relatedError } = await supabase
                     .from("products")
-                    .select("id, product_name, thumbnail, sku")
+                    .select("*")
                     .or(relatedConditions.join(','))
                     .neq("id", productData.id)
                     .limit(4);
@@ -283,6 +341,32 @@ export default function ProductPage() {
     // Handle quantity changes
     const increaseQuantity = () => setQuantity(prev => prev + 1);
     const decreaseQuantity = () => setQuantity(prev => prev > 1 ? prev - 1 : 1);
+
+    const handleDeleteDevice = async () => {
+        if (!product?.id) return;
+
+        try {
+            const { error } = await supabase
+                .from("products")
+                .delete()
+                .eq("id", product.id)
+                .eq("user_id", profile?.userId);
+
+            if (error) {
+                toast.error("Failed to delete product");
+                return;
+            }
+
+            toast.success("Product deleted successfully");
+
+            // ✅ Redirect after delete
+            router.push("/product-category/alldevices");
+        } catch (err) {
+            console.error("Unexpected error:", err);
+            toast.error("Something went wrong");
+        }
+    };
+
 
     // Split description into bullet points
     const descriptionPoints = product?.description
@@ -352,8 +436,22 @@ export default function ProductPage() {
                         onClick={() => router.back()}
                         className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
                     >
-                        <ArrowLeft className="h-4 w-4 mr-2" />
-                        <span className="text-sm">Back to Products</span>
+                        <div className="mt-2 px-3">
+                            <span className="text-xs">
+                                <Link href={'/'} className="text-xs hover:text-red-700">
+                                    Home
+                                </Link>
+                                {" / "}
+                                <Link
+                                    href={`/product-category/${product.memoryTitle?.toLowerCase().replace(/\s+/g, '-')}/`}
+                                    className="text-xs hover:text-red-700"
+                                >
+                                    {product.memoryTitle}
+                                </Link>
+                                {" / "}
+                                <span className="text-xs text-gray-600">{product.product_name}</span>
+                            </span>
+                        </div>
                     </button>
                 </div>
             </div>
@@ -367,6 +465,32 @@ export default function ProductPage() {
                             {/* Main Image Carousel - Only show if there are images */}
                             {galleryImages.length > 0 ? (
                                 <div className="relative rounded-lg overflow-hidden mb-4">
+                                    {admin === profile?.role || shopManager === profile?.role && (
+                                        <div className="absolute top-8 left-5 z-10">
+                                            <div className="flex gap-2">
+                                                <Link href={`/add-device?_=${product.slug}`}>
+                                                    <div className="cursor-pointer bg-white/90 text-[#41abd6] border border-[#41abd6] backdrop-blur-sm rounded-full p-2">
+                                                        <FaEdit />
+                                                    </div>
+                                                </Link>
+                                                <Popconfirm
+                                                    title="Delete the device"
+                                                    description="Are you sure to delete this device?"
+                                                    okText="Yes"
+                                                    cancelText="No"
+                                                    onConfirm={handleDeleteDevice} // ✅ YES par function
+                                                    okButtonProps={{
+                                                        danger: true, // ✅ red text + red border
+                                                    }}
+                                                >
+                                                    <div className="cursor-pointer bg-white/90 text-red-500 border border-red-500 backdrop-blur-sm rounded-full p-2">
+                                                        <MdDelete />
+                                                    </div>
+                                                </Popconfirm>
+
+                                            </div>
+                                        </div>
+                                    )}
                                     <Carousel
                                         dots={false}
                                         arrows={true}
@@ -433,30 +557,30 @@ export default function ProductPage() {
                         {/* Right Column - Product Info */}
                         <div>
                             {/* Product Header */}
-                            <div className="mb-6 border-b pb-6">
+                            <div className="mb-6 border-b pb-3">
                                 <div className="flex items-center justify-between mb-2">
-                                    <h1 className="text-3xl md:text-2xl font-bold text-gray-900">
+                                    <h1 className="text-xl md:text-2xl sm:text-lg font-semibold text-gray-900">
                                         {product.product_name}
                                     </h1>
                                 </div>
                                 <div className="text-gray-500 text-sm my-4">
-                                    SKU: {product.sku}
+                                    <b>SKU:</b> {product.sku}
                                 </div>
                             </div>
 
                             {/* Description Points */}
                             {descriptionPoints.length > 0 && (
                                 <div className="mb-8">
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Key Features</h3>
+                                    <h3 className="text-sm font-semibold text-gray-900 mb-4">Key Features</h3>
                                     <ul className="space-y-2">
                                         {descriptionPoints.map((point, index) => (
                                             <li key={index} className="flex items-start">
-                                                <Check className="h-5 w-5  mt-0.5 mr-3 flex-shrink-0" />
-                                                <span className="text-gray-700">{point}</span>
+                                                <BiRadioCircle className="h-5 w-5  mt-0.5 mr-1 flex-shrink-0" />
+                                                <span className="text-gray-700 text-sm">{point}</span>
                                             </li>
                                         ))}
                                     </ul>
-                                    <h3 className="text-lg font-semibold text-lime-600 my-7">{product.stock_quantity} / {product.total_inventory} In Stock</h3>
+                                    <h3 className="text-sm font-semibold text-[#a67e07] my-7">{product.stock_quantity} / {product.total_inventory} In Stock</h3>
                                 </div>
                             )}
 
@@ -465,9 +589,9 @@ export default function ProductPage() {
                                 {/* Action Buttons */}
                                 <button
                                     className="flex items-center justify-center gap-2 px-6 py-3 border border-[#0a3637] text-[#0a3637] hover:text-white rounded-sm hover:bg-[#0a3637] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    disabled={!product.isInStock}
+                                    disabled={product.stock_quantity == 0}
                                 >
-                                    {product.isInStock ? 'Add to Cart' : 'Out of Stock'}
+                                    {product.stock_quantity != 0 ? 'Add to Cart' : 'Out of Stock'}
                                 </button>
                             </div>
                         </div>
@@ -477,39 +601,86 @@ export default function ProductPage() {
                 {/* Related Products */}
                 {relatedProducts.length > 0 && (
                     <div className="mt-8">
-                        <h2 className="text-2xl font-bold text-gray-900 mb-6">You Might Also Like</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                            {relatedProducts.map((relatedProduct) => (
-                                <div
-                                    key={relatedProduct.id}
-                                    className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-                                    onClick={() => router.push(`/product/${relatedProduct.id}`)}
-                                >
-                                    <div className="p-4">
-                                        <div className="h-40 bg-gray-100 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
-                                            {relatedProduct.thumbnail ? (
-                                                <img
-                                                    src={relatedProduct.thumbnail}
-                                                    alt={relatedProduct.product_name}
-                                                    className="object-contain w-full h-full p-2"
-                                                    onError={(e) => {
-                                                        e.currentTarget.src = '/placeholder-image.jpg';
-                                                        e.currentTarget.alt = 'Image not available';
-                                                    }}
-                                                />
-                                            ) : (
-                                                <div className="text-gray-400">No Image</div>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-6 sm:mx-0 mx-4">Related Products</h2>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 sm:gap-6 gap-4 sm:mx-0 mx-4">
+                            {relatedProducts.map(product => {
+                                return (
+                                    <Link href={`/product/${product.slug}`} key={product.id}>
+                                        <div className="bg-white border border-gray-300 sm:py-5 p-3 overflow-hidden hover:shadow-md transition-shadow duration-300 group relative h-full flex flex-col"
+                                        >
+                                            {product.stock_quantity == 0 && (
+                                                <div className="absolute top-4 left-0 z-10 flex items-center gap-1 bg-red-500 text-white text-sm font-semibold px-4 py-2 rounded-br-full rounded-tr-full">
+                                                    Out of stock
+                                                </div>
                                             )}
+
+                                            {/* 5G Logo - Top Right Corner */}
+                                            {product.five_g_Enabled && (
+                                                <div className="absolute top-4 right-3 z-10">
+                                                    <img
+                                                        src="/5g-logo.png"
+                                                        alt="5G Enabled"
+                                                        className="w-10 h-10 object-contain"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {/* Show Private badge only for admin/shop manager users when product is not published */}
+                                            {product.post_status !== "Publish" && (
+                                                <div className="absolute sm:top-45 sm:right-3 top-5 z-10 flex items-center gap-1 text-xs text-white font-semibold px-3 py-1 rounded-full rounded-tr-full bg-[#41abd6]">
+                                                    Private
+                                                </div>
+                                            )}
+
+                                            {/* Image Container - Fixed Height */}
+                                            <div className="flex items-center justify-center transition-colors h-48 min-h-[12rem] sm:mt-0 -mt-12 relative">
+                                                {product.thumbnail ? (
+                                                    <img
+                                                        src={product.thumbnail}
+                                                        alt={product.product_name}
+                                                        className="object-contain h-full w-full p-2"
+                                                    />
+                                                ) : (
+                                                    <div className="flex items-center justify-center h-full w-full text-gray-400">
+                                                        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                        </svg>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Product Info Container - Flexible but with constraints */}
+                                            <div className="flex flex-col flex-grow space-y-2 text-center sm:mt-4 -mt-7">
+                                                {/* Title with fixed lines */}
+                                                <h3 className="text-gray-800 sm:text-md text-sm line-clamp-1 min-h-14 flex items-center justify-center">
+                                                    {product.product_name}
+                                                </h3>
+
+                                                {/* SKU Info - Fixed height */}
+                                                <div className="text-gray-500 text-xs sm:py-3 py-1 space-y-1">
+                                                    <p><b>SKU:</b> {product.sku}</p>
+                                                </div>
+
+                                                {/* Spacer to push button to bottom */}
+                                                <div className="flex-grow"></div>
+
+                                                {/* Button Container - Fixed at bottom */}
+                                                <div className="sm:pt-4 sm:mb-2 mt-auto">
+                                                    {product.stock_quantity != 0 ? (
+                                                        <button className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-[#0a4647] border border-[#0a4647] rounded-sm cursor-pointer hover:bg-[#0a4647] hover:text-white transition-colors">
+                                                            Add to Cart
+                                                        </button>
+                                                    ) : (
+                                                        <button className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-[#4e5050] border border-[#484a4a] rounded-sm cursor-pointer hover:bg-[#c7caca] transition-colors">
+                                                            Read More
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <h3 className="font-medium text-gray-900 mb-2 line-clamp-2">
-                                            {relatedProduct.product_name}
-                                        </h3>
-                                        <button className="w-full py-2 text-sm font-medium text-[#0e4647] border border-[#0e4647] rounded hover:bg-[#0e4647] hover:text-white transition-colors">
-                                            View Details
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                                    </Link>
+                                );
+                            })}
                         </div>
                     </div>
                 )}

@@ -4,19 +4,69 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/app/context/AuthContext";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2, ArrowLeft } from "lucide-react";
+
+interface FormData {
+    productName: string;
+    sku: string;
+    formFactor: string;
+    processor: string;
+    memory: string;
+    storage: string;
+    screenSize: string;
+    technologies: string;
+    totalInventory: string;
+    stockQuantity: string;
+    currentDate: string;
+    inventoryType: string;
+    description: string;
+    copilotPC: string;
+    fiveGEnabled: string;
+    postStatus: string;
+}
+
+interface CustomInputs {
+    formFactor: string;
+    processor: string;
+    memory: string;
+    storage: string;
+    screenSize: string;
+}
+
+interface FilterOptions {
+    formfactor: string[];
+    processor: string[];
+    memory: string[];
+    storage: string[];
+    screenSizesize: string[];
+}
+
+interface FilterIds {
+    formFactorId: string;
+    processorId: string;
+    memoryId: string;
+    storageId: string;
+    screenSizeId: string;
+}
 
 export default function Page() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const editSlug = searchParams.get('_');
+
     // State for form fields
     const [primaryImage, setPrimaryImage] = useState<File | null>(null);
     const [primaryImagePreview, setPrimaryImagePreview] = useState<string | null>(null);
     const [additionalImages, setAdditionalImages] = useState<File[]>([]);
     const [additionalImagesPreview, setAdditionalImagesPreview] = useState<string[]>([]);
+    const [removedExistingImages, setRemovedExistingImages] = useState<string[]>([]);
 
     const getTodayDate = () => {
         return new Date().toISOString().split('T')[0];
     };
 
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<FormData>({
         productName: "",
         sku: "",
         formFactor: "",
@@ -36,7 +86,7 @@ export default function Page() {
     });
 
     // Custom input states
-    const [customInputs, setCustomInputs] = useState({
+    const [customInputs, setCustomInputs] = useState<CustomInputs>({
         formFactor: "",
         processor: "",
         memory: "",
@@ -44,17 +94,17 @@ export default function Page() {
         screenSize: "",
     });
 
-    // Filter options from database - initialize with empty arrays
-    const [filterOptions, setFilterOptions] = useState({
-        formfactor: [] as string[],
-        processor: [] as string[],
-        memory: [] as string[],
-        storage: [] as string[],
-        screenSizesize: [] as string[],
+    // Filter options from database
+    const [filterOptions, setFilterOptions] = useState<FilterOptions>({
+        formfactor: [],
+        processor: [],
+        memory: [],
+        storage: [],
+        screenSizesize: [],
     });
 
     // Filter IDs state
-    const [filterIds, setFilterIds] = useState({
+    const [filterIds, setFilterIds] = useState<FilterIds>({
         formFactorId: "",
         processorId: "",
         memoryId: "",
@@ -62,19 +112,178 @@ export default function Page() {
         screenSizeId: "",
     });
 
-    // Loading state for filters
+    // Loading states
     const [isLoading, setIsLoading] = useState(true);
+    const [isEditing, setIsEditing] = useState(false);
+    const [isLoadingProduct, setIsLoadingProduct] = useState(false);
+    const [isFormLoading, setIsFormLoading] = useState(false);
+    const [productId, setProductId] = useState<string | null>(null);
 
-    // Inventory types
+    // Static options
     const inventoryTypes = ["Program", "Global"];
     const yesNoOptions = ["Yes", "No"];
     const postStatusOptions = ["Publish", "Private"];
     const { user, profile, loading } = useAuth();
 
-    // Fetch filter options from database with IDs
+    // Check if we're in edit mode
     useEffect(() => {
-        fetchFilterOptions();
-    }, []);
+        if (editSlug) {
+            setIsEditing(true);
+            fetchProductForEdit(editSlug);
+        } else {
+            fetchFilterOptions();
+        }
+    }, [editSlug]);
+
+    // Fetch product data for editing
+    const fetchProductForEdit = async (slug: string) => {
+        try {
+            setIsLoadingProduct(true);
+
+            // Fetch product by slug
+            const { data: product, error } = await supabase
+                .from("products")
+                .select("*")
+                .eq("slug", slug)
+                .single();
+
+            if (error || !product) {
+                console.error("Error fetching product:", error);
+                toast.error("Product not found", {
+                    style: { background: "red", color: "white" }
+                });
+                router.push('/add-device');
+                return;
+            }
+
+            // Set product ID for updates
+            setProductId(product.id);
+
+            // Set primary image preview
+            if (product.thumbnail) {
+                setPrimaryImagePreview(product.thumbnail);
+            }
+
+            // Set additional images preview
+            if (product.gallery) {
+                let galleryArray: string[] = [];
+
+                if (Array.isArray(product.gallery)) {
+                    galleryArray = product.gallery;
+                } else if (typeof product.gallery === 'string') {
+                    try {
+                        const parsed = JSON.parse(product.gallery);
+                        if (Array.isArray(parsed)) {
+                            galleryArray = parsed;
+                        } else if (typeof parsed === 'string') {
+                            try {
+                                const reParsed = JSON.parse(parsed);
+                                if (Array.isArray(reParsed)) {
+                                    galleryArray = reParsed;
+                                }
+                            } catch {
+                                // If re-parsing fails, treat as string
+                                if (parsed.includes(',')) {
+                                    galleryArray = parsed.split(',').map(url => url.trim());
+                                } else if (parsed.trim()) {
+                                    galleryArray = [parsed.trim()];
+                                }
+                            }
+                        }
+                    } catch {
+                        if (product.gallery.includes('[')) {
+                            const cleaned = product.gallery
+                                .replace(/[\[\]"]/g, '')
+                                .split(',')
+                                .map((url: string) => url.trim())
+                                .filter((url: string) => url.length > 0);
+
+                            galleryArray = cleaned;
+
+                        } else if (product.gallery.includes(',')) {
+                            galleryArray = product.gallery
+                                .split(',')
+                                .map((url: string) => url.trim());
+
+                        } else if (product.gallery.trim()) {
+                            galleryArray = [product.gallery.trim()];
+                        }
+
+                    }
+                }
+
+                setAdditionalImagesPreview(galleryArray);
+            }
+
+            // Fetch filter titles for display
+            const filterTypes = ["form_factor", "processor", "memory", "storage", "screen_size"];
+            const filterPromises = filterTypes.map(async (type) => {
+                const { data } = await supabase
+                    .from("filters")
+                    .select("id, title")
+                    .eq("type", type);
+
+                return { type, data: data || [] };
+            });
+
+            const filterResults = await Promise.all(filterPromises);
+
+            // Create mapping object
+            const filterMappings: Record<string, Record<string, string>> = {};
+            filterResults.forEach(result => {
+                const key = result.type === "form_factor" ? "formFactor" :
+                    result.type === "screen_size" ? "screenSize" : result.type;
+
+                const mapping: Record<string, string> = {};
+                result.data.forEach(item => {
+                    mapping[item.id] = item.title;
+                });
+
+                filterMappings[key] = mapping;
+            });
+
+            // Set form data with product values
+            setFormData({
+                productName: product.product_name || "",
+                sku: product.sku || "",
+                formFactor: filterMappings.formFactor?.[product.form_factor] || product.form_factor || "",
+                processor: filterMappings.processor?.[product.processor] || product.processor || "",
+                memory: filterMappings.memory?.[product.memory] || product.memory || "",
+                storage: filterMappings.storage?.[product.storage] || product.storage || "",
+                screenSize: filterMappings.screenSize?.[product.screen_size] || product.screen_size || "",
+                technologies: product.technologies || "",
+                totalInventory: product.total_inventory?.toString() || "",
+                stockQuantity: product.stock_quantity?.toString() || "",
+                currentDate: product.date?.split('T')[0] || getTodayDate(),
+                inventoryType: product.inventory_type || "",
+                description: product.description || "",
+                copilotPC: product.copilot ? "Yes" : "No",
+                fiveGEnabled: product.five_g_Enabled ? "Yes" : "No",
+                postStatus: product.post_status || "Publish",
+            });
+
+            // Set filter IDs
+            setFilterIds({
+                formFactorId: product.form_factor || "",
+                processorId: product.processor || "",
+                memoryId: product.memory || "",
+                storageId: product.storage || "",
+                screenSizeId: product.screen_size || "",
+            });
+
+            // Fetch filter options after setting form data
+            await fetchFilterOptions();
+
+        } catch (error) {
+            console.error("Error fetching product for edit:", error);
+            toast.error("Failed to load product for editing", {
+                style: { background: "red", color: "white" }
+            });
+            router.push('/add-device');
+        } finally {
+            setIsLoadingProduct(false);
+        }
+    };
 
     const fetchFilterOptions = async () => {
         try {
@@ -99,29 +308,25 @@ export default function Page() {
 
             const results = await Promise.all(promises);
 
-            const newOptions: any = {};
-            const newIds: any = {};
+            const newOptions: FilterOptions = {
+                formfactor: [],
+                processor: [],
+                memory: [],
+                storage: [],
+                screenSizesize: [],
+            };
 
             results.forEach(result => {
-                const key = result.type.replace("_", "").replace("screen", "screenSize");
+                const key = result.type.replace("_", "").replace("screen", "screenSize") as keyof FilterOptions;
                 newOptions[key] = [...result.items.map(item => item.title), "Custom"];
-
-                // If a filter is already selected, find its ID
-                const formDataKey = key === "screenSize" ? "screenSize" : key;
-                const selectedTitle = formData[formDataKey as keyof typeof formData];
-                if (selectedTitle && selectedTitle !== "Custom") {
-                    const selectedItem = result.items.find(item => item.title === selectedTitle);
-                    if (selectedItem) {
-                        newIds[`${formDataKey}Id`] = selectedItem.id;
-                    }
-                }
             });
 
             setFilterOptions(newOptions);
-            setFilterIds(prev => ({ ...prev, ...newIds }));
         } catch (error) {
             console.error("Error fetching filter options:", error);
-            toast.error("Failed to load filter options", { style: { background: "black", color: "white" } });
+            toast.error("Failed to load filter options", {
+                style: { background: "black", color: "white" }
+            });
         } finally {
             setIsLoading(false);
         }
@@ -139,7 +344,6 @@ export default function Page() {
                 setPrimaryImagePreview(imageUrl);
             }
         } else {
-            // For additional images, handle multiple files
             const newImages: File[] = [];
             const newPreviews: string[] = [];
             const maxImages = Math.min(files.length, 6 - additionalImages.length);
@@ -155,17 +359,30 @@ export default function Page() {
             setAdditionalImagesPreview(prev => [...prev, ...newPreviews]);
 
             if (files.length > maxImages) {
-                toast.warning(`Maximum 6 images allowed. ${maxImages} images added.`, { style: { background: "black", color: "white" } });
+                toast.warning(`Maximum 6 images allowed. ${maxImages} images added.`, {
+                    style: { background: "black", color: "white" }
+                });
             }
         }
     };
 
     const removeAdditionalImage = (index: number) => {
+        const imageUrl = additionalImagesPreview[index];
+
+        // Check if this is an existing image (URL) or a new upload (blob URL)
+        const isExistingImage = imageUrl?.startsWith('http');
+
+        if (isExistingImage) {
+            setRemovedExistingImages(prev => [...prev, imageUrl]);
+            toast.info("Existing image marked for removal. Save to apply changes.", {
+                style: { background: "black", color: "white" }
+            });
+        }
+
         setAdditionalImages(prev => prev.filter((_, i) => i !== index));
         setAdditionalImagesPreview(prev => prev.filter((_, i) => i !== index));
     };
 
-    // Function to create slug from title
     const createSlug = (text: string) => {
         return text
             .toLowerCase()
@@ -175,7 +392,6 @@ export default function Page() {
             .trim();
     };
 
-    // Function to insert custom filter into database
     const insertCustomFilter = async (title: string, type: string) => {
         try {
             const slug = createSlug(title);
@@ -189,12 +405,13 @@ export default function Page() {
 
             if (checkError) {
                 console.error("Check filter error:", checkError);
-                toast.error("Something went wrong while checking filter", { style: { background: "black", color: "white" } });
+                toast.error("Something went wrong while checking filter", {
+                    style: { background: "black", color: "white" }
+                });
                 return null;
             }
 
             if (existingFilter) {
-                toast.info(`${type} "${title}" already exists`, { style: { background: "black", color: "white" } });
                 return { id: existingFilter.id, title: existingFilter.title };
             }
 
@@ -211,23 +428,25 @@ export default function Page() {
 
             if (error) {
                 console.error("Insert error:", error);
-                toast.error("Failed to save custom filter. Please try again.", { style: { background: "black", color: "white" } });
+                toast.error("Failed to save custom filter. Please try again.", {
+                    style: { background: "black", color: "white" }
+                });
                 return null;
             }
             return { id: data.id, title: data.title };
         } catch (err) {
             console.error("Unexpected error:", err);
-            toast.error("Unexpected error occurred", { style: { background: "black", color: "white" } });
+            toast.error("Unexpected error occurred", {
+                style: { background: "black", color: "white" }
+            });
             return null;
         }
     };
 
-    // Handle regular field changes
-    const handleInputChange = async (field: keyof typeof formData, value: string) => {
+    const handleInputChange = async (field: keyof FormData, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
 
-        // Clear custom input when selecting a regular option
-        const fieldMap: Record<string, keyof typeof customInputs> = {
+        const fieldMap: Record<string, keyof CustomInputs> = {
             formFactor: "formFactor",
             processor: "processor",
             memory: "memory",
@@ -238,7 +457,6 @@ export default function Page() {
         if (fieldMap[field] && value !== "Custom") {
             setCustomInputs(prev => ({ ...prev, [fieldMap[field]]: "" }));
 
-            // Find and set the filter ID
             if (value) {
                 const typeMap: Record<string, string> = {
                     formFactor: "form_factor",
@@ -257,38 +475,36 @@ export default function Page() {
                     .single();
 
                 if (data) {
-                    const idField = `${field}Id` as keyof typeof filterIds;
+                    const idField = `${field}Id` as keyof FilterIds;
                     setFilterIds(prev => ({ ...prev, [idField]: data.id }));
                 }
             }
         }
     };
 
-    // Handle radio button changes
-    const handleRadioChange = (field: keyof typeof formData, value: string) => {
+    const handleRadioChange = (field: keyof FormData, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    // Handle custom input changes
-    const handleCustomInputChange = (field: keyof typeof customInputs, value: string) => {
+    const handleCustomInputChange = (field: keyof CustomInputs, value: string) => {
         setCustomInputs(prev => ({ ...prev, [field]: value }));
     };
 
-    // Function to instantly add and select custom filter
     const handleAddAndSelectFilter = async (
-        field: keyof typeof customInputs,
+        field: keyof CustomInputs,
         type: string
     ) => {
         const customValue = customInputs[field];
         if (!customValue.trim()) {
-            toast.error("Please enter a value", { style: { background: "black", color: "white" } });
+            toast.error("Please enter a value", {
+                style: { background: "black", color: "white" }
+            });
             return;
         }
 
         const result = await insertCustomFilter(customValue.trim(), type);
         if (result) {
-            // Update form data with the new value
-            const formFieldMap: Record<string, keyof typeof formData> = {
+            const formFieldMap: Record<string, keyof FormData> = {
                 formFactor: "formFactor",
                 processor: "processor",
                 memory: "memory",
@@ -300,22 +516,19 @@ export default function Page() {
             if (formField) {
                 setFormData(prev => ({ ...prev, [formField]: result.title }));
 
-                // Update filter ID
-                const idField = `${formField}Id` as keyof typeof filterIds;
+                const idField = `${formField}Id` as keyof FilterIds;
                 setFilterIds(prev => ({ ...prev, [idField]: result.id }));
             }
 
-            // Clear custom input
             setCustomInputs(prev => ({ ...prev, [field]: "" }));
-
-            // Refetch filter options to include the newly added filter
             await fetchFilterOptions();
 
-            toast.success(`${type} "${result.title}" added and selected!`, { style: { background: "black", color: "white" } });
+            toast.success(`${type} "${result.title}" added and selected!`, {
+                style: { background: "black", color: "white" }
+            });
         }
     };
 
-    // Function to upload images to Supabase storage
     const uploadImagesToSupabase = async () => {
         const imageUrls: { primary: string | null; additional: string[] } = {
             primary: null,
@@ -323,7 +536,7 @@ export default function Page() {
         };
 
         try {
-            // Upload primary image
+            // Upload primary image only if new image is selected
             if (primaryImage) {
                 const fileExt = primaryImage.name.split('.').pop();
                 const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
@@ -338,15 +551,16 @@ export default function Page() {
                     throw uploadError;
                 }
 
-                // Get public URL
                 const { data: { publicUrl } } = supabase.storage
                     .from('TdSynnex')
                     .getPublicUrl(filePath);
 
                 imageUrls.primary = publicUrl;
+            } else if (primaryImagePreview && !primaryImage) {
+                imageUrls.primary = primaryImagePreview;
             }
 
-            // Upload additional images
+            // Upload new additional images
             for (const image of additionalImages) {
                 const fileExt = image.name.split('.').pop();
                 const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
@@ -361,12 +575,22 @@ export default function Page() {
                     throw uploadError;
                 }
 
-                // Get public URL
                 const { data: { publicUrl } } = supabase.storage
                     .from('TdSynnex')
                     .getPublicUrl(filePath);
 
                 imageUrls.additional.push(publicUrl);
+            }
+
+            // Add existing additional images in edit mode (excluding removed ones and blob URLs)
+            if (isEditing) {
+                const existingImages = additionalImagesPreview.filter(img =>
+                    !img.startsWith('blob:') &&
+                    (img.startsWith('http://') || img.startsWith('https://')) &&
+                    !removedExistingImages.includes(img)
+                );
+
+                imageUrls.additional = [...imageUrls.additional, ...existingImages];
             }
 
             return imageUrls;
@@ -375,7 +599,6 @@ export default function Page() {
             throw error;
         }
     };
-    const [isFormLoading, setIsFormLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -400,14 +623,12 @@ export default function Page() {
             ];
 
             const emptyFields = requiredFields.filter(field => {
-                // Check if field is empty or whitespace
                 if (!field.value || field.value.trim() === '') {
                     return true;
                 }
 
-                // For fields that should have "Custom" selected but custom input is empty
                 if (field.value === "Custom") {
-                    const customFieldMap: Record<string, keyof typeof customInputs> = {
+                    const customFieldMap: Record<string, keyof CustomInputs> = {
                         formFactor: "formFactor",
                         processor: "processor",
                         memory: "memory",
@@ -415,7 +636,8 @@ export default function Page() {
                         screenSize: "screenSize",
                     };
 
-                    if (customFieldMap[field.field] && !customInputs[customFieldMap[field.field]]?.trim()) {
+                    if (customFieldMap[field.field as keyof typeof customFieldMap] &&
+                        !customInputs[customFieldMap[field.field as keyof typeof customFieldMap]]?.trim()) {
                         return true;
                     }
                 }
@@ -442,8 +664,8 @@ export default function Page() {
             ];
 
             const missingCustomInputs = customFieldsToCheck.filter(({ field, customField }) => {
-                const formValue = formData[field as keyof typeof formData];
-                const customValue = customInputs[customField as keyof typeof customInputs];
+                const formValue = formData[field as keyof FormData];
+                const customValue = customInputs[customField as keyof CustomInputs];
                 return formValue === "Custom" && (!customValue || customValue.trim() === '');
             });
 
@@ -466,8 +688,8 @@ export default function Page() {
                 return;
             }
 
-            // Check if primary image is uploaded
-            if (!primaryImage) {
+            // Check if primary image is uploaded (for new products only)
+            if (!isEditing && !primaryImage) {
                 toast.error("Please upload a primary image", {
                     style: { background: "red", color: "white" }
                 });
@@ -475,7 +697,7 @@ export default function Page() {
                 return;
             }
 
-            // Check if totalInventory and stockQuantity are valid numbers
+            // Validate numeric fields
             if (formData.totalInventory) {
                 const totalInv = parseInt(formData.totalInventory);
                 if (isNaN(totalInv) || totalInv < 0) {
@@ -517,7 +739,6 @@ export default function Page() {
                 const selectedDate = new Date(formData.currentDate);
                 const today = new Date();
 
-                // Set both dates to start of day for comparison
                 selectedDate.setHours(0, 0, 0, 0);
                 today.setHours(0, 0, 0, 0);
 
@@ -530,8 +751,8 @@ export default function Page() {
                 }
             }
 
-            // Process custom filters for fields that have "Custom" selected
-            const fieldMap: Record<string, { formField: keyof typeof formData, dbField: string }> = {
+            // Process custom filters
+            const fieldMap: Record<string, { formField: keyof FormData, dbField: string }> = {
                 formFactor: { formField: "formFactor", dbField: "form_factor" },
                 processor: { formField: "processor", dbField: "processor" },
                 memory: { formField: "memory", dbField: "memory" },
@@ -541,20 +762,18 @@ export default function Page() {
 
             const customPromises = Object.entries(fieldMap)
                 .filter(([customField]) => {
-                    const formField = fieldMap[customField].formField;
-                    return formData[formField] === "Custom" && customInputs[customField as keyof typeof customInputs].trim();
+                    const formField = fieldMap[customField as keyof typeof fieldMap].formField;
+                    return formData[formField] === "Custom" && customInputs[customField as keyof CustomInputs]?.trim();
                 })
                 .map(async ([customField, { dbField }]) => {
-                    const value = customInputs[customField as keyof typeof customInputs];
-
-                    if (value.trim()) {
+                    const value = customInputs[customField as keyof CustomInputs];
+                    if (value?.trim()) {
                         const result = await insertCustomFilter(value.trim(), dbField);
                         if (result) {
-                            const formField = fieldMap[customField].formField;
+                            const formField = fieldMap[customField as keyof typeof fieldMap].formField;
                             setFormData(prev => ({ ...prev, [formField]: result.title }));
 
-                            // Update filter ID
-                            const idField = `${formField}Id` as keyof typeof filterIds;
+                            const idField = `${formField}Id` as keyof FilterIds;
                             setFilterIds(prev => ({ ...prev, [idField]: result.id }));
 
                             return { field: customField, id: result.id, value: result.title };
@@ -563,120 +782,234 @@ export default function Page() {
                     return null;
                 });
 
-            // Wait for all custom filters to be processed
             const results = await Promise.all(customPromises);
-
-            // Refetch filter options if any custom filters were added
             if (results.some(result => result !== null)) {
                 await fetchFilterOptions();
             }
 
-            // Upload images to Supabase storage
+            // Upload images
             const imageUrls = await uploadImagesToSupabase();
 
-            // Create slug from product name
+            // Create slug
             const slug = createSlug(formData.productName);
 
-            // Prepare final data for submission
+            // Prepare final data
             const finalFormData = {
                 ...formData,
-                // Convert numeric fields
                 totalInventory: formData.totalInventory ? parseInt(formData.totalInventory) : null,
                 stockQuantity: formData.stockQuantity ? parseInt(formData.stockQuantity) : null,
-                currentDate: formData.currentDate,
             };
 
             const toBool = (value?: string) => value === "Yes";
 
-            // Check for duplicate product name
-            const { data: pRow, error: fetchError } = await supabase
-                .from("products")
-                .select("product_name")
-                .eq("product_name", finalFormData.productName).single();
+            if (isEditing && productId) {
+                // UPDATE EXISTING PRODUCT
+                const { data: pRow } = await supabase
+                    .from("products")
+                    .select("product_name")
+                    .eq("product_name", finalFormData.productName)
+                    .neq("id", productId)
+                    .single();
 
-            console.log("PROW", pRow)
+                if (pRow) {
+                    toast.error("Unable to update the device because a device with the same title already exists.", {
+                        style: { background: "red", color: "white" }
+                    });
+                    setIsFormLoading(false);
+                    return;
+                }
 
-            if (pRow) {
-                toast.error("Unable to add the device because a device with the same title already exists.", {
-                    style: { background: "red", color: "white" }
+                const { data: pRowSKU } = await supabase
+                    .from("products")
+                    .select("sku")
+                    .eq("sku", finalFormData.sku.trim())
+                    .neq("id", productId)
+                    .single();
+
+                if (pRowSKU) {
+                    toast.error("Unable to update the device because a device with the same SKU already exists.", {
+                        style: { background: "red", color: "white" }
+                    });
+                    setIsFormLoading(false);
+                    return;
+                }
+
+                // Get existing product data to preserve existing images
+                const { data: existingProduct } = await supabase
+                    .from("products")
+                    .select("gallery")
+                    .eq("id", productId)
+                    .single();
+
+                let finalGallery: string[] = [...imageUrls.additional];
+
+                // Helper function to parse existing gallery
+                const parseExistingGallery = (galleryData: any): string[] => {
+                    if (!galleryData) return [];
+
+                    try {
+                        if (Array.isArray(galleryData)) return galleryData;
+                        if (typeof galleryData === 'string') {
+                            try {
+                                const parsed = JSON.parse(galleryData);
+                                if (Array.isArray(parsed)) return parsed;
+                                if (typeof parsed === 'string') {
+                                    const reParsed = JSON.parse(parsed);
+                                    if (Array.isArray(reParsed)) return reParsed;
+                                    return [reParsed];
+                                }
+                                return [parsed];
+                            } catch {
+                                // Handle comma-separated string
+                                return galleryData.split(',').map((url: string) => url.trim()).filter((url: string) => url);
+                            }
+                        }
+                        return [];
+                    } catch {
+                        return [];
+                    }
+                };
+
+                // Add existing images that aren't being removed
+                if (existingProduct?.gallery) {
+                    const existingGallery = parseExistingGallery(existingProduct.gallery);
+                    existingGallery.forEach((url: string) => {
+                        if (!removedExistingImages.includes(url) && !finalGallery.includes(url)) {
+                            finalGallery.push(url);
+                        }
+                    });
+                }
+
+                // Update device
+                const { error } = await supabase
+                    .from("products")
+                    .update({
+                        product_name: finalFormData.productName,
+                        slug: slug,
+                        sku: finalFormData.sku,
+                        form_factor: filterIds.formFactorId,
+                        processor: filterIds.processorId,
+                        memory: filterIds.memoryId,
+                        storage: filterIds.storageId,
+                        screen_size: filterIds.screenSizeId,
+                        technologies: finalFormData.technologies,
+                        inventory_type: finalFormData.inventoryType,
+                        total_inventory: finalFormData.totalInventory,
+                        stock_quantity: finalFormData.stockQuantity,
+                        date: finalFormData.currentDate,
+                        copilot: toBool(finalFormData.copilotPC),
+                        five_g_Enabled: toBool(finalFormData.fiveGEnabled),
+                        post_status: finalFormData.postStatus,
+                        description: finalFormData.description,
+                        thumbnail: imageUrls.primary,
+                        gallery: finalGallery,
+                        updated_at: new Date().toISOString(),
+                    })
+                    .eq("id", productId)
+                    .eq("user_id", profile?.userId);
+
+                if (error) {
+                    console.error("Update error:", error);
+                    toast.error("Failed to update device. Please try again.", {
+                        style: { background: "red", color: "white" }
+                    });
+                    setIsFormLoading(false);
+                    return;
+                }
+
+                toast.success("Device updated successfully!", {
+                    style: { background: "black", color: "white" }
                 });
-                setIsFormLoading(false);
-                return;
+
+                router.push(`/product/${slug}`);
+
+            } else {
+                // CREATE NEW PRODUCT
+                const { data: pRow } = await supabase
+                    .from("products")
+                    .select("product_name")
+                    .eq("product_name", finalFormData.productName)
+                    .single();
+
+                if (pRow) {
+                    toast.error("Unable to add the device because a device with the same title already exists.", {
+                        style: { background: "red", color: "white" }
+                    });
+                    setIsFormLoading(false);
+                    return;
+                }
+
+                const { data: pRowSKU } = await supabase
+                    .from("products")
+                    .select("sku")
+                    .eq("sku", finalFormData.sku.trim())
+                    .single();
+
+                if (pRowSKU) {
+                    toast.error("Unable to add the device because a device with the same SKU already exists.", {
+                        style: { background: "red", color: "white" }
+                    });
+                    setIsFormLoading(false);
+                    return;
+                }
+
+                // Insert new device
+                const { error } = await supabase
+                    .from("products")
+                    .insert({
+                        product_name: finalFormData.productName,
+                        slug: slug,
+                        sku: finalFormData.sku,
+                        form_factor: filterIds.formFactorId,
+                        processor: filterIds.processorId,
+                        memory: filterIds.memoryId,
+                        storage: filterIds.storageId,
+                        screen_size: filterIds.screenSizeId,
+                        technologies: finalFormData.technologies,
+                        inventory_type: finalFormData.inventoryType,
+                        total_inventory: finalFormData.totalInventory,
+                        stock_quantity: finalFormData.stockQuantity,
+                        date: finalFormData.currentDate,
+                        copilot: toBool(finalFormData.copilotPC),
+                        five_g_Enabled: toBool(finalFormData.fiveGEnabled),
+                        post_status: finalFormData.postStatus,
+                        description: finalFormData.description,
+                        isBundle: false,
+                        isInStock: true,
+                        thumbnail: imageUrls.primary,
+                        gallery: imageUrls.additional,
+                        user_id: user?.id,
+                    });
+
+                if (error) {
+                    console.error("Submission error:", error);
+                    toast.error("Failed to add device. Please try again.", {
+                        style: { background: "red", color: "white" }
+                    });
+                    setIsFormLoading(false);
+                    return;
+                }
+
+                toast.success("Device added successfully!", {
+                    style: { background: "black", color: "white" }
+                });
+
+                resetForm();
+                router.push("/product-category/alldevices/");
             }
 
-            // Check for duplicate SKU
-            const { data: pRowSKU, error: skuError } = await supabase
-                .from("products")
-                .select("sku")
-                .eq("sku", finalFormData.sku.trim()).single();
-
-            console.log("PROWsku", pRowSKU)
-
-            if (pRowSKU) {
-                toast.error("Unable to add the device because a device with the same SKU already exists.", {
-                    style: { background: "red", color: "white" }
-                });
-                setIsFormLoading(false);
-                return;
-            }
-
-            // Insert device data into your devices table
-            const { error } = await supabase
-                .from("products")
-                .insert({
-                    product_name: finalFormData.productName,
-                    slug: slug,
-                    sku: finalFormData.sku,
-                    form_factor: filterIds.formFactorId,
-                    processor: filterIds.processorId,
-                    memory: filterIds.memoryId,
-                    storage: filterIds.storageId,
-                    screen_size: filterIds.screenSizeId,
-                    technologies: finalFormData.technologies,
-                    inventory_type: finalFormData.inventoryType,
-                    total_inventory: finalFormData.totalInventory,
-                    stock_quantity: finalFormData.stockQuantity,
-                    date: finalFormData.currentDate,
-                    copilot: toBool(finalFormData.copilotPC),
-                    five_g_Enabled: toBool(finalFormData.fiveGEnabled),
-                    post_status: finalFormData.postStatus,
-                    description: finalFormData.description,
-                    isBundle: false,
-                    isInStock: true,
-                    thumbnail: imageUrls.primary,
-                    gallery: imageUrls.additional,
-                    user_id: user?.id,
-                });
-
-            if (error) {
-                console.log("Submission error: => ", error);
-                toast.error("Failed to add device. Please try again.", {
-                    style: { background: "red", color: "white" }
-                });
-                setIsFormLoading(false);
-                return;
-            }
-
-            toast.success("Device added successfully!", {
-                style: { background: "black", color: "white" }
-            });
-
-            // RESET FORM AFTER SUCCESSFUL SUBMISSION
-            resetForm();
             setIsFormLoading(false);
 
         } catch (error) {
             console.error("Error submitting form:", error);
-            toast.error("Failed to add device. Please try again.", {
+            toast.error("Failed to process device. Please try again.", {
                 style: { background: "red", color: "white" }
             });
             setIsFormLoading(false);
         }
     };
 
-    // Add this reset function after your other functions
     const resetForm = () => {
-        // Reset form data
         setFormData({
             productName: "",
             sku: "",
@@ -696,7 +1029,6 @@ export default function Page() {
             postStatus: "Publish",
         });
 
-        // Reset custom inputs
         setCustomInputs({
             formFactor: "",
             processor: "",
@@ -705,7 +1037,6 @@ export default function Page() {
             screenSize: "",
         });
 
-        // Reset filter IDs
         setFilterIds({
             formFactorId: "",
             processorId: "",
@@ -714,25 +1045,23 @@ export default function Page() {
             screenSizeId: "",
         });
 
-        // Reset images
         setPrimaryImage(null);
         setPrimaryImagePreview(null);
         setAdditionalImages([]);
         setAdditionalImagesPreview([]);
+        setRemovedExistingImages([]);
 
-        // Reset file inputs (if any are in DOM)
         const fileInputs = document.querySelectorAll('input[type="file"]');
         fileInputs.forEach(input => {
             (input as HTMLInputElement).value = '';
         });
     };
 
-    // Helper function to render field with custom option
     const renderFieldWithCustom = (
         label: string,
-        field: keyof typeof formData,
-        options: string[] | undefined,
-        customField: keyof typeof customInputs,
+        field: keyof FormData,
+        options: string[],
+        customField: keyof CustomInputs,
         type: string
     ) => {
         const safeOptions = options || [];
@@ -744,7 +1073,6 @@ export default function Page() {
                     {label}
                 </label>
 
-                {/* OPTIONS */}
                 {isLoading ? (
                     <div className="animate-pulse flex space-x-2">
                         <div className="h-9 bg-gray-200 rounded w-24"></div>
@@ -758,7 +1086,7 @@ export default function Page() {
                                 key={option}
                                 type="button"
                                 onClick={() => handleInputChange(field, option)}
-                                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${formData[field] === option
+                                className={`px-3 py-1.5 text-sm rounded-md cursor-pointer transition-colors ${formData[field] === option
                                     ? "bg-[#3ba1da] text-white border border-[#41abd6]"
                                     : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent"
                                     }`}
@@ -769,7 +1097,6 @@ export default function Page() {
                     </div>
                 )}
 
-                {/* CUSTOM INPUT (ONLY WHEN "Custom" IS SELECTED) */}
                 {showCustomInput && (
                     <div className="flex gap-2 mt-2">
                         <input
@@ -780,13 +1107,13 @@ export default function Page() {
                                 handleCustomInputChange(customField, e.target.value)
                             }
                             className="flex-1 px-4 py-2 border border-gray-300 rounded-md
-              focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
+                focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
                         />
                         <button
                             type="button"
                             onClick={() => handleAddAndSelectFilter(customField, type)}
                             className="px-4 py-2 bg-[#3ba1da] text-white font-medium rounded-md
-              hover:bg-[#41abd6] focus:outline-none focus:ring-2 focus:ring-[#41abd6]"
+                hover:bg-[#41abd6] focus:outline-none focus:ring-2 focus:ring-[#41abd6]"
                         >
                             Add
                         </button>
@@ -796,12 +1123,34 @@ export default function Page() {
         );
     };
 
+    if (isLoadingProduct) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-[#3ba1da] mx-auto" />
+                    <p className="mt-4 text-gray-600">Loading product data...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gray-50">
-            {/* Header Navigation */}
-
             <div className="p-6 max-w-7xl mx-auto">
-                <h1 className="text-2xl font-normal text-gray-900 mb-6">Add New Device</h1>
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => router.back()}
+                            className="flex items-center text-gray-600 hover:text-gray-900"
+                        >
+                            <ArrowLeft className="h-5 w-5 mr-2" />
+                            Back
+                        </button>
+                        <h1 className="text-2xl font-normal text-gray-900">
+                            {isEditing ? 'Edit Device' : 'Add New Device'}
+                        </h1>
+                    </div>
+                </div>
 
                 <form onSubmit={handleSubmit} className="space-y-8">
                     {/* Product Images Section */}
@@ -844,7 +1193,9 @@ export default function Page() {
                                                     accept="image/*"
                                                     onChange={(e) => handleImageUpload(e, 'primary')}
                                                 />
-                                                <span className="text-[#3ba1da] font-medium cursor-pointer hover:text-[#41abd6] transition-colors">Click to upload</span>
+                                                <span className="text-[#3ba1da] font-medium cursor-pointer hover:text-[#41abd6] transition-colors">
+                                                    Click to upload
+                                                </span>
                                             </label>
                                             <p className="text-xs text-gray-500 mt-2">Maximum file size: 10MB</p>
                                             <p className="text-xs text-gray-500">Supported: PNG, JPG, WEBP</p>
@@ -860,7 +1211,6 @@ export default function Page() {
                                     <span className="text-xs text-gray-500">Additional Images</span>
                                 </div>
 
-                                {/* Upload area - full width when no images */}
                                 {additionalImagesPreview.length === 0 ? (
                                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center mb-4">
                                         <div className="text-gray-400 mb-3">
@@ -876,7 +1226,9 @@ export default function Page() {
                                                 multiple
                                                 onChange={(e) => handleImageUpload(e, 'additional')}
                                             />
-                                            <span className="text-[#3ba1da] font-medium cursor-pointer hover:text-[#41abd6] transition-colors">Click to upload</span>
+                                            <span className="text-[#3ba1da] font-medium cursor-pointer hover:text-[#41abd6] transition-colors">
+                                                Click to upload
+                                            </span>
                                         </label>
                                         <p className="text-xs text-gray-500 mt-2">Upload up to 6 images at once</p>
                                         <p className="text-xs text-gray-500">Maximum file size: 10MB each</p>
@@ -1023,7 +1375,6 @@ export default function Page() {
                                 <label className="block text-gray-700 text-sm font-medium mb-2">Date</label>
                                 <input
                                     type="date"
-                                    placeholder="Enter date"
                                     value={formData.currentDate}
                                     onChange={(e) => handleInputChange('currentDate', e.target.value)}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
@@ -1104,19 +1455,18 @@ export default function Page() {
                             </div>
                         </div>
 
-                        {/* Submit Button - Centered */}
+                        {/* Submit Button */}
                         <div className="mt-8 pt-6 border-t border-gray-200 flex justify-center cursor-default">
                             <button
                                 type="submit"
-                                disabled={isFormLoading} // disables the button
+                                disabled={isFormLoading}
                                 className={`px-12 py-3 bg-[#3ba1da] text-white font-medium rounded-md 
-                                    focus:outline-none focus:ring-2 focus:ring-[#41abd6] focus:ring-offset-2
-                                    transition-colors 
-                                    ${isFormLoading ? 'cursor-not-allowed opacity-50' : 'hover:bg-[#41abd6] cursor-pointer'}`}
+                  focus:outline-none focus:ring-2 focus:ring-[#41abd6] focus:ring-offset-2
+                  transition-colors 
+                  ${isFormLoading ? 'cursor-not-allowed opacity-50' : 'hover:bg-[#41abd6] cursor-pointer'}`}
                             >
-                                {isFormLoading ? 'Submitting...' : 'Submit'}
+                                {isFormLoading ? (isEditing ? 'Updating...' : 'Submitting...') : (isEditing ? 'Update Device' : 'Submit')}
                             </button>
-
                         </div>
                     </div>
                 </form>

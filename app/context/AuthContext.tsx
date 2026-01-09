@@ -10,6 +10,7 @@ export type UserProfile = {
     lastName: string;
     email: string;
     role: string;
+    userId: string;
     reseller: string;
     login_at: string | null;
     login_count: string | null;
@@ -19,6 +20,7 @@ type AuthContextType = {
     user: User | null;
     profile: UserProfile | null;
     loading: boolean;
+    isLoggedIn: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,12 +29,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
     const fetchProfile = async (authUser: User | null) => {
         if (!authUser) {
             setProfile(null);
+            setIsLoggedIn(false);
             return;
         }
+        
         const { data, error } = await supabase
             .from("users")
             .select("*")
@@ -42,8 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) {
             console.error("Error fetching profile:", error.message);
             setProfile(null);
+            setIsLoggedIn(false);
         } else {
             setProfile(data);
+            setIsLoggedIn(true);
         }
     };
 
@@ -53,17 +60,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const { data } = await supabase.auth.getSession();
             const authUser = data.session?.user ?? null;
             setUser(authUser);
-            await fetchProfile(authUser);
+            
+            if (authUser) {
+                setIsLoggedIn(true);
+                await fetchProfile(authUser);
+            } else {
+                setIsLoggedIn(false);
+                setProfile(null);
+            }
+            
             setLoading(false);
         };
 
         loadUser();
 
-        const {
-             data: {subscription} } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             const authUser = session?.user ?? null;
             setUser(authUser);
-            fetchProfile(authUser); // async but don't await
+            
+            if (authUser) {
+                setIsLoggedIn(true);
+                fetchProfile(authUser); // async but don't await
+            } else {
+                setIsLoggedIn(false);
+                setProfile(null);
+            }
+            
             setLoading(false);
         });
 
@@ -71,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, profile, loading }}>
+        <AuthContext.Provider value={{ user, profile, loading, isLoggedIn }}>
             {children}
         </AuthContext.Provider>
     );
