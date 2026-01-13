@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, Download, MoreVertical, Search, Filter, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "../context/AuthContext";
 
 // Sample notification data
 const NOTIFICATIONS = [
@@ -112,6 +114,44 @@ export default function NotificationsPage() {
     const [selectedRows, setSelectedRows] = useState<number[]>([]);
     const [entriesPerPage, setEntriesPerPage] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
+    const router = useRouter();
+    const { profile, isLoggedIn, loading, user } = useAuth();
+    const [authChecked, setAuthChecked] = useState(false);
+    const [authInitialized, setAuthInitialized] = useState(false);
+
+
+    // Handle auth check - IMPROVED VERSION
+    useEffect(() => {
+        // Only run auth check after auth is fully initialized
+        if (loading) {
+            // Still loading auth state
+            console.log("AuthContext is still loading...");
+            return;
+        }
+
+        // AuthContext loading is done, mark as initialized
+        console.log("AuthContext loaded - User:", user, "Profile:", profile, "isLoggedIn:", isLoggedIn);
+        setAuthInitialized(true);
+
+        // Now check authentication status
+        if (!isLoggedIn || profile?.isVerified === false && !profile) {
+            console.log("User not authenticated, redirecting to login");
+            router.replace('/login/?redirect_to=notification');
+        } else {
+            console.log("User authenticated, setting authChecked to true");
+            setAuthChecked(true);
+        }
+    }, [loading, isLoggedIn, profile, user, router]);
+
+    // Fetch data only after auth is confirmed AND initialized
+    useEffect(() => {
+        if (!authChecked || !authInitialized) {
+            return; // Don't fetch data until auth is fully checked AND initialized
+        }
+
+        console.log("Auth confirmed and initialized, fetching data...");
+    }, [authChecked, authInitialized]);
+
 
     // Get unique statuses for filter dropdown
     const statuses = ["All", ...new Set(NOTIFICATIONS.map(n => n.status))];

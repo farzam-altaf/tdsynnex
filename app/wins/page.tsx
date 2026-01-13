@@ -3,6 +3,7 @@
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
 
 // Single product for each order number
 const ORDER_PRODUCT_MAPPING: Record<number, string> = {
@@ -73,8 +74,8 @@ export default function Page() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [product, setProduct] = useState("");
     const [showOtherInput, setShowOtherInput] = useState(false);
-    const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
-    const router = useRouter()
+    const router = useRouter();
+    const { profile, isLoggedIn, loading, user } = useAuth();
 
     useEffect(() => {
         if (formData.orderNumber) {
@@ -100,47 +101,42 @@ export default function Page() {
 
 
 
+    const [authChecked, setAuthChecked] = useState(false);
+    const [authInitialized, setAuthInitialized] = useState(false);
+
+
+    // Handle auth check - IMPROVED VERSION
     useEffect(() => {
-        const checkAuth = async () => {
-            const { data } = await supabase.auth.getSession()
-
-            if (!data.session) {
-                router.replace('/login')
-                return
-            }
-
-            setIsLoggedIn(true)
+        // Only run auth check after auth is fully initialized
+        if (loading) {
+            // Still loading auth state
+            console.log("AuthContext is still loading...");
+            return;
         }
 
-        checkAuth()
+        // AuthContext loading is done, mark as initialized
+        console.log("AuthContext loaded - User:", user, "Profile:", profile, "isLoggedIn:", isLoggedIn);
+        setAuthInitialized(true);
 
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
-            if (!session) {
-                router.replace('/login/?redirect_to=wins')
-            } else {
-                setIsLoggedIn(true)
-            }
-        })
+        // Now check authentication status
+        if (!isLoggedIn || profile?.isVerified === false && !profile) {
+            console.log("User not authenticated, redirecting to login");
+            router.replace('/login/?redirect_to=wins');
+        } else {
+            console.log("User authenticated, setting authChecked to true");
+            setAuthChecked(true);
+        }
+    }, [loading, isLoggedIn, profile, user, router]);
 
-        return () => subscription.unsubscribe()
-    }, [router])
-
+    // Fetch data only after auth is confirmed AND initialized
     useEffect(() => {
-        if (!isLoggedIn) return
+        if (!authChecked || !authInitialized) {
+            return; // Don't fetch data until auth is fully checked AND initialized
+        }
 
-        // your logic here
-    }, [isLoggedIn])
+        console.log("Auth confirmed and initialized, fetching data...");
+    }, [authChecked, authInitialized]);
 
-    // ✅ CONDITIONAL RENDERING AT THE END
-    if (isLoggedIn === null) {
-        return null // or loading spinner
-    }
-
-
-    // Optional: prevent UI flicker
-    if (isLoggedIn === null) return null
 
     const validateField = (name: string, value: string) => {
         let error = "";

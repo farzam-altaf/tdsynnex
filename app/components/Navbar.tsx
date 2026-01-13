@@ -12,6 +12,7 @@ import { IoCartOutline } from 'react-icons/io5'
 import { Badge, Drawer } from 'antd'
 import { Bell, Search, ShoppingCart, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useCart } from '../context/CartContext' // Add this import
 
 const shopManager = process.env.NEXT_PUBLIC_SHOPMANAGER;
 const admin = process.env.NEXT_PUBLIC_ADMINISTRATOR;
@@ -50,18 +51,6 @@ interface ProductSearchResult {
   post_status: string;
 }
 
-// Interface for cart items
-interface CartItem {
-  id: string;
-  product_id: string;
-  product_name: string;
-  sku: string;
-  thumbnail?: string;
-  price: number;
-  quantity: number;
-  stock_quantity: number;
-}
-
 function classNames(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ')
 }
@@ -75,8 +64,6 @@ export default function Navbar() {
   const [searchResults, setSearchResults] = useState<ProductSearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [totalProducts, setTotalProducts] = useState(0)
-  const [cartCount, setCartCount] = useState(0)
-  const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const pathname = usePathname()
@@ -86,7 +73,17 @@ export default function Navbar() {
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null)
 
   const router = useRouter()
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading } = useAuth()
+  const {
+    cartItems,
+    cartCount,
+    isLoading: cartLoading,
+    isUpdating: cartUpdating,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    getCartTotal
+  } = useCart() // Use cart context
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -105,70 +102,43 @@ export default function Navbar() {
       setIsLoggedIn(!!session)
     })
 
-    // Fetch cart items (you'll need to implement this based on your cart storage)
-    fetchCartItems();
-
     return () => subscription.unsubscribe()
   }, [])
 
-  // Fetch cart items function (example - adjust based on your implementation)
-  const fetchCartItems = async () => {
-    try {
-      // Example: Fetch cart from localStorage or database
-      // You might want to fetch from Supabase or localStorage based on your implementation
-      const storedCart = localStorage.getItem('cart');
-      if (storedCart) {
-        const items = JSON.parse(storedCart);
-        setCartItems(items);
-        setCartCount(items.reduce((total: number, item: CartItem) => total + item.quantity, 0));
-      }
-    } catch (error) {
-      console.error('Error fetching cart items:', error);
-    }
-  };
-
-  // Calculate total price
+  // Calculate total price using cart context
   const calculateTotal = () => {
-    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-  };
+    return getCartTotal()
+  }
 
-  // Remove item from cart
-  const removeFromCart = (itemId: string) => {
-    const updatedCart = cartItems.filter(item => item.id !== itemId);
-    setCartItems(updatedCart);
-    setCartCount(updatedCart.reduce((total, item) => total + item.quantity, 0));
-    
-    // Update localStorage (or your cart storage)
-    localStorage.setItem('cart', JSON.stringify(updatedCart));
-  };
-
-  // Update item quantity
-  const updateQuantity = (itemId: string, newQuantity: number) => {
-    if (newQuantity < 1) {
-      removeFromCart(itemId);
-      return;
+  // Handle cart item removal
+  const handleRemoveFromCart = async (productId: string) => {
+    try {
+      await removeFromCart(productId)
+    } catch (error) {
+      console.error('Error removing from cart:', error)
     }
+  }
 
-    const updatedCart = cartItems.map(item => {
-      if (item.id === itemId) {
-        return { ...item, quantity: newQuantity };
-      }
-      return item;
-    });
-
-    setCartItems(updatedCart);
-    setCartCount(updatedCart.reduce((total, item) => total + item.quantity, 0));
-    
-    // Update localStorage (or your cart storage)
-    localStorage.setItem('cart', JSON.stringify(updatedCart));
+  // Handle quantity update
+  const handleUpdateQuantity = async (productId: string, newQuantity: number) => {
+    try {
+      // Ensure newQuantity is a valid number
+      const quantity = Math.max(1, newQuantity);
+      await updateQuantity(productId, quantity);
+    } catch (error) {
+      console.error('Error updating quantity:', error);
+      // Show error message to user
+    }
   };
 
-  // Clear cart
-  const clearCart = () => {
-    setCartItems([]);
-    setCartCount(0);
-    localStorage.removeItem('cart');
-  };
+  // Handle clear cart
+  const handleClearCart = async () => {
+    try {
+      await clearCart()
+    } catch (error) {
+      console.error('Error clearing cart:', error)
+    }
+  }
 
   // Fetch search results
   const fetchSearchResults = useCallback(async (query: string) => {
@@ -180,12 +150,11 @@ export default function Navbar() {
 
     setIsSearching(true)
     try {
-      // Search in product_name and sku columns
       const { data: products, error, count } = await supabase
         .from('products')
         .select('id, product_name, sku, slug, thumbnail, stock_quantity, post_status', { count: 'exact' })
         .or(`product_name.ilike.%${query}%,sku.ilike.%${query}%`)
-        .limit(5) // Limit to 5 for dropdown
+        .limit(5)
 
       if (error) {
         console.error('Search error:', error)
@@ -234,6 +203,13 @@ export default function Navbar() {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [])
+
+
+  const handleCart = () => {
+    router.replace('/cart');
+    setIsCartDrawerOpen(false);
+  };
+
 
   // Focus search input when dropdown opens
   useEffect(() => {
@@ -319,7 +295,6 @@ export default function Navbar() {
   };
 
   const handleCheckout = () => {
-    // Implement checkout logic
     router.push('/checkout');
     setIsCartDrawerOpen(false);
   };
@@ -327,6 +302,11 @@ export default function Navbar() {
   const handleContinueShopping = () => {
     setIsCartDrawerOpen(false);
     router.push('/product-category/alldevices');
+  };
+
+  // Get stock quantity for a cart item
+  const getItemStockQuantity = (cartItem: any) => {
+    return cartItem.product?.stock_quantity || 0;
   };
 
   return (
@@ -364,7 +344,6 @@ export default function Navbar() {
                         </Link>
                       )
                     })}
-
                   </div>
                 </div>
 
@@ -374,7 +353,7 @@ export default function Navbar() {
                     className="hidden lg:flex relative rounded-full p-1 text-black cursor-pointer"
                   >
                     <span className="sr-only">Notifications</span>
-                    <Bell size={22} /> 
+                    <Bell size={22} />
                   </Link>
 
                   {/* Desktop Search Button and Dropdown */}
@@ -524,7 +503,6 @@ export default function Navbar() {
                           authMenuItems.map((item) => {
                             const isActive = pathname === item.href
 
-                            // ✅ LOGOUT ITEM
                             if (item.href === 'logout') {
                               return (
                                 <button
@@ -537,7 +515,6 @@ export default function Navbar() {
                               )
                             }
 
-                            // ✅ NORMAL LINK
                             return (
                               <Link
                                 key={item.name}
@@ -585,7 +562,8 @@ export default function Navbar() {
                   <button
                     type="button"
                     onClick={handleCartClick}
-                    className="relative rounded-full p-1 sm:mt-1 mt-2 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200"
+                    disabled={cartUpdating || cartLoading}
+                    className="relative rounded-full p-1 sm:mt-1 mt-2 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <span className="sr-only">Cart</span>
                     <Badge
@@ -633,7 +611,6 @@ export default function Navbar() {
                       <div className="absolute right-0 top-full mt-2 w-36 origin-top-right rounded-md bg-white shadow-lg z-50 border border-gray-200">
                         {isLoggedIn ? (
                           authMenuItems.map((item) => {
-                            // ✅ LOGOUT CASE
                             if (item.href === 'logout') {
                               return (
                                 <button
@@ -646,7 +623,6 @@ export default function Navbar() {
                               )
                             }
 
-                            // ✅ NORMAL LINK
                             const isActive = pathname === item.href
 
                             return (
@@ -755,10 +731,11 @@ export default function Navbar() {
             </div>
             {cartItems.length > 0 && (
               <button
-                onClick={clearCart}
-                className="text-sm text-red-500 hover:text-red-700"
+                onClick={handleClearCart}
+                disabled={cartUpdating}
+                className="text-sm text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Clear All
+                {cartUpdating ? 'Clearing...' : 'Clear All'}
               </button>
             )}
           </div>
@@ -766,10 +743,15 @@ export default function Navbar() {
         placement="right"
         onClose={() => setIsCartDrawerOpen(false)}
         open={isCartDrawerOpen}
-        size={450}
+        size={400}
         className="cart-drawer"
       >
-        {cartItems.length === 0 ? (
+        {cartLoading ? (
+          <div className="flex flex-col items-center justify-center h-full py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#35c8dc]"></div>
+            <p className="mt-4 text-gray-500">Loading cart...</p>
+          </div>
+        ) : cartItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full py-12">
             <ShoppingCart className="text-gray-300 mb-4" size={64} />
             <h3 className="text-lg font-medium text-gray-900 mb-2">Your cart is empty</h3>
@@ -787,102 +769,104 @@ export default function Navbar() {
           <div className="flex flex-col h-full">
             {/* Cart Items List */}
             <div className="flex-1 overflow-y-auto">
-              {cartItems.map((item) => (
-                <div key={item.id} className="border-b border-gray-200 py-4">
-                  <div className="flex items-start space-x-3">
-                    {/* Product Image */}
-                    <div className="w-20 h-20 bg-gray-100 rounded-md flex items-center justify-center flex-shrink-0">
-                      {item.thumbnail ? (
-                        <img
-                          src={item.thumbnail}
-                          alt={item.product_name}
-                          className="w-full h-full object-contain p-1"
-                        />
-                      ) : (
-                        <ShoppingCart className="text-gray-400" size={24} />
-                      )}
-                    </div>
+              {cartItems.map((item) => {
+                const stockQuantity = getItemStockQuantity(item);
+                const productName = item.product?.product_name || 'Unknown Product';
+                const sku = item.product?.sku || 'N/A';
+                const thumbnail = item.product?.thumbnail;
+                const price = item.product?.price || 0;
+                const productSlug = item.product?.slug || '';
 
-                    {/* Product Details */}
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-medium text-gray-900 truncate">
-                        {item.product_name}
-                      </h4>
-                      <p className="text-xs text-gray-500">SKU: {item.sku}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="text-sm font-semibold text-[#35c8dc]">
-                          ${item.price.toFixed(2)}
-                        </div>
-                        
-                        {/* Quantity Controls */}
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100"
-                          >
-                            -
-                          </button>
-                          <span className="text-sm font-medium">{item.quantity}</span>
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            disabled={item.quantity >= item.stock_quantity}
-                            className={`w-6 h-6 flex items-center justify-center border border-gray-300 rounded ${
-                              item.quantity >= item.stock_quantity
+                return (
+                  <div key={item.id} className="border-b border-gray-200 py-4">
+                    <div className="flex items-start space-x-3">
+                      {/* Product Image */}
+                      <div className="w-15 h-15 bg-gray-100 rounded-md flex items-center justify-center flex-shrink-0">
+                        {thumbnail ? (
+                          <img
+                            src={thumbnail}
+                            alt={productName}
+                            className="w-full h-full object-contain p-1"
+                          />
+                        ) : (
+                          <ShoppingCart className="text-gray-400" size={24} />
+                        )}
+                      </div>
+
+                      {/* Product Details */}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium text-gray-900 truncate hover:text-[#35c8dc] cursor-pointer"
+                          onClick={() => productSlug && router.push(`/product/${productSlug}`)}>
+                          {productName}
+                        </h4>
+                        <p className="text-xs text-gray-500">SKU: {sku}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          {/* Quantity Controls */}
+                          {/* <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => handleUpdateQuantity(item.product_id, item.quantity - 1)}
+                              disabled={cartUpdating}
+                              className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              -
+                            </button>
+                            <span className="text-sm font-medium">{item.quantity}</span>
+                            <button
+                              onClick={() => handleUpdateQuantity(item.product_id, item.quantity + 1)}
+                              disabled={cartUpdating || item.quantity >= stockQuantity}
+                              className={`w-6 h-6 flex items-center justify-center border border-gray-300 rounded ${item.quantity >= stockQuantity || cartUpdating
                                 ? 'opacity-50 cursor-not-allowed'
                                 : 'hover:bg-gray-100'
-                            }`}
-                          >
-                            +
-                          </button>
+                                }`}
+                            >
+                              +
+                            </button>
+                          </div> */}
                         </div>
                       </div>
+
+                      {/* Remove Button */}
+                      <button
+                        onClick={() => handleRemoveFromCart(item.product_id)}
+                        disabled={cartUpdating}
+                        className="text-gray-400 hover:text-red-500 p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
 
-                    {/* Remove Button */}
-                    <button
-                      onClick={() => removeFromCart(item.id)}
-                      className="text-gray-400 hover:text-red-500 p-1"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {/* Stock Status */}
+                    {item.quantity >= stockQuantity && stockQuantity > 0 && (
+                      <p className="text-xs text-red-500 mt-2">
+                        Only {stockQuantity} items in stock
+                      </p>
+                    )}
+                    {stockQuantity === 0 && (
+                      <p className="text-xs text-red-500 mt-2">
+                        Out of stock
+                      </p>
+                    )}
                   </div>
-                  
-                  {/* Stock Status */}
-                  {item.quantity >= item.stock_quantity && (
-                    <p className="text-xs text-red-500 mt-2">
-                      Only {item.stock_quantity} items in stock
-                    </p>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Cart Summary */}
             <div className="border-t border-gray-200 pt-4 mt-4">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-gray-600">Subtotal</span>
-                <span className="text-lg font-bold">${calculateTotal().toFixed(2)}</span>
-              </div>
-              
               <div className="space-y-3">
                 <button
+                  onClick={handleCart}
+                  className="w-full py-2 border-2 cursor-pointer border-[#35c8dc] text-[#35c8dc] font-bold hover:bg-gray-50 transition-colors"
+                >
+                  View Cart
+                </button>
+                <button
                   onClick={handleCheckout}
-                  className="w-full py-3 bg-[#35c8dc] text-white rounded-md font-medium hover:bg-[#2db4c8] transition-colors"
+                  className="w-full py-3 cursor-pointer bg-[#35c8dc] text-white font-medium hover:bg-[#2db4c8] transition-colors"
                 >
                   Proceed to Checkout
                 </button>
-                
-                <button
-                  onClick={handleContinueShopping}
-                  className="w-full py-2 border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors"
-                >
-                  Continue Shopping
-                </button>
               </div>
-              
-              <p className="text-xs text-gray-500 text-center mt-4">
-                Free shipping on orders over $100
-              </p>
             </div>
           </div>
         )}

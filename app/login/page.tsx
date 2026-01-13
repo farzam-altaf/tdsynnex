@@ -5,63 +5,80 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useAuth } from "../context/AuthContext";
 
 export default function Page() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  // Only track errors for email and password
+  const [isloading, setLoading] = useState(false);
   const [errors, setErrors] = useState({
     email: "",
     password: "",
   });
-
-  // Track if form has been submitted
   const [submitted, setSubmitted] = useState(false);
 
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const router = useRouter();
+  const { profile, isLoggedIn, loading, user } = useAuth();
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authInitialized, setAuthInitialized] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
-
+  // Handle auth check for logged-in users - FIXED VERSION
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setIsLoggedIn(!!data.session)
-    })
+    // Don't do anything if still loading
+    if (loading) {
+      return;
+    }
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsLoggedIn(!!session)
-    })
+    // Mark auth as initialized
+    setAuthInitialized(true);
 
-    return () => subscription.unsubscribe()
-  }, [])
+    // Check if user is already logged in and verified
+    if (isLoggedIn && profile?.isVerified === true) {
+      console.log("User is already logged in and verified");
 
-  useEffect(() => {
-    // Check current session on mount
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        setIsLoggedIn(true);
-        router.replace('/'); // ✅ safe: inside useEffect
+      // Prevent multiple redirects
+      if (!isRedirecting) {
+        setIsRedirecting(true);
+        const redirectTo = searchParams.get("redirect_to");
+        const redirectPath = redirectTo ? `/${redirectTo}` : "/";
+        console.log("Redirecting to:", redirectPath);
+
+        // Use setTimeout to ensure redirect happens in next tick
+        setTimeout(() => {
+          router.push(redirectPath);
+        }, 100);
       }
-    });
+    } else {
+      console.log("User not logged in or not verified, staying on login page");
+      setAuthChecked(true);
+    }
+  }, [loading, isLoggedIn, profile, router, searchParams, isRedirecting]);
 
-    // Listen for auth state changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setIsLoggedIn(true);
-        router.replace('/'); // ✅ safe
-      } else {
-        setIsLoggedIn(false);
-      }
-    });
+  // Optional: prevent UI flicker - MUST BE AFTER ALL HOOKS
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3ba1da] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
-    return () => subscription.unsubscribe();
-  }, [router]);
+  // If already logged in and redirecting, show loading
+  if (isLoggedIn && profile?.isVerified === true && !authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3ba1da] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Redirecting...</p>
+        </div>
+      </div>
+    );
+  }
 
   const validateForm = () => {
     const newErrors = {
@@ -121,6 +138,36 @@ export default function Page() {
 
     // ✅ USER LOGIN SUCCESS
     const userId = data.user?.id;
+
+
+    if (!userId) return;
+
+    // 🔍 CHECK isVerified
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("isVerified")
+      .eq("userId", userId)
+      .single();
+
+    if (userError) {
+      toast.error("Unable to verify account status", {
+        style: { background: "black", color: "white" },
+      });
+      await supabase.auth.signOut();
+      setLoading(false);
+      return;
+    }
+
+    // ❌ NOT APPROVED
+    if (!userData?.isVerified) {
+      toast.error("Your account is not approved yet.", {
+        style: { background: "black", color: "white" },
+      });
+
+      await supabase.auth.signOut(); // 🔴 force logout
+      setLoading(false);
+      return;
+    }
 
     if (userId) {
       // 1️⃣ Get previous login_count
@@ -216,10 +263,10 @@ export default function Page() {
               <div className="flex justify-center pt-4">
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={isloading}
                   className="w-full rounded-md bg-[#3ba1da] px-6 py-3 cursor-pointer font-semibold text-white transition-colors hover:bg-[#41abd6] disabled:opacity-50"
                 >
-                  {loading ? "Please wait..." : "Login"}
+                  {isloading ? "Please wait..." : "Login"}
                 </button>
               </div>
 

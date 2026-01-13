@@ -8,7 +8,9 @@ import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/context/AuthContext";
-import { FaPlus } from "react-icons/fa6";
+import { FaMinus, FaPlus } from "react-icons/fa6";
+import { useCart } from "@/app/context/CartContext";
+import { toast } from "sonner";
 
 // Filter types to fetch from database
 const FILTER_TYPES = ["form_factor", "processor", "screen_size", "memory", "storage"];
@@ -121,13 +123,20 @@ const FiltersSidebarSkeleton = () => (
 );
 
 export default function Page() {
-    const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
     const router = useRouter();
-    const { profile } = useAuth();
+    const { profile, isLoggedIn, loading, user } = useAuth();
     const admin = process.env.NEXT_PUBLIC_ADMINISTRATOR;
     const shopManager = process.env.NEXT_PUBLIC_SHOPMANAGER;
     const superSubscriber = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
     const subscriber = process.env.NEXT_PUBLIC_SUBSCRIBER;
+    const {
+        addToCart,
+        removeFromCart,
+        isUpdating,
+        addingProductId,
+        isInCart, // Add this
+        cartItems
+    } = useCart()
 
     // State for database filters
     const [databaseFilters, setDatabaseFilters] = useState<Record<string, string[]>>({});
@@ -136,7 +145,8 @@ export default function Page() {
     // State for products
     const [products, setProducts] = useState<Product[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-
+    const [authChecked, setAuthChecked] = useState(false);
+    const [authInitialized, setAuthInitialized] = useState(false);
     // Combined filters state
     const [filters, setFilters] = useState<Record<string, string[]>>({
         formFactor: [],
@@ -148,111 +158,154 @@ export default function Page() {
         fiveGEnabled: [],
     });
 
+    const handleAddToCart = async (productId: string) => {
+        try {
+            await addToCart(productId, 1)
+            toast.success('Product added to cart!', {
+                style: { background: "black", color: "white" },
+            })
+        } catch (error: any) {
+            console.error('Error adding to cart:', error)
+            let errorMessage = 'Failed to add product to cart. Please try again.'
+
+            if (error?.code === '23505') {
+                errorMessage = 'This product is already in your cart.'
+            } else if (error?.code === '23503') {
+                errorMessage = 'Product not found.'
+            } else if (error?.message?.includes('foreign key constraint')) {
+                errorMessage = 'Invalid product. Please refresh the page and try again.'
+            }
+
+            toast.error(errorMessage, {
+                style: { background: "red", color: "white" },
+            })
+        }
+    }
+
+    // Handle cart item removal
+    const handleRemoveFromCart = async (productId: string) => {
+        try {
+            await removeFromCart(productId)
+        } catch (error) {
+            console.error('Error removing from cart:', error)
+        }
+    }
+
+    const checkIfInCart = (productId: string): boolean => {
+        return isInCart(productId)
+    }
+
+
     const [showFilters, setShowFilters] = useState(false);
     // Set all filters to be open by default
     const [openFilters, setOpenFilters] = useState<string[]>([]);
+    console.log("profile", profile, loading, isLoggedIn)
 
+    // Handle auth check - IMPROVED VERSION
     useEffect(() => {
-        const checkAuth = async () => {
-            const { data } = await supabase.auth.getSession();
+        // Only run auth check after auth is fully initialized
+        if (loading) {
+            // Still loading auth state
+            console.log("AuthContext is still loading...");
+            return;
+        }
 
-            if (!data.session) {
-                router.replace('/login/?redirect_to=product-category/alldevices');
-                return;
-            }
+        // AuthContext loading is done, mark as initialized
+        console.log("AuthContext loaded - User:", user, "Profile:", profile, "isLoggedIn:", isLoggedIn);
+        setAuthInitialized(true);
 
-            setIsLoggedIn(true);
-        };
+        // Now check authentication status
+        if (!isLoggedIn || profile?.isVerified === false && !profile) {
+            console.log("User not authenticated, redirecting to login");
+            router.replace('/login/?redirect_to=product-category/alldevices');
+        } else {
+            console.log("User authenticated, setting authChecked to true");
+            setAuthChecked(true);
+        }
+    }, [loading, isLoggedIn, profile, user, router]);
 
-        checkAuth();
+    // Fetch data only after auth is confirmed AND initialized
+    useEffect(() => {
+        if (!authChecked || !authInitialized) {
+            return; // Don't fetch data until auth is fully checked AND initialized
+        }
 
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
-            if (!session) {
-                router.replace('/login');
-            } else {
-                setIsLoggedIn(true);
-            }
-        });
-
-        // Fetch data from database
+        console.log("Auth confirmed and initialized, fetching data...");
         fetchDataFromDatabase();
-
-        return () => subscription.unsubscribe();
-    }, [router]);
+    }, [authChecked, authInitialized]);
 
     // Fetch all data from database
     const fetchDataFromDatabase = async () => {
+        if (!authChecked) return;
         try {
             setIsLoading(true);
 
             // 1. Fetch filters from database
             const allFilters: Record<string, string[]> = {};
             const mappings: Record<string, Record<string, string>> = {};
+            if (isLoggedIn) {
+                // Fetch each filter type
+                for (const type of FILTER_TYPES) {
+                    const { data, error } = await supabase
+                        .from("filters")
+                        .select("id, title")
+                        .eq("type", type)
+                        .order("title");
 
-            // Fetch each filter type
-            for (const type of FILTER_TYPES) {
-                const { data, error } = await supabase
-                    .from("filters")
-                    .select("id, title")
-                    .eq("type", type)
-                    .order("title");
+                    if (error) {
+                        console.error(`Error fetching ${type} filters:`, error);
+                        allFilters[type] = [];
+                        mappings[type] = {};
+                    } else {
+                        // Map database type names to frontend names
+                        const frontendKey = type === "form_factor" ? "formFactor" :
+                            type === "screen_size" ? "screenSize" : type;
 
-                if (error) {
-                    console.error(`Error fetching ${type} filters:`, error);
-                    allFilters[type] = [];
-                    mappings[type] = {};
-                } else {
-                    // Map database type names to frontend names
-                    const frontendKey = type === "form_factor" ? "formFactor" :
-                        type === "screen_size" ? "screenSize" : type;
+                        // Store titles for display
+                        allFilters[frontendKey] = data?.map(item => item.title) || [];
 
-                    // Store titles for display
-                    allFilters[frontendKey] = data?.map(item => item.title) || [];
+                        // Create ID to title mapping for this filter type
+                        const idToTitle: Record<string, string> = {};
+                        data?.forEach(item => {
+                            idToTitle[item.id] = item.title;
+                        });
 
-                    // Create ID to title mapping for this filter type
-                    const idToTitle: Record<string, string> = {};
-                    data?.forEach(item => {
-                        idToTitle[item.id] = item.title;
-                    });
-
-                    mappings[frontendKey] = idToTitle;
+                        mappings[frontendKey] = idToTitle;
+                    }
                 }
+
+                setDatabaseFilters(allFilters);
+                setFilterMappings(mappings);
+
+                // 2. Fetch products from database
+                const { data: productsData, error: productsError } = await supabase
+                    .from("products")
+                    .select("*")
+                    .order("date", { ascending: false });
+
+                if (productsError) {
+                    console.error("Error fetching products:", productsError);
+                    setProducts([]);
+                } else if (productsData) {
+                    // Now that mappings are set, we need to map products with the correct mappings
+                    // Since state updates are async, we need to use the local mappings variable
+                    const productsWithTitles = productsData.map(product => ({
+                        ...product,
+                        // Map filter IDs to titles using the local mappings variable
+                        formFactorTitle: mappings.formFactor?.[product.form_factor] || product.form_factor,
+                        processorTitle: mappings.processor?.[product.processor] || product.processor,
+                        memoryTitle: mappings.memory?.[product.memory] || product.memory,
+                        storageTitle: mappings.storage?.[product.storage] || product.storage,
+                        screenSizeTitle: mappings.screenSize?.[product.screen_size] || product.screen_size,
+                    }));
+
+                    setProducts(productsWithTitles);
+                }
+
+                // Initialize open filters with all available keys
+                const allFilterKeys = [...Object.keys(allFilters), ...HARDCODED_FILTER_KEYS];
+                setOpenFilters(allFilterKeys);
             }
-
-            setDatabaseFilters(allFilters);
-            setFilterMappings(mappings);
-
-            // 2. Fetch products from database
-            const { data: productsData, error: productsError } = await supabase
-                .from("products")
-                .select("*")
-                .order("date", { ascending: false });
-
-            if (productsError) {
-                console.error("Error fetching products:", productsError);
-                setProducts([]);
-            } else if (productsData) {
-                // Now that mappings are set, we need to map products with the correct mappings
-                // Since state updates are async, we need to use the local mappings variable
-                const productsWithTitles = productsData.map(product => ({
-                    ...product,
-                    // Map filter IDs to titles using the local mappings variable
-                    formFactorTitle: mappings.formFactor?.[product.form_factor] || product.form_factor,
-                    processorTitle: mappings.processor?.[product.processor] || product.processor,
-                    memoryTitle: mappings.memory?.[product.memory] || product.memory,
-                    storageTitle: mappings.storage?.[product.storage] || product.storage,
-                    screenSizeTitle: mappings.screenSize?.[product.screen_size] || product.screen_size,
-                }));
-
-                setProducts(productsWithTitles);
-            }
-
-            // Initialize open filters with all available keys
-            const allFilterKeys = [...Object.keys(allFilters), ...HARDCODED_FILTER_KEYS];
-            setOpenFilters(allFilterKeys);
-
         } catch (error) {
             console.error("Error fetching data:", error);
         } finally {
@@ -590,7 +643,7 @@ export default function Page() {
 
                         {/* Products grid - Show skeleton when loading */}
                         <div className="w-full lg:max-w-7xl lg:mx-auto lg:px-6">
-                            {isLoading ? (
+                            {isLoading || !authChecked ? (
                                 <ProductsGridSkeleton />
                             ) : filteredProducts.length > 0 ? (
                                 <>
@@ -618,6 +671,8 @@ export default function Page() {
                                                     return null; // Don't render this product for non-admin users
                                                 }
                                             }
+
+                                            const isProductInCart = checkIfInCart(product.id)
 
                                             return (
                                                 <Link href={`/product/${product.slug}`} key={product.id}>
@@ -681,12 +736,43 @@ export default function Page() {
 
                                                             {/* Button Container - Fixed at bottom */}
                                                             <div className="sm:pt-4 sm:mb-2 mt-auto">
-                                                                {product.stock_quantity != 0 ? (
-                                                                    <button className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-[#0a4647] border border-[#0a4647] rounded-sm cursor-pointer hover:bg-[#0a4647] hover:text-white transition-colors">
-                                                                        Add to Cart
-                                                                    </button>
+                                                                {product.stock_quantity != 0 && product.post_status === "Publish" ? (
+                                                                    <>
+                                                                        {isProductInCart ? (
+                                                                            // Remove from cart button
+                                                                            <div className="flex flex-col items-center space-y-2">
+
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.preventDefault() // Prevent Link navigation
+                                                                                        e.stopPropagation()
+                                                                                        handleRemoveFromCart(product.id)
+                                                                                    }}
+                                                                                    disabled={isUpdating}
+                                                                                    className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm text-red-600 hover:text-white border border-red-600 rounded-sm cursor-pointer hover:bg-red-500 hover:border-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                                                                >
+                                                                                    Remove
+                                                                                </button>
+                                                                            </div>
+                                                                        ) : (
+                                                                            // Add to cart button
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault() // Prevent Link navigation
+                                                                                    e.stopPropagation()
+                                                                                    handleAddToCart(product.id)
+                                                                                }}
+                                                                                disabled={isUpdating && addingProductId === product.id}
+                                                                                className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-[#0a4647] border border-[#0a4647] rounded-sm cursor-pointer hover:bg-[#0a4647] hover:text-white transition-colors disabled:opacity-50"
+                                                                            >
+                                                                                {isUpdating && addingProductId === product.id ? 'Adding...' : 'Add to Cart'}
+                                                                            </button>
+                                                                        )}
+                                                                    </>
                                                                 ) : (
-                                                                    <button className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-[#4e5050] border border-[#484a4a] rounded-sm cursor-pointer hover:bg-[#c7caca] transition-colors">
+                                                                    <button
+                                                                        className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-[#4e5050] border border-[#484a4a] rounded-sm cursor-pointer hover:bg-[#eaebeb] transition-colors"
+                                                                    >
                                                                         Read More
                                                                     </button>
                                                                 )}

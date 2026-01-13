@@ -18,7 +18,7 @@ import {
 import { Carousel, Popconfirm, Skeleton } from "antd";
 import { supabase } from "@/lib/supabase/client";
 import { FaEdit } from "react-icons/fa";
-import { FaDeleteLeft } from "react-icons/fa6";
+import { FaDeleteLeft, FaMinus } from "react-icons/fa6";
 import { MdDelete } from "react-icons/md";
 import { useAuth } from "@/app/context/AuthContext";
 import Link from "next/link";
@@ -26,6 +26,7 @@ import { useRef } from "react";
 import type { CarouselRef } from "antd/es/carousel";
 import { toast } from "sonner";
 import { BiRadioCircle } from "react-icons/bi";
+import { useCart } from "@/app/context/CartContext";
 
 // Loading skeleton component
 const ProductSkeleton = () => {
@@ -162,20 +163,295 @@ interface RelatedProduct {
 export default function Page() {
     const params = useParams();
     const router = useRouter();
+    const { profile, isLoggedIn, loading, user } = useAuth();
     const slug = params.slug as string;
-
-    const { profile } = useAuth();
     const admin = process.env.NEXT_PUBLIC_ADMINISTRATOR;
     const shopManager = process.env.NEXT_PUBLIC_SHOPMANAGER;
 
     const [product, setProduct] = useState<Product | null>(null);
     const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [isloading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedImage, setSelectedImage] = useState(0);
     const [quantity, setQuantity] = useState(1);
     const [isWishlisted, setIsWishlisted] = useState(false);
-    // Function to parse gallery images from text/string to array
+
+    // Carousel ref for manual control
+    const carouselRef = useRef<CarouselRef>(null);
+
+    const {
+        addToCart,
+        removeFromCart,
+        isUpdating,
+        addingProductId,
+        isInCart,
+        cartItems
+    } = useCart()
+
+    // Carousel navigation functions
+    const goToPreviousSlide = () => {
+        if (carouselRef.current) {
+            carouselRef.current.prev();
+        }
+    };
+
+    const goToNextSlide = () => {
+        if (carouselRef.current) {
+            carouselRef.current.next();
+        }
+    };
+
+    const [authChecked, setAuthChecked] = useState(false);
+    const [authInitialized, setAuthInitialized] = useState(false);
+
+    // Handle auth check - IMPROVED VERSION
+    useEffect(() => {
+        // Only run auth check after auth is fully initialized
+        if (loading) {
+            // Still loading auth state
+            console.log("AuthContext is still loading...");
+            return;
+        }
+
+        // AuthContext loading is done, mark as initialized
+        console.log("AuthContext loaded - User:", user, "Profile:", profile, "isLoggedIn:", isLoggedIn);
+        setAuthInitialized(true);
+
+        // Now check authentication status
+        if (!isLoggedIn || profile?.isVerified === false && !profile) {
+            console.log("User not authenticated, redirecting to login");
+            router.replace(`/login/?redirect_to=product/${slug}`);
+        } else {
+            console.log("User authenticated, setting authChecked to true");
+            setAuthChecked(true);
+        }
+    }, [loading, isLoggedIn, profile, user, router]);
+
+    // Fetch data only after auth is confirmed AND initialized
+    useEffect(() => {
+        if (!authChecked || !authInitialized) {
+            return; // Don't fetch data until auth is fully checked AND initialized
+        }
+
+        console.log("Auth confirmed and initialized, fetching data...");
+    }, [authChecked, authInitialized]);
+
+    // Optional: prevent UI flicker - MUST BE AFTER ALL HOOKS
+    if (isLoggedIn === null) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3ba1da] mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading...</p>
+                </div>
+            </div>
+        );
+    }
+
+    const handleAddToCart = async (productId: string) => {
+        try {
+            await addToCart(productId, 1)
+            toast.success('Product added to cart!', {
+                style: { background: "black", color: "white" },
+            })
+        } catch (error: any) {
+            let errorMessage = 'Failed to add product to cart. Please try again.'
+
+            if (error?.code === '23505') {
+                errorMessage = 'This product is already in your cart.'
+            } else if (error?.code === '23503') {
+                errorMessage = 'Product not found.'
+                router.push(`/product/${slug}`)
+            } else if (error?.message?.includes('foreign key constraint')) {
+                errorMessage = 'Invalid product. Please refresh the page and try again.'
+            }
+
+            toast.error(errorMessage, {
+                style: { background: "red", color: "white" },
+            })
+        }
+    }
+
+    // Handle cart item removal
+    const handleRemoveFromCart = async (productId: string) => {
+        try {
+            await removeFromCart(productId)
+            toast.success('Product removed from cart!', {
+                style: { background: "black", color: "white" },
+            })
+        } catch (error: any) {
+            console.error('Error removing from cart:', error)
+            let errorMessage = 'Failed to remove product from cart. Please try again.'
+
+            if (error?.message?.includes('not found')) {
+                errorMessage = 'Product not found in cart.'
+            }
+
+            toast.error(errorMessage, {
+                style: { background: "red", color: "white" },
+            })
+        }
+    }
+
+    // Check if product is in cart
+    const checkIfInCart = (productId: string): boolean => {
+        return isInCart(productId)
+    }
+
+    // Get cart item for specific product
+    const getCartItemForProduct = (productId: string) => {
+        return cartItems.find(item => item.product_id === productId)
+    }
+
+    // Main product action button with Read More for out of stock
+    const renderMainActionButton = () => {
+        if (!product) return null;
+
+        if (product.stock_quantity === 0) {
+            return (
+                <div className="flex flex-col gap-2">
+                    <button
+                        className="flex items-center justify-center gap-2 px-5 py-2 border border-gray-400 text-gray-400 rounded-sm cursor-not-allowed transition-colors"
+                        disabled
+                    >
+                        Out of Stock
+                    </button>
+                    <button
+                        onClick={() => {
+                            // Scroll to description section
+                            const descriptionSection = document.getElementById('product-description');
+                            if (descriptionSection) {
+                                descriptionSection.scrollIntoView({ behavior: 'smooth' });
+                            }
+                        }}
+                        className="flex items-center justify-center gap-2 px-5 py-2 border border-[#0a3637] text-[#0a3637] rounded-sm hover:bg-[#0a3637] hover:text-white transition-colors"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Read More Details
+                    </button>
+                </div>
+            );
+        }
+
+        if (product.post_status !== "Publish") {
+            return (
+                <div
+                    className="flex w-56 items-center justify-center gap-2 px-5 py-2 border border-[#0a3637] text-[#0a3637] rounded-sm"
+                >
+                    Private
+                </div>
+            );
+        }
+
+        const isProductInCart = checkIfInCart(product.id);
+        const cartItem = getCartItemForProduct(product.id);
+
+        if (isProductInCart) {
+            return (
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => handleRemoveFromCart(product.id)}
+                        disabled={isUpdating}
+                        className="flex items-center justify-center gap-1 px-5 py-2 text-sm
+               border border-red-600 bg-red-600 text-white rounded
+               hover:bg-red-700 hover:border-red-700 font-medium
+               disabled:opacity-50"
+                    >
+                        {isUpdating ? 'Removing...' : 'Remove from Cart'}
+                    </button>
+                </div>
+            );
+        } else {
+            return (
+                <button
+                    onClick={() => handleAddToCart(product.id)}
+                    disabled={isUpdating && addingProductId === product.id}
+                    className="flex items-center justify-center gap-2 px-5 py-2 cursor-pointer border border-[#0a3637] text-[#0a3637] rounded-sm hover:bg-[#0a3637] hover:text-white transition-colors disabled:opacity-50"
+                >
+                    <ShoppingCart className="h-4 w-4" />
+                    {isUpdating && addingProductId === product.id ? 'Adding...' : 'Add to Cart'}
+                </button>
+            );
+        }
+    };
+
+    // Related product action button with Read More for out of stock
+    const renderRelatedProductButton = (product: RelatedProduct) => {
+        if (product.stock_quantity === 0) {
+            return (
+                <div className="flex flex-col gap-2">
+                    <button
+                        className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-gray-400 border border-gray-400 rounded-sm cursor-not-allowed"
+                        disabled
+                    >
+                        Out of Stock
+                    </button>
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            router.push(`/product/${product.slug}`);
+                        }}
+                        className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-[#0a4647] border border-[#0a4647] rounded-sm cursor-pointer hover:bg-[#0a4647] hover:text-white transition-colors"
+                    >
+                        Read More
+                    </button>
+                </div>
+            );
+        }
+        if (product.post_status !== "Publish") {
+            return (
+                <div className="sm:pt-4 sm:mb-2 mt-auto">
+                                                        <button
+                                                            className="self-start sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium
+                                                                text-[#4e5050] border border-[#484a4a] rounded-sm
+                                                                hover:bg-[#eaebeb] transition-colors"
+                                                        >
+                                                            Read More
+                                                        </button>
+                                                    </div>
+            );
+        }
+
+        const isProductInCart = checkIfInCart(product.id);
+        const cartItem = getCartItemForProduct(product.id);
+
+        if (isProductInCart) {
+            return (
+                <div className="space-y-2">
+                    {/* Remove button */}
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleRemoveFromCart(product.id);
+                        }}
+                        disabled={isUpdating}
+                        className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-red-500 border border-red-500 rounded-sm cursor-pointer hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50"
+                    >
+                        Remove
+                    </button>
+                </div>
+            );
+        } else {
+            return (
+                <button
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleAddToCart(product.id);
+                    }}
+                    disabled={isUpdating && addingProductId === product.id}
+                    className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-[#0a4647] border border-[#0a4647] rounded-sm cursor-pointer hover:bg-[#0a4647] hover:text-white transition-colors disabled:opacity-50"
+                >
+                    {isUpdating && addingProductId === product.id ? 'Adding...' : 'Add to Cart'}
+                </button>
+            );
+        }
+    };
+
     const parseGalleryImages = (galleryData: string | string[] | null): string[] => {
         if (!galleryData) return [];
 
@@ -242,7 +518,7 @@ export default function Page() {
                     .single();
 
                 if (productError) {
-                    console.error("Error fetching product:", productError);
+                    router.push(`/product/${slug}`)
                     setError("Product not found");
                     return;
                 }
@@ -411,7 +687,7 @@ export default function Page() {
     }
 
     // Error state
-    if (error || !product) {
+    if (error) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
@@ -443,13 +719,13 @@ export default function Page() {
                                 </Link>
                                 {" / "}
                                 <Link
-                                    href={`/product-category/${product.memoryTitle?.toLowerCase().replace(/\s+/g, '-')}/`}
+                                    href={`/product-category/${product?.memoryTitle?.toLowerCase().replace(/\s+/g, '-')}/`}
                                     className="text-xs hover:text-red-700"
                                 >
-                                    {product.memoryTitle}
+                                    {product?.memoryTitle}
                                 </Link>
                                 {" / "}
-                                <span className="text-xs text-gray-600">{product.product_name}</span>
+                                <span className="text-xs text-gray-600">{product?.product_name}</span>
                             </span>
                         </div>
                     </button>
@@ -468,7 +744,7 @@ export default function Page() {
                                     {admin === profile?.role || shopManager === profile?.role && (
                                         <div className="absolute top-8 left-5 z-10">
                                             <div className="flex gap-2">
-                                                <Link href={`/add-device?_=${product.slug}`}>
+                                                <Link href={`/add-device?_=${product?.slug}`}>
                                                     <div className="cursor-pointer bg-white/90 text-[#41abd6] border border-[#41abd6] backdrop-blur-sm rounded-full p-2">
                                                         <FaEdit />
                                                     </div>
@@ -478,41 +754,73 @@ export default function Page() {
                                                     description="Are you sure to delete this device?"
                                                     okText="Yes"
                                                     cancelText="No"
-                                                    onConfirm={handleDeleteDevice} // ✅ YES par function
+                                                    onConfirm={handleDeleteDevice}
                                                     okButtonProps={{
-                                                        danger: true, // ✅ red text + red border
+                                                        danger: true,
                                                     }}
                                                 >
                                                     <div className="cursor-pointer bg-white/90 text-red-500 border border-red-500 backdrop-blur-sm rounded-full p-2">
                                                         <MdDelete />
                                                     </div>
                                                 </Popconfirm>
-
                                             </div>
                                         </div>
                                     )}
-                                    <Carousel
-                                        dots={false}
-                                        arrows={true}
-                                        afterChange={(current) => setSelectedImage(current)}
-                                    >
-                                        {galleryImages.map((image, index) => (
-                                            <div key={index} className="relative h-96 md:h-[500px]">
-                                                <img
-                                                    src={image}
-                                                    alt={`${product.product_name} - Image ${index + 1}`}
-                                                    className="object-contain w-full h-full p-4"
-                                                    onError={(e) => {
-                                                        e.currentTarget.src = '/placeholder-image.jpg';
-                                                        e.currentTarget.alt = 'Image not available';
-                                                    }}
-                                                />
-                                            </div>
-                                        ))}
-                                    </Carousel>
+
+                                    {/* Carousel Container with Custom Navigation */}
+                                    <div className="relative">
+                                        <Carousel
+                                            ref={carouselRef}
+                                            dots={false}
+                                            arrows={false} // Disable default arrows
+                                            afterChange={(current) => setSelectedImage(current)}
+                                        >
+                                            {galleryImages.map((image, index) => (
+                                                <div key={index} className="relative h-96 md:h-[500px]">
+                                                    <img
+                                                        src={image}
+                                                        alt={`${product?.product_name} - Image ${index + 1}`}
+                                                        className="object-contain w-full h-full p-4"
+                                                        onError={(e) => {
+                                                            e.currentTarget.src = '/placeholder-image.jpg';
+                                                            e.currentTarget.alt = 'Image not available';
+                                                        }}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </Carousel>
+
+                                        {/* Custom Navigation Buttons - Only show if multiple images */}
+                                        {galleryImages.length > 1 && (
+                                            <>
+                                                {/* Previous Button */}
+                                                <button
+                                                    onClick={goToPreviousSlide}
+                                                    className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 rounded-full p-1 cursor-pointer z-10"
+                                                    aria-label="Previous image"
+                                                >
+                                                    <ChevronLeft className="h-6 w-6" />
+                                                </button>
+
+                                                {/* Next Button */}
+                                                <button
+                                                    onClick={goToNextSlide}
+                                                    className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 rounded-full p-1 cursor-pointer z-10"
+                                                    aria-label="Next image"
+                                                >
+                                                    <ChevronRight className="h-6 w-6" />
+                                                </button>
+
+                                                {/* Image Counter */}
+                                                <div className="absolute bottom-4 right-4 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full z-10">
+                                                    {selectedImage + 1} / {galleryImages.length}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
 
                                     {/* 5G Badge if enabled */}
-                                    {product.five_g_Enabled && (
+                                    {product?.five_g_Enabled && (
                                         <div className="absolute top-4 right-4 z-10">
                                             <div className="bg-white/90 backdrop-blur-sm rounded-full p-2">
                                                 <img
@@ -536,7 +844,12 @@ export default function Page() {
                                     {galleryImages.map((image, index) => (
                                         <button
                                             key={index}
-                                            onClick={() => setSelectedImage(index)}
+                                            onClick={() => {
+                                                setSelectedImage(index);
+                                                if (carouselRef.current) {
+                                                    carouselRef.current.goTo(index);
+                                                }
+                                            }}
                                             className={`relative h-20 rounded-lg overflow-hidden border-2 ${selectedImage === index ? 'border-[#0e4647]' : 'border-transparent'}`}
                                         >
                                             <img
@@ -560,40 +873,53 @@ export default function Page() {
                             <div className="mb-6 border-b pb-3">
                                 <div className="flex items-center justify-between mb-2">
                                     <h1 className="text-xl md:text-2xl sm:text-lg font-semibold text-gray-900">
-                                        {product.product_name}
+                                        {product?.product_name}
                                     </h1>
                                 </div>
                                 <div className="text-gray-500 text-sm my-4">
-                                    <b>SKU:</b> {product.sku}
+                                    <b>SKU:</b> {product?.sku}
                                 </div>
                             </div>
 
-                            {/* Description Points */}
-                            {descriptionPoints.length > 0 && (
-                                <div className="mb-8">
-                                    <h3 className="text-sm font-semibold text-gray-900 mb-4">Key Features</h3>
-                                    <ul className="space-y-2">
-                                        {descriptionPoints.map((point, index) => (
-                                            <li key={index} className="flex items-start">
-                                                <BiRadioCircle className="h-5 w-5  mt-0.5 mr-1 flex-shrink-0" />
-                                                <span className="text-gray-700 text-sm">{point}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    <h3 className="text-sm font-semibold text-[#a67e07] my-7">{product.stock_quantity} / {product.total_inventory} In Stock</h3>
+                            {/* Description Points with ID for Read More button */}
+                            <div id="product-description">
+                                {descriptionPoints.length > 0 && (
+                                    <div className="mb-8">
+                                        <h3 className="text-sm font-semibold text-gray-900 mb-4">Key Features</h3>
+                                        <ul className="space-y-2">
+                                            {descriptionPoints.map((point, index) => (
+                                                <li key={index} className="flex items-start">
+                                                    <BiRadioCircle className="h-5 w-5  mt-0.5 mr-1 flex-shrink-0" />
+                                                    <span className="text-gray-700 text-sm">{point}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <h3 className="text-sm font-semibold text-[#a67e07] my-7">
+                                            {product?.stock_quantity} / {product?.total_inventory} In Stock
+                                        </h3>
+                                    </div>
+                                )}
+                            </div>
+                            {product?.stock_quantity != 0 ? (
+                                <div className="space-y-4">
+                                    {renderMainActionButton()}
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <h1 className="text-red-500 font-bold text-lg">Out of stock</h1>
+                                    <div className="border py-3 px-5">
+                                        <h1 className="text-xl">Get an alert when the product is in stock</h1>
+                                        <div className="border ps-2 py-2 my-4">
+                                            {profile?.email}
+                                        </div>
+                                        <div className="">
+                                            <button className="border rounded cursor-pointer text-base px-4 py-1.5 border-black mt-5">
+                                                Add to Waitlist
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
-
-                            {/* Quantity Selector and Action Buttons */}
-                            <div className="space-y-4">
-                                {/* Action Buttons */}
-                                <button
-                                    className="flex items-center justify-center gap-2 px-6 py-3 border border-[#0a3637] text-[#0a3637] hover:text-white rounded-sm hover:bg-[#0a3637] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    disabled={product.stock_quantity == 0}
-                                >
-                                    {product.stock_quantity != 0 ? 'Add to Cart' : 'Out of Stock'}
-                                </button>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -665,17 +991,21 @@ export default function Page() {
                                                 <div className="flex-grow"></div>
 
                                                 {/* Button Container - Fixed at bottom */}
-                                                <div className="sm:pt-4 sm:mb-2 mt-auto">
-                                                    {product.stock_quantity != 0 ? (
-                                                        <button className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-[#0a4647] border border-[#0a4647] rounded-sm cursor-pointer hover:bg-[#0a4647] hover:text-white transition-colors">
-                                                            Add to Cart
-                                                        </button>
-                                                    ) : (
-                                                        <button className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-[#4e5050] border border-[#484a4a] rounded-sm cursor-pointer hover:bg-[#c7caca] transition-colors">
+                                                {product.stock_quantity != 0 ? (
+                                                    <div className="sm:pt-4 sm:mb-2 mt-auto">
+                                                        {renderRelatedProductButton(product)}
+                                                    </div>
+                                                ) : (
+                                                    <div className="sm:pt-4 sm:mb-2 mt-auto">
+                                                        <button
+                                                            className="self-start sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium
+                                                                text-[#4e5050] border border-[#484a4a] rounded-sm
+                                                                hover:bg-[#eaebeb] transition-colors"
+                                                        >
                                                             Read More
                                                         </button>
-                                                    )}
-                                                </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </Link>

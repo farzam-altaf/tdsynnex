@@ -12,6 +12,7 @@ export type UserProfile = {
     role: string;
     userId: string;
     reseller: string;
+    isVerified: boolean;
     login_at: string | null;
     login_count: string | null;
 };
@@ -37,15 +38,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setIsLoggedIn(false);
             return;
         }
-        
+
         const { data, error } = await supabase
             .from("users")
             .select("*")
             .eq("userId", authUser.id)
+            .eq("isVerified", true)
             .single();
 
         if (error) {
-            console.error("Error fetching profile:", error.message);
             setProfile(null);
             setIsLoggedIn(false);
         } else {
@@ -60,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const { data } = await supabase.auth.getSession();
             const authUser = data.session?.user ?? null;
             setUser(authUser);
-            
+
             if (authUser) {
                 setIsLoggedIn(true);
                 await fetchProfile(authUser);
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setIsLoggedIn(false);
                 setProfile(null);
             }
-            
+
             setLoading(false);
         };
 
@@ -77,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             const authUser = session?.user ?? null;
             setUser(authUser);
-            
+
             if (authUser) {
                 setIsLoggedIn(true);
                 fetchProfile(authUser); // async but don't await
@@ -85,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setIsLoggedIn(false);
                 setProfile(null);
             }
-            
+
             setLoading(false);
         });
 
