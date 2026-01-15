@@ -47,8 +47,8 @@ export default function Banner() {
               {/* Button */}
               <div className="flex justify-center md:justify-start">
                 <Link
-                  href="/demo-kit"
-                  className="inline-flex items-center justify-center rounded bg-[#f7b500] px-5 py-2 text-sm font-semibold text-black transition-all duration-300 hover:bg-[#41abd6] hover:shadow-lg hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#f7b500]/50 sm:px-6 sm:py-3 sm:text-base md:px-7 md:py-3 md:text-base"
+                  href="/product-category/alldevices"
+                  className="inline-flex items-center justify-center rounded bg-[#f7b500] hover:bg-[#f1be31] px-5 py-2 text-sm font-semibold text-black focus:outline-none focus:ring-4 focus:ring-[#f7b500]/50 sm:px-6 sm:py-3 sm:text-base md:px-7 md:py-3 md:text-base"
                 >
                   Create Demo Kit
                 </Link>

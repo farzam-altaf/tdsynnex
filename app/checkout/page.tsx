@@ -38,6 +38,7 @@ export default function Page() {
     rev_opportunity: 1800,
     crm_account: "",
     segment: "",
+    order_status: "pending",
     vertical: "",
     current_manufacturer: "",
     use_case: "",
@@ -59,6 +60,7 @@ export default function Page() {
   });
 
   const cartItem = cartItems[0]?.product;
+  console.log("cartItem", cartItem)
 
   // Initialize form with profile data
   useEffect(() => {
@@ -247,7 +249,6 @@ export default function Page() {
     if (!isValid) {
       // Show toast for validation errors
       toast.error("Please fill in all required fields correctly", {
-        description: "Check the form for highlighted errors",
         style: { background: "red", color: "white" }
       });
 
@@ -307,6 +308,7 @@ export default function Page() {
       email: formData.email,
       address: formData.address,
       state: formData.state,
+      order_status: "Waiting Approval",
       city: formData.city,
       zip: formData.zip,
       desired_date: formData.desired_date,
@@ -346,6 +348,20 @@ export default function Page() {
         throw error;
       }
 
+      const stockQty = Number(cartItem?.stock_quantity) - 1;
+      const withCustomerQty = Number(cartItem?.withCustomer) + 1;
+
+      // FIXED: Use 'error' instead of 'perror'
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({
+          stock_quantity: stockQty,
+          withCustomer: withCustomerQty,
+        })
+        .eq('id', cartItem?.id);
+
+      if (updateError) throw updateError; // FIXED: Throw updateError
+
       console.log("Order submitted successfully:", data);
 
       // Remove product from cart after successful order
@@ -356,7 +372,6 @@ export default function Page() {
       // Dismiss loading toast and show success toast
       toast.dismiss(loadingToast);
       toast.success("Order Placed Successfully!", {
-        description: "Your order has been submitted.",
         style: { background: "black", color: "white" }
       });
 

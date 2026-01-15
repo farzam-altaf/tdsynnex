@@ -404,14 +404,14 @@ export default function Page() {
         if (product.post_status !== "Publish") {
             return (
                 <div className="sm:pt-4 sm:mb-2 mt-auto">
-                                                        <button
-                                                            className="self-start sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium
+                    <button
+                        className="self-start sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium
                                                                 text-[#4e5050] border border-[#484a4a] rounded-sm
                                                                 hover:bg-[#eaebeb] transition-colors"
-                                                        >
-                                                            Read More
-                                                        </button>
-                                                    </div>
+                    >
+                        Read More
+                    </button>
+                </div>
             );
         }
 
@@ -930,6 +930,9 @@ export default function Page() {
                         <h2 className="text-2xl font-bold text-gray-900 mb-6 sm:mx-0 mx-4">Related Products</h2>
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 sm:gap-6 gap-4 sm:mx-0 mx-4">
                             {relatedProducts.map(product => {
+                                if (product.post_status !== "Publish") {
+                                    return null;
+                                }
                                 return (
                                     <Link href={`/product/${product.slug}`} key={product.id}>
                                         <div className="bg-white border border-gray-300 sm:py-5 p-3 overflow-hidden hover:shadow-md transition-shadow duration-300 group relative h-full flex flex-col"

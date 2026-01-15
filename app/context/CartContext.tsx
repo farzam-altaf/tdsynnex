@@ -20,6 +20,7 @@ export interface CartItem {
     slug: string
     thumbnail?: string
     stock_quantity: number
+    withCustomer: number
     post_status: string
     // Price is optional since we're not requiring it
     price?: number
@@ -179,6 +180,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
             slug,
             thumbnail,
             stock_quantity,
+            withCustomer,
             post_status
           )
         `)

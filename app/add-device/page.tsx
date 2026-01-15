@@ -126,30 +126,45 @@ export default function Page() {
     const { profile, isLoggedIn, loading, user } = useAuth();
     const [authChecked, setAuthChecked] = useState(false);
     const [authInitialized, setAuthInitialized] = useState(false);
+    const smRole = process.env.NEXT_PUBLIC_SHOPMANAGER;
+    const adminRole = process.env.NEXT_PUBLIC_ADMINISTRATOR;
+    const superSubscriberRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
+    const subscriberRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
+    // Role options for select
+    const roleOptions = [
+        { label: "Admin", value: adminRole || "Administrator" },
+        { label: "Super Subscriber", value: superSubscriberRole || "Super-Subscriber" },
+        { label: "Shop Manager", value: smRole || "Shop-Manager" },
+        { label: "Subscriber", value: subscriberRole || "Subscriber" }
+    ];
 
+    const allowedRoles = [smRole, adminRole].filter(Boolean); // Remove undefined values
 
-    // Handle auth check - IMPROVED VERSION
+    // Check if current user is authorized
+    const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
+
+    // Handle auth check
     useEffect(() => {
-        // Only run auth check after auth is fully initialized
-        if (loading) {
-            // Still loading auth state
-            console.log("AuthContext is still loading...");
+        if (loading) return;
+
+        if (!isLoggedIn || !profile?.isVerified) {
+            console.log("User not authenticated, redirecting to login");
+            if(!editSlug){
+                router.replace('/login/?redirect_to=add-device');
+            } else{
+                router.replace(`/login/?redirect_to=add-device?_=${editSlug}`);
+            }
             return;
         }
 
-        // AuthContext loading is done, mark as initialized
-        console.log("AuthContext loaded - User:", user, "Profile:", profile, "isLoggedIn:", isLoggedIn);
-        setAuthInitialized(true);
-
-        // Now check authentication status
-        if (!isLoggedIn || profile?.isVerified === false && !profile) {
-            console.log("User not authenticated, redirecting to login");
-            router.replace('/login/?redirect_to=add-device');
-        } else {
-            console.log("User authenticated, setting authChecked to true");
-            setAuthChecked(true);
+        // Check if user has permission to access this page
+        if (!isAuthorized) {
+            console.log("User not authorized, redirecting...");
+            router.replace('/product-category/alldevices');
+            return;
         }
-    }, [loading, isLoggedIn, profile, user, router]);
+
+    }, [loading, isLoggedIn, profile, router, isAuthorized]);
 
     // Fetch data only after auth is confirmed AND initialized
     useEffect(() => {
@@ -1004,6 +1019,7 @@ export default function Page() {
                         inventory_type: finalFormData.inventoryType,
                         total_inventory: finalFormData.totalInventory,
                         stock_quantity: finalFormData.stockQuantity,
+                        withCustomer: '0',
                         date: finalFormData.currentDate,
                         copilot: toBool(finalFormData.copilotPC),
                         five_g_Enabled: toBool(finalFormData.fiveGEnabled),
@@ -1167,6 +1183,13 @@ export default function Page() {
                 </div>
             </div>
         );
+    }
+
+    if (!isAuthorized) {
+        return (
+            <>
+            </>
+        )
     }
 
     return (
