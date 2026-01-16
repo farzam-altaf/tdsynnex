@@ -140,13 +140,6 @@ export default function Page() {
                         <p className="text-gray-600 mb-8">
                             Add items to your cart to get started
                         </p>
-
-                        <Link
-                            href="/product-category/alldevices"
-                            className="bg-[#35c8dc] text-white py-2 px-5 rounded-md font-semibold hover:bg-[#2db4c8] transition duration-200 inline-block"
-                        >
-                            Continue Shopping
-                        </Link>
                     </div>
                 </div>
             </div>

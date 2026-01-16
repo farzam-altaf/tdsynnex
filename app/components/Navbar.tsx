@@ -37,6 +37,7 @@ const menuItems = [
 
 const authMenuItems = [
   { name: 'Edit Profile', href: '/edit-profile' },
+  { name: 'My Orders', href: '/order-details' },
   { name: 'Password reset', href: '/password-reset' },
   { name: 'Logout', href: 'logout' },
 ]
@@ -410,7 +411,7 @@ export default function Navbar() {
                               ) : searchResults.length > 0 ? (
                                 <>
                                   <div className="space-y-2 max-h-72 overflow-y-auto">
-                                    {searchResults.slice(0, 4).map((product) => (
+                                    {searchResults.filter(product => product.post_status === 'Publish').slice(0, 4).map((product) => (
                                       <button
                                         key={product.id}
                                         onClick={() => handleProductClick(product.slug)}
@@ -759,12 +760,6 @@ export default function Navbar() {
             <p className="text-gray-500 text-center mb-6">
               Looks like you haven't added any products to your cart yet.
             </p>
-            <button
-              onClick={handleContinueShopping}
-              className="px-6 py-2 bg-[#35c8dc] text-white rounded-md font-medium hover:bg-[#2db4c8] transition-colors"
-            >
-              Continue Shopping
-            </button>
           </div>
         ) : (
           <div className="flex flex-col h-full">
@@ -930,47 +925,56 @@ export default function Navbar() {
                       ) : searchResults.length > 0 ? (
                         <>
                           <div className="space-y-2 max-h-72 overflow-y-auto">
-                            {searchResults.slice(0, 4).map((product) => (
-                              <button
-                                key={product.id}
-                                onClick={() => handleProductClick(product.slug)}
-                                className="w-full text-left p-3 hover:bg-gray-50 rounded-md transition-colors flex items-start space-x-3 group"
-                              >
-                                {product.thumbnail ? (
-                                  <img
-                                    src={product.thumbnail}
-                                    alt={product.product_name}
-                                    className="w-10 h-10 object-contain"
-                                  />
-                                ) : (
-                                  <div className="w-10 h-10 bg-gray-100 flex items-center justify-center rounded">
-                                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
+                            {(() => {
+                              // ✅ Filter only published products
+                              const publishedProducts = searchResults.filter(product => product.post_status === 'Publish');
+                              const productsToShow = publishedProducts.slice(0, 4);
+
+                              if (productsToShow.length === 0) {
+                                return (
+                                  <div className="text-center py-4">
+                                    <p className="text-gray-500 text-sm">No published products found</p>
                                   </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-gray-900 truncate group-hover:text-[#35c8dc]">
-                                    {product.product_name}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    SKU: {product.sku}
-                                  </p>
-                                  <div className="flex items-center space-x-2 mt-1">
-                                    {product.stock_quantity === 0 && (
-                                      <span className="text-xs text-red-500 font-medium">
-                                        Out of stock
-                                      </span>
-                                    )}
-                                    {product.post_status !== 'Publish' && (
-                                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                                        Private
-                                      </span>
-                                    )}
+                                );
+                              }
+
+                              return productsToShow.map((product) => (
+                                <button
+                                  key={product.id}
+                                  onClick={() => handleProductClick(product.slug)}
+                                  className="w-full text-left p-3 hover:bg-gray-50 rounded-md transition-colors flex items-start space-x-3 group"
+                                >
+                                  {product.thumbnail ? (
+                                    <img
+                                      src={product.thumbnail}
+                                      alt={product.product_name}
+                                      className="w-10 h-10 object-contain"
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-10 bg-gray-100 flex items-center justify-center rounded">
+                                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                      </svg>
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 truncate group-hover:text-[#35c8dc]">
+                                      {product.product_name}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      SKU: {product.sku}
+                                    </p>
+                                    <div className="flex items-center space-x-2 mt-1">
+                                      {product.stock_quantity === 0 && (
+                                        <span className="text-xs text-red-500 font-medium">
+                                          Out of stock
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              </button>
-                            ))}
+                                </button>
+                              ));
+                            })()}
                           </div>
 
                           {/* See All Products Link - Mobile */}

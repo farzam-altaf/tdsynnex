@@ -42,9 +42,9 @@ import { CloseOutlined, SaveOutlined } from '@ant-design/icons';
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase/client"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import Link from "next/link"
 
 // Define Order type based on your Supabase table
-// Define Product type based on your Supabase table
 export type Product = {
     id: string;
     product_name: string;
@@ -102,6 +102,14 @@ export type Order = {
     notes: string | null
     product_id: string | null
     products?: Product
+    tracking: string | null
+    return_tracking: string | null
+    tracking_link: string | null
+    return_tracking_link: string | null
+    username: string | null
+    case_type: string | null
+    password: string | null
+    return_label: string | null
 }
 
 export default function Page() {
@@ -145,6 +153,8 @@ export default function Page() {
         "product_name": "Product Name",
         "processor": "Processor",
         "form_factor": "Form Factor",
+        "quantity": "Quantity",
+        "currently_running": "OS",
         "shipped_date": "Shipped Date",
         "returned_date": "Returned Date",
         "vertical": "Vertical",
@@ -152,6 +162,12 @@ export default function Page() {
         "order_month": "Order Month",
         "order_quarter": "Order Quarter",
         "order_year": "Order Year",
+        "tracking": "Tracking Number",
+        "return_tracking": "Return Tracking",
+        "tracking_link": "Tracking Link",
+        "return_tracking_link": "Return Tracking Link",
+        "username": "Username",
+        "case_type": "Case Type",
         "actions": "Actions"
     };
 
@@ -249,7 +265,7 @@ export default function Page() {
 
     // Format currency
     const formatCurrency = (amount: number | null) => {
-        if (amount === null || amount === undefined) return 'N/A';
+        if (amount === null || amount === undefined) return '-';
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
             currency: 'USD',
@@ -266,7 +282,7 @@ export default function Page() {
 
     // Format date for display
     const formatDate = (dateString: string | null) => {
-        if (!dateString) return 'N/A';
+        if (!dateString) return '-';
         return new Date(dateString).toLocaleDateString();
     };
 
@@ -418,9 +434,11 @@ export default function Page() {
         setIsSubmitting(true);
 
         try {
-            // Prepare updated order data
+            // Prepare updated order data - REMOVE products object
+            const { products, ...orderWithoutProducts } = selectedOrder;
+
             const updatedOrder = {
-                ...selectedOrder,
+                ...orderWithoutProducts,
                 updated_at: new Date().toISOString()
             };
 
@@ -433,7 +451,10 @@ export default function Page() {
 
             // Update local state
             setOrders(prev => prev.map(order =>
-                order.id === selectedOrder.id ? updatedOrder : order
+                order.id === selectedOrder.id ? {
+                    ...orderWithoutProducts,
+                    products: products // Keep products in local state
+                } : order
             ));
 
             toast.success("Order updated successfully!", { style: { color: "white", backgroundColor: "black" } });
@@ -448,7 +469,6 @@ export default function Page() {
             setIsSubmitting(false);
         }
     };
-
     // Get error class for form fields
     const getErrorClass = (fieldName: string) => {
         return editErrors[fieldName]
@@ -472,7 +492,11 @@ export default function Page() {
                     </Button>
                 )
             },
-            cell: ({ row }) => <div className="text-left ps-2 font-medium">{row.getValue("order_no")}</div>,
+            cell: ({ row }) => <div className="text-left ps-2 font-medium">
+                <Link href={`/order-details/${row.getValue("order_no")}`} target="_blank" className="text-teal-600 underline">
+                    {row.getValue("order_no")}
+                </Link>
+            </div>,
         },
         {
             accessorKey: "order_date",
@@ -527,7 +551,7 @@ export default function Page() {
                 )
             },
             cell: ({ row }) => {
-                const productName = row.original.products?.product_name || 'N/A';
+                const productName = row.original.products?.product_name || '-';
                 return <div className="text-left ps-2">{productName}</div>
             },
         },
@@ -546,7 +570,7 @@ export default function Page() {
                 )
             },
             cell: ({ row }) => {
-                const processor = row.original.products?.processor_filter?.title || 'N/A';
+                const processor = row.original.products?.processor_filter?.title || '-';
                 return <div className="text-left ps-2">{processor}</div>
             },
         },
@@ -565,7 +589,7 @@ export default function Page() {
                 )
             },
             cell: ({ row }) => {
-                const formFactor = row.original.products?.form_factor_filter?.title || 'N/A';
+                const formFactor = row.original.products?.form_factor_filter?.title || '-';
                 return <div className="text-left ps-2">{formFactor}</div>
             },
         },
@@ -583,7 +607,7 @@ export default function Page() {
                     </Button>
                 )
             },
-            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("company_name") || 'N/A'}</div>,
+            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("company_name") || '-'}</div>,
         },
         {
             accessorKey: "se_email",
@@ -599,7 +623,7 @@ export default function Page() {
                     </Button>
                 )
             },
-            cell: ({ row }) => <div className="text-left ps-2 lowercase">{row.getValue("se_email") || 'N/A'}</div>,
+            cell: ({ row }) => <div className="text-left ps-2 lowercase">{row.getValue("se_email") || '-'}</div>,
         },
         {
             accessorKey: "sm_email",
@@ -615,7 +639,7 @@ export default function Page() {
                     </Button>
                 )
             },
-            cell: ({ row }) => <div className="text-left ps-2 lowercase">{row.getValue("sm_email") || 'N/A'}</div>,
+            cell: ({ row }) => <div className="text-left ps-2 lowercase">{row.getValue("sm_email") || '-'}</div>,
         },
         {
             accessorKey: "crm_account",
@@ -631,7 +655,43 @@ export default function Page() {
                     </Button>
                 )
             },
-            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("crm_account") || 'N/A'}</div>,
+            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("crm_account") || '-'}</div>,
+        },
+        {
+            accessorKey: "quantity",
+            header: ({ column }) => {
+                return (
+                    <Button
+                        variant="ghost"
+                        className="hover:bg-transparent hover:text-current cursor-pointer justify-start w-full"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                    >
+                        Device Qty
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                )
+            },
+            cell: ({ row }) => {
+                return <div className="text-left ps-2">{row.getValue("quantity") || '-'}</div>
+            },
+        },
+        {
+            accessorKey: "currently_running",
+            header: ({ column }) => {
+                return (
+                    <Button
+                        variant="ghost"
+                        className="hover:bg-transparent hover:text-current cursor-pointer justify-start w-full"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                    >
+                        OS
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                )
+            },
+            cell: ({ row }) => {
+                return <div className="text-left ps-2">{row.getValue("currently_running") || '-'}</div>
+            },
         },
         {
             accessorKey: "shipped_date",
@@ -685,7 +745,7 @@ export default function Page() {
                     </Button>
                 )
             },
-            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("vertical") || 'N/A'}</div>,
+            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("vertical") || '-'}</div>,
         },
         {
             accessorKey: "segment",
@@ -701,7 +761,7 @@ export default function Page() {
                     </Button>
                 )
             },
-            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("segment") || 'N/A'}</div>,
+            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("segment") || '-'}</div>,
         },
         {
             accessorKey: "order_month",
@@ -717,7 +777,7 @@ export default function Page() {
                     </Button>
                 )
             },
-            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("order_month") || 'N/A'}</div>,
+            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("order_month") || '-'}</div>,
         },
         {
             accessorKey: "order_year",
@@ -733,7 +793,7 @@ export default function Page() {
                     </Button>
                 )
             },
-            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("order_year") || 'N/A'}</div>,
+            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("order_year") || '-'}</div>,
         },
         {
             accessorKey: "order_quarter",
@@ -749,7 +809,7 @@ export default function Page() {
                     </Button>
                 )
             },
-            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("order_quarter") || 'N/A'}</div>,
+            cell: ({ row }) => <div className="text-left ps-2">{row.getValue("order_quarter") || '-'}</div>,
         },
     ];
 
@@ -810,7 +870,7 @@ export default function Page() {
                                 <DropdownMenuItem
                                     className="cursor-pointer"
                                     onClick={() => {
-                                        router.push(`/order-details/${order.id}`);
+                                        router.push(`/order-details/${order.order_no}`);
                                     }}
                                 >
                                     <Eye className="mr-2 h-4 w-4" />
@@ -928,8 +988,8 @@ export default function Page() {
                 'Order Date': formatDate(order.order_date),
                 'Shipping Status': order.order_status || '',
                 'Product Name': order.products?.product_name || '',
-                'Processor': order.products?.processor_filter?.title || 'N/A',
-                'Form Factor': order.products?.form_factor_filter?.title || 'N/A',
+                'Processor': order.products?.processor_filter?.title || '-',
+                'Form Factor': order.products?.form_factor_filter?.title || '-',
                 'Pipeline Opportunity': order.rev_opportunity || 0,
                 'Budget Per Device': order.dev_budget || 0,
                 'Device Opportunity Size': order.dev_opportunity || 0,
@@ -942,7 +1002,14 @@ export default function Page() {
                 'Segment': order.segment || '',
                 'Order Month': order.order_month || '',
                 'Order Quarter': order.order_quarter || '',
-                'Order Year': order.order_year || ''
+                'Order Year': order.order_year || '',
+                'Tracking Number': order.tracking || '',
+                'Return Tracking': order.return_tracking || '',
+                'Tracking Link': order.tracking_link || '',
+                'Return Tracking Link': order.return_tracking_link || '',
+                'Username': order.username || '',
+                'Case Type': order.case_type || '',
+                'Return Label': order.return_label || ''
             }));
 
             const csvString = convertToCSV(data);
@@ -1943,6 +2010,119 @@ export default function Page() {
                                     />
                                     {editErrors.desired_date && (
                                         <p className="text-xs text-red-500">{editErrors.desired_date}</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Tracking & Return Details Section */}
+                        <div className="space-y-4 pt-4 border-t">
+                            <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                                <div className="h-6 w-1 bg-[#0A4647] rounded-full"></div>
+                                Tracking & Return Details
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">
+                                        Tracking Number
+                                    </label>
+                                    <AntInput
+                                        name="tracking"
+                                        value={selectedOrder.tracking || ''}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter tracking number"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">
+                                        Tracking Link
+                                    </label>
+                                    <AntInput
+                                        name="tracking_link"
+                                        type="url"
+                                        value={selectedOrder.tracking_link || ''}
+                                        onChange={handleInputChange}
+                                        placeholder="https://..."
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">
+                                        Return Tracking
+                                    </label>
+                                    <AntInput
+                                        name="return_tracking"
+                                        value={selectedOrder.return_tracking || ''}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter return tracking number"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">
+                                        Return Tracking Link
+                                    </label>
+                                    <AntInput
+                                        name="return_tracking_link"
+                                        type="url"
+                                        value={selectedOrder.return_tracking_link || ''}
+                                        onChange={handleInputChange}
+                                        placeholder="https://..."
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">
+                                        Username
+                                    </label>
+                                    <AntInput
+                                        name="username"
+                                        value={selectedOrder.username || ''}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter username"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">
+                                        Case Type
+                                    </label>
+                                    <AntInput
+                                        name="case_type"
+                                        value={selectedOrder.case_type || ''}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter case type"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">
+                                        Password
+                                    </label>
+                                    <AntInput
+                                        name="password"
+                                        type="password"
+                                        value={selectedOrder.password || ''}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter password"
+                                    />
+                                </div>
+                                <div className="space-y-2 sm:col-span-2">
+                                    <label className="text-sm font-medium text-gray-700">
+                                        Return Label URL
+                                    </label>
+                                    <AntInput
+                                        name="return_label"
+                                        value={selectedOrder.return_label || ''}
+                                        onChange={handleInputChange}
+                                        placeholder="https://..."
+                                    />
+                                    {selectedOrder.return_label && (
+                                        <div className="mt-2">
+                                            <a
+                                                href={selectedOrder.return_label}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-blue-600 hover:underline text-sm"
+                                            >
+                                                View Return Label
+                                            </a>
+                                        </div>
                                     )}
                                 </div>
                             </div>

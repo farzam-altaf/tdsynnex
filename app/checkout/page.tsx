@@ -308,7 +308,7 @@ export default function Page() {
       email: formData.email,
       address: formData.address,
       state: formData.state,
-      order_status: "Waiting Approval",
+      order_status: process.env.NEXT_PUBLIC_STATUS_AWAITING,
       city: formData.city,
       zip: formData.zip,
       desired_date: formData.desired_date,
