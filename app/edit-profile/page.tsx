@@ -210,14 +210,11 @@ export default function Page() {
                         type="button"
                         variant="outline"
                         onClick={handlePasswordReset}
-                        className="w-full flex items-center cursor-pointer justify-center gap-2 border-[#35c8dc] text-[#35c8dc] hover:bg-[#35c8dc] hover:text-white transition-colors"
+                        className="w-full flex items-center cursor-pointer justify-center gap-2 border-[#35c8dc] text-[#2eacbd] hover:bg-[#35c8dc] hover:text-white transition-colors"
                     >
                         <Lock className="h-4 w-4" />
                         Reset Password
                     </Button>
-                    <p className="text-sm text-gray-500 mt-2 text-center">
-                        Click to reset your password
-                    </p>
                 </div>
             </form>
         </div>

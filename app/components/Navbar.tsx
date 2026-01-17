@@ -7,15 +7,19 @@ import { supabase } from '@/lib/supabase/client'
 import { Disclosure } from '@headlessui/react'
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 import { IoIosSearch, IoIosClose } from 'react-icons/io'
-import { CiCircleChevDown, CiUser } from 'react-icons/ci'
+import { CiCircleChevDown, CiSearch, CiUser } from 'react-icons/ci'
 import { IoCartOutline } from 'react-icons/io5'
 import { Badge, Drawer } from 'antd'
 import { Bell, Search, ShoppingCart, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext' // Add this import
+import { PiBellLight, PiShoppingCartThin } from "react-icons/pi";
 
+// Add at the top with other role constants
 const shopManager = process.env.NEXT_PUBLIC_SHOPMANAGER;
 const admin = process.env.NEXT_PUBLIC_ADMINISTRATOR;
+const superSubscriber = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
+const subscriber = process.env.NEXT_PUBLIC_SUBSCRIBER;
 
 type NavigationItem = { name: string; href: string }
 
@@ -224,12 +228,21 @@ export default function Navbar() {
 
   // Check if user role matches allowed roles
   const showAuthNavigation =
-    profile && (profile.role === admin || profile.role === shopManager);
+    profile && (profile.role === admin || profile.role === superSubscriber);
 
-  const navigation =
-    !loading && isLoggedIn && showAuthNavigation
-      ? [...publicNavigation, ...authNavigation]
-      : publicNavigation;
+  // Replace the existing navigation logic with this:
+
+  const navigation = !loading && isLoggedIn
+    ? [
+      ...publicNavigation,
+      // Add 'Report a Win' for all logged in users EXCEPT shopManager
+      ...(profile?.role !== shopManager ? [{ name: 'Report a Win', href: '/wins' }] : []),
+      // Add '360Dashboard' only for admin and superSubscriber
+      ...((profile?.role === admin || profile?.role === superSubscriber)
+        ? [{ name: '360Dashboard', href: '/360dashboard' }]
+        : [])
+    ]
+    : publicNavigation;
 
   const handleUserMenuMouseEnter = () => {
     if (userMenuTimeoutRef.current) {
@@ -350,133 +363,137 @@ export default function Navbar() {
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <Link
-                    href="/notification"
-                    className="hidden lg:flex relative rounded-full p-1 text-black cursor-pointer"
-                  >
-                    <span className="sr-only">Notifications</span>
-                    <Bell size={22} />
-                  </Link>
+                  {(isLoggedIn && (profile?.role === admin || profile?.role === superSubscriber)) && (
+                    <Link
+                      href="/notification"
+                      className="hidden lg:flex relative rounded-full p-1 text-black cursor-pointer"
+                    >
+                      <span className="sr-only">Notifications</span>
+                      <PiBellLight size={22} />
+                    </Link>
+                  )}
 
                   {/* Desktop Search Button and Dropdown */}
-                  <div className="hidden sm:block relative" ref={searchRef}>
-                    <button
-                      type="button"
-                      className="relative rounded-full p-1 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200"
-                      onClick={() => setIsSearchOpen(!isSearchOpen)}
-                    >
-                      <span className="sr-only">Search</span>
-                      <IoIosSearch size={22} />
-                    </button>
+                  {isLoggedIn && (
+                    <div className="hidden sm:block relative" ref={searchRef}>
+                      <button
+                        type="button"
+                        className="relative rounded-full p-1 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200"
+                        onClick={() => setIsSearchOpen(!isSearchOpen)}
+                      >
+                        <span className="sr-only">Search</span>
+                        <CiSearch size={22} />
+                      </button>
 
-                    {isSearchOpen && (
-                      <div className="absolute right-0 top-full mt-2 w-[500px] bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                        <form onSubmit={handleSearchSubmit} className="p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center space-x-2 flex-1">
-                              <Search className="text-gray-400" size={20} />
-                              <input
-                                ref={searchInputRef}
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search products..."
-                                className="flex-1 border-0 focus:ring-0 focus:outline-none text-sm"
-                              />
-                              {searchQuery && (
-                                <button
-                                  type="button"
-                                  onClick={() => setSearchQuery('')}
-                                  className="text-gray-400 hover:text-gray-600"
-                                >
-                                  <IoIosClose size={20} />
-                                </button>
-                              )}
+                      {isSearchOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-[500px] bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                          <form onSubmit={handleSearchSubmit} className="p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2 flex-1">
+                                <Search className="text-gray-400" size={20} />
+                                <input
+                                  ref={searchInputRef}
+                                  type="text"
+                                  value={searchQuery}
+                                  onChange={(e) => setSearchQuery(e.target.value)}
+                                  placeholder="Search products..."
+                                  className="flex-1 border-0 focus:ring-0 focus:outline-none text-sm"
+                                />
+                                {searchQuery && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSearchQuery('')}
+                                    className="text-gray-400 hover:text-gray-600"
+                                  >
+                                    <IoIosClose size={20} />
+                                  </button>
+                                )}
+                              </div>
+                              <button
+                                type="submit"
+                                className="ml-2 px-3 py-1 bg-[#35c8dc] text-white rounded-md text-sm font-medium hover:bg-[#2db4c8] transition-colors"
+                              >
+                                Search
+                              </button>
                             </div>
-                            <button
-                              type="submit"
-                              className="ml-2 px-3 py-1 bg-[#35c8dc] text-white rounded-md text-sm font-medium hover:bg-[#2db4c8] transition-colors"
-                            >
-                              Search
-                            </button>
-                          </div>
 
-                          {/* Search Results Dropdown */}
-                          {(searchQuery.trim() && (isSearching || searchResults.length > 0)) && (
-                            <div className="border-t border-gray-100 pt-2 mt-2">
-                              {isSearching ? (
-                                <div className="py-3 text-center text-gray-500 text-sm">
-                                  Searching...
-                                </div>
-                              ) : searchResults.length > 0 ? (
-                                <>
-                                  <div className="space-y-2 max-h-72 overflow-y-auto">
-                                    {searchResults.filter(product => product.post_status === 'Publish').slice(0, 4).map((product) => (
-                                      <button
-                                        key={product.id}
-                                        onClick={() => handleProductClick(product.slug)}
-                                        className="w-full text-left px-3 cursor-pointer hover:bg-gray-50 rounded-md transition-colors flex items-start space-x-3 group"
-                                      >
-                                        {product.thumbnail ? (
-                                          <img
-                                            src={product.thumbnail}
-                                            alt={product.product_name}
-                                            className="w-10 h-10 object-contain"
-                                          />
-                                        ) : (
-                                          <div className="w-10 h-10 bg-gray-100 flex items-center justify-center rounded">
-                                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
-                                          </div>
-                                        )}
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-medium text-gray-900 group-hover:text-[#35c8dc]">
-                                            {product.product_name}
-                                          </p>
-                                          <p className="text-xs text-gray-500">
-                                            SKU: {product.sku}
-                                          </p>
-                                          <div className="flex items-center space-x-2 mt-1">
-                                            {product.stock_quantity === 0 && (
-                                              <span className="text-xs text-red-500 font-medium">
-                                                Out of stock
-                                              </span>
-                                            )}
-                                            {product.post_status !== 'Publish' && (
-                                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                                                Private
-                                              </span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </button>
-                                    ))}
+                            {/* Search Results Dropdown */}
+                            {(searchQuery.trim() && (isSearching || searchResults.length > 0)) && (
+                              <div className="border-t border-gray-100 pt-2 mt-2">
+                                {isSearching ? (
+                                  <div className="py-3 text-center text-gray-500 text-sm">
+                                    Searching...
                                   </div>
-
-                                  {/* See All Products Link */}
-                                  {totalProducts > 4 && (
-                                    <div className="border-t border-gray-100 pt-2 mt-2">
-                                      <button
-                                        onClick={handleSeeAllClick}
-                                        className="w-full text-center text-sm cursor-pointer text-[#35c8dc] hover:text-[#2db4c8] font-medium py-2"
-                                      >
-                                        See all {totalProducts} products
-                                      </button>
+                                ) : searchResults.length > 0 ? (
+                                  <>
+                                    <div className="space-y-2 max-h-72 overflow-y-auto">
+                                      {searchResults.filter(product => product.post_status === 'Publish').slice(0, 4).map((product) => (
+                                        <button
+                                          key={product.id}
+                                          onClick={() => handleProductClick(product.slug)}
+                                          className="w-full text-left px-3 cursor-pointer hover:bg-gray-50 rounded-md transition-colors flex items-start space-x-3 group"
+                                        >
+                                          {product.thumbnail ? (
+                                            <img
+                                              src={product.thumbnail}
+                                              alt={product.product_name}
+                                              className="w-10 h-10 object-contain"
+                                            />
+                                          ) : (
+                                            <div className="w-10 h-10 bg-gray-100 flex items-center justify-center rounded">
+                                              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                              </svg>
+                                            </div>
+                                          )}
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-gray-900 group-hover:text-[#35c8dc]">
+                                              {product.product_name}
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                              SKU: {product.sku}
+                                            </p>
+                                            <div className="flex items-center space-x-2 mt-1">
+                                              {product.stock_quantity === 0 && (
+                                                <span className="text-xs text-red-500 font-medium">
+                                                  Out of stock
+                                                </span>
+                                              )}
+                                              {product.post_status !== 'Publish' && (
+                                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                                                  Private
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </button>
+                                      ))}
                                     </div>
-                                  )}
-                                </>
-                              ) : (
-                                <div className="py-3 text-center text-gray-500 text-sm">
-                                  No products found
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </form>
-                      </div>
-                    )}
-                  </div>
+
+                                    {/* See All Products Link */}
+                                    {totalProducts > 4 && (
+                                      <div className="border-t border-gray-100 pt-2 mt-2">
+                                        <button
+                                          onClick={handleSeeAllClick}
+                                          className="w-full text-center text-sm cursor-pointer text-[#35c8dc] hover:text-[#2db4c8] font-medium py-2"
+                                        >
+                                          See all {totalProducts} products
+                                        </button>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="py-3 text-center text-gray-500 text-sm">
+                                    No products found
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </form>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="relative hidden sm:flex items-center">
                     <button
@@ -584,7 +601,7 @@ export default function Navbar() {
                       }}
                     >
                       <div className="relative">
-                        <IoCartOutline size={26} />
+                        <PiShoppingCartThin size={26} />
                       </div>
                     </Badge>
                   </button>
@@ -597,7 +614,7 @@ export default function Navbar() {
                       onClick={handleMobileSearchClick}
                     >
                       <span className="sr-only">Search</span>
-                      <IoIosSearch size={22} />
+                      <CiSearch size={22} />
                     </button>
                   </div>
 
@@ -723,7 +740,7 @@ export default function Navbar() {
         title={
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <ShoppingCart className="text-[#35c8dc]" size={20} />
+              <PiShoppingCartThin className="text-[#35c8dc]" size={20} />
               <span className="text-lg font-semibold">Your Cart</span>
               {cartCount > 0 && (
                 <span className="bg-[#35c8dc] text-white text-xs px-2 py-1 rounded-full">
@@ -755,7 +772,7 @@ export default function Navbar() {
           </div>
         ) : cartItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full py-12">
-            <ShoppingCart className="text-gray-300 mb-4" size={64} />
+            <PiShoppingCartThin className="text-gray-300 mb-4" size={64} />
             <h3 className="text-lg font-medium text-gray-900 mb-2">Your cart is empty</h3>
             <p className="text-gray-500 text-center mb-6">
               Looks like you haven't added any products to your cart yet.
@@ -785,7 +802,7 @@ export default function Navbar() {
                             className="w-full h-full object-contain p-1"
                           />
                         ) : (
-                          <ShoppingCart className="text-gray-400" size={24} />
+                          <PiShoppingCartThin className="text-gray-400" size={24} />
                         )}
                       </div>
 

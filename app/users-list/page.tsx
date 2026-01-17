@@ -95,7 +95,7 @@ export default function Page() {
     const superSubscriberRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
     const subscriberRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
 
-    const allowedRoles = [smRole, adminRole].filter(Boolean); // Remove undefined values
+    const allowedRoles = [smRole, adminRole].filter(Boolean);
 
     const columnDisplayNames: Record<string, string> = {
         "firstName": "First Name",
