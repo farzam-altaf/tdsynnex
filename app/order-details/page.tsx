@@ -121,7 +121,8 @@ export default function Page() {
     const sRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
 
     const allowedRoles = [smRole, adminRole, sRole, ssRole].filter(Boolean); // Remove undefined values
-    const actionRoles = [smRole, adminRole].filter(Boolean); // Remove undefined values
+    const actionRoles = [smRole, adminRole, ssRole].filter(Boolean); // Remove undefined values
+    const viewRoles = [sRole, ssRole].filter(Boolean); // Remove undefined values
 
     const columnDisplayNames: Record<string, string> = {
         "order_no": "Order #",
@@ -146,6 +147,7 @@ export default function Page() {
     // Check if current user is authorized
     const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
     const isActionAuthorized = profile?.role && actionRoles.includes(profile.role);
+    const isViewAuthorized = profile?.role && viewRoles.includes(profile.role);
 
     // Handle auth check
     useEffect(() => {
@@ -712,9 +714,8 @@ export default function Page() {
         },
     ]
 
-
     // Only add actions column if user is authorized for actions
-    if (isActionAuthorized) {
+    if (!isViewAuthorized) {
         columns.unshift({
             id: "actions",
             enableHiding: false,
@@ -820,13 +821,36 @@ export default function Page() {
         });
     }
 
-    if (!isActionAuthorized) {
+    // Only add actions column if user is authorized for actions
+    if (isViewAuthorized) {
         columns.unshift({
             id: "actions",
             enableHiding: false,
             cell: ({ row }) => {
                 const order = row.original;
+                const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
+                const handleDeleteClick = () => {
+                    setIsDeleteDialogOpen(true);
+                };
+
+                const handleConfirmDelete = async () => {
+                    try {
+                        const { error } = await supabase
+                            .from('orders')
+                            .delete()
+                            .eq('id', order.id);
+
+                        if (error) throw error;
+
+                        // Refresh the orders list
+                        fetchOrders();
+                        setIsDeleteDialogOpen(false);
+                    } catch (error) {
+                        console.error('Error deleting order:', error);
+                        setError('Failed to delete order');
+                    }
+                };
                 return (
                     <div className="flex space-x-2 ps-2">
                         <DropdownMenu>
@@ -838,10 +862,11 @@ export default function Page() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     className="cursor-pointer"
                                     onClick={() => {
-                                        router.push(`/order-details/${order.id}`);
+                                        router.push(`/order-details/${order.order_no}`);
                                     }}
                                 >
                                     <Eye className="mr-2 h-4 w-4" />
@@ -854,6 +879,7 @@ export default function Page() {
             },
         });
     }
+
 
     // Initialize table
     const table = useReactTable({
@@ -985,6 +1011,7 @@ export default function Page() {
                         variant="outline"
                         onClick={fetchOrders}
                         disabled={isLoading}
+                        className="cursor-pointer"
                     >
                         {isLoading ? "Refreshing..." : "Refresh"}
                     </Button>

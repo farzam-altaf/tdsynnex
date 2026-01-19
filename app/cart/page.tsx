@@ -9,7 +9,7 @@ import { FaRemoveFormat } from 'react-icons/fa';
 import { MdDeleteSweep, MdOutlineDeleteOutline } from 'react-icons/md';
 import { useAuth } from '../context/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircleIcon } from 'lucide-react';
+import { AlertCircleIcon, Trash } from 'lucide-react';
 import { AiOutlineShoppingCart } from 'react-icons/ai';
 
 // Cart summary data (you might want to fetch this from your API too)
@@ -219,12 +219,12 @@ export default function Page() {
                                                     >
                                                         {isRemovingThisItem ? (
                                                             <div className='flex items-center gap-2 border py-1 px-4 rounded-sm border-red-500 cursor-pointer opacity-70'>
-                                                                <MdDeleteSweep className='mt-0.5' />
+                                                                <MdDeleteSweep />
                                                                 <span className='text-sm font-medium'>Removing...</span>
                                                             </div>
                                                         ) : (
                                                             <div className='flex items-center gap-2 border py-1 px-4 rounded-sm border-red-500 cursor-pointer hover:bg-red-50'>
-                                                                <MdOutlineDeleteOutline className='mt-0.5' />
+                                                                <Trash size={12} />
                                                                 <span className='text-sm font-medium'>Remove</span>
                                                             </div>
                                                         )}

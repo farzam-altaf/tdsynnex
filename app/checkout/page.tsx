@@ -377,7 +377,7 @@ export default function Page() {
 
       // Redirect to order confirmation page
       setTimeout(() => {
-        router.push('/');
+        router.push('/thanks');
       }, 2000);
 
     } catch (error: any) {
@@ -1121,7 +1121,7 @@ export default function Page() {
                 <button
                   onClick={handleSubmit}
                   disabled={isSubmitting || cartLoading}
-                  className="px-12 py-3 bg-[#0A4647] text-white font-semibold rounded-md hover:bg-[#0a5c5e] focus:outline-none focus:ring-1 focus:ring-[#0A4647] focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-12 py-3 bg-[#0A4647] text-white cursor-pointer font-semibold rounded-md hover:bg-[#0a5c5e] focus:outline-none focus:ring-1 focus:ring-[#0A4647] focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? 'Placing Order...' : 'Place Order'}
                 </button>

@@ -139,8 +139,10 @@ export default function Page() {
     const ssRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
     const sRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
 
+
     const allowedRoles = [smRole, adminRole, sRole, ssRole].filter(Boolean); // Remove undefined values
-    const actionRoles = [smRole, adminRole].filter(Boolean); // Remove undefined values
+    const actionRoles = [smRole, adminRole, ssRole].filter(Boolean); // Remove undefined values
+    const viewRoles = [sRole, ssRole].filter(Boolean); // Remove undefined values
 
     const columnDisplayNames: Record<string, string> = {
         "order_no": "Order #",
@@ -174,6 +176,7 @@ export default function Page() {
     // Check if current user is authorized
     const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
     const isActionAuthorized = profile?.role && actionRoles.includes(profile.role);
+    const isViewAuthorized = profile?.role && viewRoles.includes(profile.role);
 
     // Handle auth check
     useEffect(() => {
@@ -814,7 +817,7 @@ export default function Page() {
     ];
 
     // Only add actions column if user is authorized for actions
-    if (isActionAuthorized) {
+    if (!isViewAuthorized) {
         columns.unshift({
             id: "actions",
             enableHiding: false,
@@ -919,7 +922,7 @@ export default function Page() {
             },
         });
     }
-    if (!isActionAuthorized) {
+    if (isViewAuthorized) {
         columns.unshift({
             id: "actions",
             enableHiding: false,
@@ -939,7 +942,7 @@ export default function Page() {
                                 <DropdownMenuItem
                                     className="cursor-pointer"
                                     onClick={() => {
-                                        router.push(`/order-details/${order.id}`);
+                                        router.push(`/order-details/${order.order_no}`);
                                     }}
                                 >
                                     <Eye className="mr-2 h-4 w-4" />
@@ -1086,6 +1089,7 @@ export default function Page() {
                         variant="outline"
                         onClick={fetchOrders}
                         disabled={isLoading}
+                        className="cursor-pointer"
                     >
                         {isLoading ? "Refreshing..." : "Refresh"}
                     </Button>

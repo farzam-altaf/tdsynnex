@@ -702,22 +702,9 @@ export default function Page() {
                                 <ProductsGridSkeleton />
                             ) : filteredProducts.length > 0 ? (
                                 <>
-                                    {admin === profile?.role || shopManager === profile?.role && (
-                                        <div className="flex items-center justify-between sm:my-10 my-5">
-                                            <div className="text-3xl font-semibold"><span className="capitalize">{slug == "notebooks" ? "Laptops" : slug}</span> {q !== "search" && "Devices"}</div>
-                                            <div className="">
-                                                <div className="flex justify-center md:justify-start">
-                                                    <Link
-                                                        href="/add-device"
-                                                        className="inline-flex items-center justify-center rounded bg-[#41abd6] px-5 py-2 text-sm font-semibold text-white transition-all duration-300 hover:bg-[#3791b4] hover:shadow-lg hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#3791b4]/50 sm:px-4 sm:py-2 sm:text-sm md:px-4 md:py-2 md:text-sm"
-                                                    >
-                                                        <FaPlus className="me-3" />
-                                                        Add New Device
-                                                    </Link>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+                                    <div className="flex items-center justify-between sm:my-10 my-5">
+                                        <div className="text-3xl font-semibold"><span className="capitalize">{slug == "notebooks" ? "Laptops" : slug}</span> {q !== "search" && "Devices"}</div>
+                                    </div>
                                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-10">
                                         {filteredProducts.map(product => {
                                             // If product is not published, only show to admin/shop_manager

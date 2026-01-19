@@ -12,20 +12,27 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
+import Link from "next/link"
 
 export type Win = {
     id: string
-    order_no: string
-    device_name: string
-    reseller_name: string
-    reseller_account_no: string
-    synnex_order_no: string
-    customer_name: string
-    number_of_units: number
-    total_deal_revenue: number
-    purchase_type: string
-    date_of_purchase: string
-    how_demo_helped: string
+    submitted_by: string
+    isOther: boolean
+    otherDesc: string
+    reseller: string
+    orderHash: string
+    synnexOrderHash: string
+    resellerAccount: string
+    customerName: string
+    units: number
+    deal_rev: number
+    purchaseType: string
+    purchaseDate: string
+    notes: string
+    product_id?: string
+    order_id?: string
+    products?: any // Added for product data
+    orders?: any // Added for order data
 }
 
 export default function WinDetailsPage() {
@@ -36,7 +43,7 @@ export default function WinDetailsPage() {
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Check if current user is authorized (similar to your existing logic)
+    // Check if current user is authorized
     const smRole = process.env.NEXT_PUBLIC_SHOPMANAGER;
     const adminRole = process.env.NEXT_PUBLIC_ADMINISTRATOR;
     const ssRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
@@ -45,17 +52,87 @@ export default function WinDetailsPage() {
     const allowedRoles = [smRole, adminRole, sRole, ssRole].filter(Boolean);
     const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
 
-    // Fetch win details from Supabase
+    // Fetch win details with related data
     const fetchWinDetails = async () => {
         try {
             setIsLoading(true);
             setError(null);
 
-            const { data, error: supabaseError } = await supabase
-                .from('wins') // Assuming your table is named 'wins'
+            // First, fetch the win record
+            const { data: winData, error: winError } = await supabase
+                .from('wins')
                 .select('*')
                 .eq('id', winId)
                 .single();
+
+            if (winError) {
+                throw winError;
+            }
+
+            if (winData) {
+                const winRecord = winData as Win;
+
+                // Fetch related data in parallel
+                const [productData, orderData] = await Promise.all([
+                    // Fetch product if product_id exists
+                    winRecord.product_id ?
+                        supabase
+                            .from('products')
+                            .select('*')
+                            .eq('id', winRecord.product_id)
+                            .single()
+                        : Promise.resolve({ data: null, error: null }),
+
+                    // Fetch order if order_id exists
+                    winRecord.order_id ?
+                        supabase
+                            .from('orders')
+                            .select('*')
+                            .eq('id', winRecord.order_id)
+                            .single()
+                        : Promise.resolve({ data: null, error: null })
+                ]);
+
+                // Combine all data
+                const combinedData = {
+                    ...winRecord,
+                    product: productData.data,
+                    order: orderData.data
+                };
+
+                setWin(combinedData);
+                console.log("Fetched win data:", combinedData);
+            }
+
+        } catch (err: unknown) {
+            console.error('Error fetching win details:', err);
+            if (err instanceof Error) {
+                setError(err.message || 'Failed to fetch win details');
+            } else {
+                setError('Failed to fetch win details');
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Alternative method using JOIN (if your Supabase supports it)
+    const fetchWinDetailsWithJoin = async () => {
+        try {
+            setIsLoading(true);
+            setError(null);
+
+            const { data, error: supabaseError } = await supabase
+                .from('wins')
+                .select(`
+                    *,
+                    products!left(*),
+                    orders!left(*)
+                `)
+                .eq('id', winId)
+                .single();
+
+            console.log("Fetched data with join:", data);
 
             if (supabaseError) {
                 throw supabaseError;
@@ -79,7 +156,9 @@ export default function WinDetailsPage() {
 
     useEffect(() => {
         if (!loading && isLoggedIn && profile?.isVerified && isAuthorized) {
-            fetchWinDetails();
+            // Try the JOIN method first, if it fails, use the parallel method
+            fetchWinDetailsWithJoin();
+            // Or use: fetchWinDetails();
         }
     }, [loading, isLoggedIn, profile, isAuthorized, winId]);
 
@@ -131,128 +210,174 @@ export default function WinDetailsPage() {
         return new Intl.NumberFormat('en-US').format(num);
     };
 
+    // Helper to get device name - UPDATED with isOther condition
+    const getDeviceName = () => {
+        // If isOther is true, show otherDesc
+        if (win.isOther && win.otherDesc) {
+            return win.otherDesc;
+        }
+
+        // Try to get from product first
+        if (win.products?.sku) {
+            return win.products.sku;
+        }
+        // Try to get from order's product
+        if (win.orders?.products?.sku) {
+            return win.orders.products.sku;
+        }
+        return "-";
+    };
+
+    // Helper to get Synnex order number
+    const getSynnexOrderNumber = () => {
+        // Check win record first
+        if (win.synnexOrderHash) {
+            return win.synnexOrderHash;
+        }
+        // Check order record
+        if (win.orders?.order_no) {
+            return win.orders.order_no;
+        }
+        return "-";
+    };
+
+    // Helper to get notes
+    const getNotes = () => {
+        // Check win record first
+        if (win.notes) {
+            return win.notes;
+        }
+        // Check order record
+        if (win.orders?.notes) {
+            return win.orders.notes;
+        }
+        return "-";
+    };
+
+    // Convert string to number safely
+    const safeParseNumber = (value: any): number => {
+        if (!value) return 0;
+        if (typeof value === 'number') return value;
+        const num = parseFloat(value.toString().replace(/[^0-9.-]+/g, ''));
+        return isNaN(num) ? 0 : num;
+    };
+
     return (
         <div className="container mx-auto py-10 px-5">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold">Win Report Details</h1>
-                <p className="text-gray-600 mt-2">Order #: {win.order_no || "N/A"}</p>
-            </div>
 
-            {/* Win Details Table */}
-            <div className="space-y-6">
-                <Table className="border">
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }} colSpan={2}>
-                                Win Form Details
-                            </TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {/* Demo Program Order # */}
-                        <TableRow>
-                            <TableCell className="w-[65%] font-semibold">Demo Program Order #</TableCell>
-                            <TableCell className="w-[35%] border-l">
-                                {win.order_no || "-"}
-                            </TableCell>
-                        </TableRow>
+            <div className="h-lvh">
 
-                        {/* Device Name */}
-                        <TableRow>
-                            <TableCell className="w-[65%] font-semibold">Device Name</TableCell>
-                            <TableCell className="w-[35%] border-l">
-                                {win.device_name || "-"}
-                            </TableCell>
-                        </TableRow>
+                {/* Win Details Table */}
+                <div className="space-y-6">
+                    <Table className="border">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }} colSpan={2}>
+                                    Win Form Details
+                                </TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {/* Demo Program Order # */}
+                            <TableRow>
+                                <TableCell className="w-[65%] font-semibold">Demo Program Order #</TableCell>
+                                <TableCell className="w-[35%] border-l">
+                                    {win.orders?.order_no || win.orderHash || "-"}
+                                </TableCell>
+                            </TableRow>
 
-                        {/* Reseller Name */}
-                        <TableRow>
-                            <TableCell className="w-[65%] font-semibold">Reseller Name</TableCell>
-                            <TableCell className="w-[35%] border-l">
-                                {win.reseller_name || "-"}
-                            </TableCell>
-                        </TableRow>
+                            {/* Device Name */}
+                            <TableRow>
+                                <TableCell className="w-[65%] font-semibold">{!win.isOther ? `Device Name` : 'Device Part #'}</TableCell>
+                                <TableCell className="w-[35%] border-l">
+                                    {getDeviceName()}
+                                </TableCell>
+                            </TableRow>
 
-                        {/* Reseller Account # */}
-                        <TableRow>
-                            <TableCell className="w-[65%] font-semibold">Reseller Account #</TableCell>
-                            <TableCell className="w-[35%] border-l">
-                                {win.reseller_account_no || "-"}
-                            </TableCell>
-                        </TableRow>
+                            {/* Reseller Name */}
+                            <TableRow>
+                                <TableCell className="w-[65%] font-semibold">Reseller Name</TableCell>
+                                <TableCell className="w-[35%] border-l">
+                                    {win.reseller || "-"}
+                                </TableCell>
+                            </TableRow>
 
-                        {/* Synnex Order # */}
-                        <TableRow>
-                            <TableCell className="w-[65%] font-semibold">Synnex Order #</TableCell>
-                            <TableCell className="w-[35%] border-l">
-                                {win.synnex_order_no || "-"}
-                            </TableCell>
-                        </TableRow>
+                            {/* Reseller Account # */}
+                            <TableRow>
+                                <TableCell className="w-[65%] font-semibold">Reseller Account #</TableCell>
+                                <TableCell className="w-[35%] border-l">
+                                    {win.resellerAccount || "-"}
+                                </TableCell>
+                            </TableRow>
 
-                        {/* Customer Name */}
-                        <TableRow>
-                            <TableCell className="w-[65%] font-semibold">Customer Name</TableCell>
-                            <TableCell className="w-[35%] border-l">
-                                {win.customer_name || "-"}
-                            </TableCell>
-                        </TableRow>
+                            {/* Synnex Order # */}
+                            <TableRow>
+                                <TableCell className="w-[65%] font-semibold">Synnex Order #</TableCell>
+                                <TableCell className="w-[35%] border-l">
+                                    {getSynnexOrderNumber()}
+                                </TableCell>
+                            </TableRow>
 
-                        {/* Number of Units */}
-                        <TableRow>
-                            <TableCell className="w-[65%] font-semibold">Number of Units</TableCell>
-                            <TableCell className="w-[35%] border-l">
-                                {win.number_of_units ? formatNumber(win.number_of_units) : "0"}
-                            </TableCell>
-                        </TableRow>
+                            {/* Customer Name */}
+                            <TableRow>
+                                <TableCell className="w-[65%] font-semibold">Customer Name</TableCell>
+                                <TableCell className="w-[35%] border-l">
+                                    {win.customerName || "-"}
+                                </TableCell>
+                            </TableRow>
 
-                        {/* Total Deal Revenue */}
-                        <TableRow>
-                            <TableCell className="w-[65%] font-semibold">Total Deal Revenue ($)</TableCell>
-                            <TableCell className="w-[35%] border-l">
-                                {win.total_deal_revenue ? formatCurrency(win.total_deal_revenue) : "$0"}
-                            </TableCell>
-                        </TableRow>
+                            {/* Number of Units */}
+                            <TableRow>
+                                <TableCell className="w-[65%] font-semibold">Number of Units</TableCell>
+                                <TableCell className="w-[35%] border-l">
+                                    {formatNumber(safeParseNumber(win.units))}
+                                </TableCell>
+                            </TableRow>
 
-                        {/* Purchase Type */}
-                        <TableRow>
-                            <TableCell className="w-[65%] font-semibold">Is this a one time purchase or roll-out?</TableCell>
-                            <TableCell className="w-[35%] border-l">
-                                {win.purchase_type ? (
-                                    win.purchase_type.toLowerCase() === "roll-out" ? "Roll-out" : "One-time Purchase"
-                                ) : "-"}
-                            </TableCell>
-                        </TableRow>
+                            {/* Total Deal Revenue */}
+                            <TableRow>
+                                <TableCell className="w-[65%] font-semibold">Total Deal Revenue ($)</TableCell>
+                                <TableCell className="w-[35%] border-l">
+                                    {formatCurrency(safeParseNumber(win.deal_rev))}
+                                </TableCell>
+                            </TableRow>
 
-                        {/* Date of Purchase */}
-                        <TableRow>
-                            <TableCell className="w-[65%] font-semibold">Date of Purchase</TableCell>
-                            <TableCell className="w-[35%] border-l">
-                                {win.date_of_purchase ? new Date(win.date_of_purchase).toLocaleDateString('en-US', {
-                                    year: 'numeric',
-                                    month: '2-digit',
-                                    day: '2-digit'
-                                }) : "-"}
-                            </TableCell>
-                        </TableRow>
+                            {/* Purchase Type */}
+                            <TableRow>
+                                <TableCell className="w-[65%] font-semibold">Is this a one time purchase or roll-out?</TableCell>
+                                <TableCell className="w-[35%] border-l">
+                                    {win.purchaseType ? (
+                                        win.purchaseType.toLowerCase() === "roll-out" ? "Roll-out" : "One-time Purchase"
+                                    ) : "-"}
+                                </TableCell>
+                            </TableRow>
 
-                        {/* How Demo Helped */}
-                        <TableRow>
-                            <TableCell className="w-[65%] font-semibold">How did TD Synnex Surface Demo help you close this deal?</TableCell>
-                            <TableCell className="w-[35%] border-l">
-                                {win.how_demo_helped || "-"}
-                            </TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
+                            {/* Date of Purchase */}
+                            <TableRow>
+                                <TableCell className="w-[65%] font-semibold">Date of Purchase</TableCell>
+                                <TableCell className="w-[35%] border-l">
+                                    {win.purchaseDate ? new Date(win.purchaseDate).toLocaleDateString('en-US', {
+                                        year: 'numeric',
+                                        month: '2-digit',
+                                        day: '2-digit'
+                                    }) : "-"}
+                                </TableCell>
+                            </TableRow>
 
-                {/* Back Button */}
-                <div className="flex justify-start">
-                    <button
-                        onClick={() => window.history.back()}
-                        className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 cursor-pointer"
-                    >
-                        Back to Wins List
-                    </button>
+                            {/* How Demo Helped */}
+                            <TableRow>
+                                <TableCell className="w-[65%] font-semibold">How did TD Synnex Surface Demo help you close this deal?</TableCell>
+                            </TableRow>
+
+                            {/* How Demo Helped */}
+                            <TableRow>
+                                <TableCell className="w-[35%] border-l">
+                                    {getNotes()}
+                                </TableCell>
+                            </TableRow>
+
+                        </TableBody>
+                    </Table>
                 </div>
             </div>
         </div>

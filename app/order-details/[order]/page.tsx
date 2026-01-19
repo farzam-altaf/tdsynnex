@@ -226,6 +226,11 @@ export default function Page() {
             }
 
             if (data) {
+
+                if (sRole == profile?.role && data[0].order_by !== profile?.id) {
+                    router.back();
+                }
+
                 setOrders(data as Order[]);
                 // Initialize tracking data with order data
                 if (data.length > 0) {
@@ -262,11 +267,11 @@ export default function Page() {
         }
     }, [loading, isLoggedIn, profile, isAuthorized]);
 
-    // Button click handlers
     const handleApprove = async () => {
         if (!order || !isActionAuthorized) return;
 
         try {
+            // Update order status
             const { error } = await supabase
                 .from('orders')
                 .update({
@@ -289,13 +294,63 @@ export default function Page() {
         if (!order || !isActionAuthorized) return;
 
         try {
+            const currentDate = new Date().toISOString().split('T')[0];
+
+            // Only update product quantities if current status is one of the allowed statuses
+            const allowedPreviousStatuses = [
+                process.env.NEXT_PUBLIC_STATUS_AWAITING,
+                process.env.NEXT_PUBLIC_STATUS_PROCESSING,
+                process.env.NEXT_PUBLIC_STATUS_SHIPPED,
+                process.env.NEXT_PUBLIC_STATUS_EXTENSION
+            ].filter(Boolean);
+
+            if (allowedPreviousStatuses.includes(order.order_status) && order.products && order.quantity) {
+                const orderQuantity = parseInt(order.quantity) || 0;
+
+                if (orderQuantity > 0) {
+                    // Parse current product quantities
+                    const currentStockQty = parseInt(order.products.stock_quantity) || 0;
+                    const currentWithCustomerQty = parseInt(order.products.withCustomer) || 0;
+
+                    // Calculate new quantities
+                    const newStockQty = currentStockQty + orderQuantity; // Increase stock
+                    const newWithCustomerQty = currentWithCustomerQty - orderQuantity; // Decrease withCustomer
+
+                    // Ensure quantities don't go negative
+                    const finalStockQty = Math.max(0, newStockQty).toString();
+                    const finalWithCustomerQty = Math.max(0, newWithCustomerQty).toString();
+
+                    // Update product quantities
+                    const { error: productUpdateError } = await supabase
+                        .from('products')
+                        .update({
+                            stock_quantity: finalStockQty,
+                            withCustomer: finalWithCustomerQty
+                        })
+                        .eq('id', order.products.id);
+
+                    if (productUpdateError) {
+                        console.error('Error updating product quantities:', productUpdateError);
+                    } else {
+                        console.log('Product quantities updated on rejection');
+                    }
+                }
+            }
+
+            // Update order status
+            const updateData: any = {
+                order_status: `${process.env.NEXT_PUBLIC_STATUS_REJECTED}`,
+                rejected_by: profile?.id,
+                action_date: currentDate
+            };
+
+            // Clear shipped_date and returned_date when rejecting
+            updateData.shipped_date = null;
+            updateData.returned_date = null;
+
             const { error } = await supabase
                 .from('orders')
-                .update({
-                    order_status: `${process.env.NEXT_PUBLIC_STATUS_REJECTED}`,
-                    rejected_by: profile?.id,
-                    action_date: `${new Date().toISOString().split('T')[0]}`
-                })
+                .update(updateData)
                 .eq('id', order.id);
 
             if (error) throw error;
@@ -314,7 +369,6 @@ export default function Page() {
         setEditedValue(value || "");
         setEditingRowId(rowId);
     };
-
     const handleSaveEdit = async (field: string) => {
         if (!order || !isActionAuthorized || editingField !== field) return;
 
@@ -328,6 +382,137 @@ export default function Page() {
 
                 if (devOpportunity && devBudget) {
                     updateData.rev_opportunity = devOpportunity * devBudget;
+                }
+            }
+
+            // If status is being changed to Returned or Rejected, update product quantities
+            if (field === "order_status" && order.products && order.quantity) {
+                const currentStatus = order.order_status;
+                const newStatus = editedValue;
+                const allowedPreviousStatuses = [
+                    process.env.NEXT_PUBLIC_STATUS_AWAITING,
+                    process.env.NEXT_PUBLIC_STATUS_PROCESSING,
+                    process.env.NEXT_PUBLIC_STATUS_SHIPPED,
+                    process.env.NEXT_PUBLIC_STATUS_EXTENSION
+                ].filter(Boolean);
+                const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+
+                // Check if changing from allowed status to Returned or Rejected
+                if (
+                    allowedPreviousStatuses.includes(currentStatus) &&
+                    (newStatus === process.env.NEXT_PUBLIC_STATUS_RETURNED ||
+                        newStatus === process.env.NEXT_PUBLIC_STATUS_REJECTED)
+                ) {
+                    const orderQuantity = parseInt(order.quantity) || 0;
+
+                    if (orderQuantity > 0) {
+                        // Parse current product quantities
+                        const currentStockQty = parseInt(order.products.stock_quantity) || 0;
+                        const currentWithCustomerQty = parseInt(order.products.withCustomer) || 0;
+
+                        // Calculate new quantities
+                        const newStockQty = currentStockQty + orderQuantity; // Increase stock
+                        const newWithCustomerQty = currentWithCustomerQty - orderQuantity; // Decrease withCustomer
+
+                        // Ensure quantities don't go negative
+                        const finalStockQty = Math.max(0, newStockQty).toString();
+                        const finalWithCustomerQty = Math.max(0, newWithCustomerQty).toString();
+
+                        // Update product quantities
+                        const { error: productUpdateError } = await supabase
+                            .from('products')
+                            .update({
+                                stock_quantity: finalStockQty,
+                                withCustomer: finalWithCustomerQty
+                            })
+                            .eq('id', order.products.id);
+
+                        if (productUpdateError) {
+                            console.error('Error updating product quantities:', productUpdateError);
+                            // Don't throw here - still update order status but log the error
+                        } else {
+                            console.log('Product quantities updated successfully');
+                        }
+                    }
+
+                    // If status is changing to Returned, update returned_date
+                    if (newStatus === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
+                        updateData.returned_date = currentDate;
+
+                        // Clear shipped_date if it exists (optional - depends on your business logic)
+                        updateData.shipped_date = null;
+                    }
+                }
+
+                // Also handle reverse scenario: if status is changing from Returned/Rejected back to something else
+                if (
+                    (currentStatus === process.env.NEXT_PUBLIC_STATUS_RETURNED ||
+                        currentStatus === process.env.NEXT_PUBLIC_STATUS_REJECTED) &&
+                    !(newStatus === process.env.NEXT_PUBLIC_STATUS_RETURNED ||
+                        newStatus === process.env.NEXT_PUBLIC_STATUS_REJECTED)
+                ) {
+                    const orderQuantity = parseInt(order.quantity) || 0;
+
+                    if (orderQuantity > 0) {
+                        // Parse current product quantities
+                        const currentStockQty = parseInt(order.products.stock_quantity) || 0;
+                        const currentWithCustomerQty = parseInt(order.products.withCustomer) || 0;
+
+                        // Reverse the previous update: decrease stock, increase withCustomer
+                        const newStockQty = currentStockQty - orderQuantity;
+                        const newWithCustomerQty = currentWithCustomerQty + orderQuantity;
+
+                        // Ensure quantities don't go negative
+                        const finalStockQty = Math.max(0, newStockQty).toString();
+                        const finalWithCustomerQty = Math.max(0, newWithCustomerQty).toString();
+
+                        // Update product quantities
+                        const { error: productUpdateError } = await supabase
+                            .from('products')
+                            .update({
+                                stock_quantity: finalStockQty,
+                                withCustomer: finalWithCustomerQty
+                            })
+                            .eq('id', order.products.id);
+
+                        if (productUpdateError) {
+                            console.error('Error updating product quantities:', productUpdateError);
+                        } else {
+                            console.log('Product quantities reversed successfully');
+                        }
+                    }
+
+                    // If changing from Returned to another status, clear returned_date
+                    if (currentStatus === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
+                        updateData.returned_date = null;
+                    }
+                }
+
+                // Check if status is changing to Shipped or Shipped Extension
+                const shippedStatuses = [
+                    process.env.NEXT_PUBLIC_STATUS_SHIPPED,
+                    process.env.NEXT_PUBLIC_STATUS_EXTENSION
+                ].filter(Boolean);
+
+                const nonShippedStatuses = [
+                    process.env.NEXT_PUBLIC_STATUS_AWAITING,
+                    process.env.NEXT_PUBLIC_STATUS_PROCESSING,
+                    process.env.NEXT_PUBLIC_STATUS_RETURNED,
+                    process.env.NEXT_PUBLIC_STATUS_REJECTED
+                ].filter(Boolean);
+
+                // If changing to Shipped or Shipped Extension, update shipped_date
+                if (shippedStatuses.includes(newStatus) && !shippedStatuses.includes(currentStatus)) {
+                    updateData.shipped_date = currentDate;
+
+                    // Clear returned_date if it exists (since it's being shipped, not returned)
+                    if (currentStatus === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
+                        updateData.returned_date = null;
+                    }
+                }
+                // If changing from Shipped/Extension to a non-shipped status, clear shipped_date
+                else if (shippedStatuses.includes(currentStatus) && nonShippedStatuses.includes(newStatus)) {
+                    updateData.shipped_date = null;
                 }
             }
 
@@ -352,12 +537,25 @@ export default function Page() {
                                 updated.rev_opportunity = devOpportunity * devBudget;
                             }
                         }
+                        // Update dates in local state
+                        if (field === "order_status") {
+                            if (editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED ||
+                                editedValue === process.env.NEXT_PUBLIC_STATUS_EXTENSION) {
+                                updated.shipped_date = new Date().toISOString().split('T')[0];
+                            }
+                            if (editedValue === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
+                                updated.returned_date = new Date().toISOString().split('T')[0];
+                            }
+                        }
                         return updated;
                     }
                     return o;
                 });
                 return updatedOrder;
             });
+
+            // Refresh data to get updated product info
+            await fetchOrders();
 
             // Reset editing state
             setEditingField(null);

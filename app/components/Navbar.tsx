@@ -77,6 +77,10 @@ export default function Navbar() {
   const searchRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  const [pendingUserCount, setPendingUserCount] = useState(0);
+  const [pendingOrderCount, setPendingOrderCount] = useState(0);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const notificationRef = useRef<HTMLDivElement>(null);
 
   const router = useRouter()
   const { user, profile, loading } = useAuth()
@@ -96,6 +100,70 @@ export default function Navbar() {
     setIsUserMenuOpen(false)
     router.replace('/login')
   }
+
+  const fetchNotificationCounts = useCallback(async () => {
+    if (!profile?.role || (profile.role !== admin && profile.role !== shopManager)) {
+      return;
+    }
+
+    try {
+      // Fetch pending user approvals (isVerified = false)
+      const { count: userCount, error: userError } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('isVerified', false);
+
+      if (!userError) {
+        setPendingUserCount(userCount || 0);
+      }
+
+      // Fetch pending orders (awaiting approval)
+      const { count: orderCount, error: orderError } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('order_status', process.env.NEXT_PUBLIC_STATUS_AWAITING);
+
+      if (!orderError) {
+        setPendingOrderCount(orderCount || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching notification counts:', error);
+    }
+  }, [profile?.role]);
+
+  // Add useEffect to fetch counts
+  useEffect(() => {
+    if (!loading && profile?.role && (profile.role === admin || profile.role === shopManager)) {
+      fetchNotificationCounts();
+
+      // Refresh counts every 30 seconds
+      const interval = setInterval(fetchNotificationCounts, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [loading, profile?.role, fetchNotificationCounts]);
+
+  // Add click outside handler for notification dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setIsNotificationOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Calculate total count
+  const totalNotificationCount = pendingUserCount + pendingOrderCount;
+
+  // Add this function to handle notification click
+  const handleNotificationClick = () => {
+    setIsNotificationOpen(!isNotificationOpen);
+  };
+
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -236,9 +304,9 @@ export default function Navbar() {
     ? [
       ...publicNavigation,
       // Add 'Report a Win' for all logged in users EXCEPT shopManager
-      ...(profile?.role !== shopManager ? [{ name: 'Report a Win', href: '/wins' }] : []),
+      ...(profile?.role !== superSubscriber ? [{ name: 'Report a Win', href: '/wins' }] : []),
       // Add '360Dashboard' only for admin and superSubscriber
-      ...((profile?.role === admin || profile?.role === superSubscriber)
+      ...((profile?.role === admin || profile?.role === shopManager)
         ? [{ name: '360Dashboard', href: '/360dashboard' }]
         : [])
     ]
@@ -363,14 +431,112 @@ export default function Navbar() {
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  {(isLoggedIn && (profile?.role === admin || profile?.role === superSubscriber)) && (
-                    <Link
-                      href="/notification"
-                      className="hidden lg:flex relative rounded-full p-1 text-black cursor-pointer"
-                    >
-                      <span className="sr-only">Notifications</span>
-                      <PiBellLight size={22} />
-                    </Link>
+                  {(isLoggedIn && (profile?.role === admin || profile?.role === shopManager)) && (
+                    <div className="hidden lg:block relative" ref={notificationRef}>
+                      <button
+                        type="button"
+                        onClick={handleNotificationClick}
+                        className="relative rounded-full p-1 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200"
+                      >
+                        <span className="sr-only">Notifications</span>
+                        <Badge
+                          count={totalNotificationCount}
+                          size="small"
+                          overflowCount={99}
+                          showZero={false}
+                          style={{
+                            backgroundColor: '#ef4444',
+                            fontSize: '10px',
+                            height: '18px',
+                            minWidth: '18px',
+                            lineHeight: '18px',
+                            top: '1px',
+                            right: '1px'
+                          }}
+                        >
+                          <PiBellLight size={22} />
+                        </Badge>
+                      </button>
+
+                      {/* Notification Dropdown */}
+                      {isNotificationOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                          <div className="p-2">
+                            <h3 className="text-sm font-semibold text-gray-900 mb-3">Notifications</h3>
+
+                            {/* User Approvals */}
+                            <button
+                              onClick={() => {
+                                router.push('/users-list?_=true');
+                                setIsNotificationOpen(false);
+                              }}
+                              className="w-full text-left mb-2 py-3 px-2 rounded-md hover:bg-gray-100 transition-colors duration-200 cursor-pointer"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                    <CiUser className="text-blue-600" size={16} />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900">User Approvals</p>
+                                    <p className="text-xs text-gray-500">Pending user verifications</p>
+                                  </div>
+                                </div>
+                                {pendingUserCount > 0 && (
+                                  <Badge
+                                    count={pendingUserCount}
+                                    size="small"
+                                    style={{
+                                      backgroundColor: '#ef4444',
+                                      fontSize: '10px',
+                                      height: '18px',
+                                      minWidth: '18px',
+                                      lineHeight: '18px'
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            </button>
+
+                            {/* Order Approvals */}
+                            <button
+                              onClick={() => {
+                                router.push('/order-details');
+                                setIsNotificationOpen(false);
+                              }}
+                              className="w-full text-left py-3 px-2 rounded-md hover:bg-gray-100 transition-colors duration-200 cursor-pointer"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                                    <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900">Awaiting Approvals</p>
+                                    <p className="text-xs text-gray-500">Pending order approvals</p>
+                                  </div>
+                                </div>
+                                {pendingOrderCount > 0 && (
+                                  <Badge
+                                    count={pendingOrderCount}
+                                    size="small"
+                                    style={{
+                                      backgroundColor: '#ef4444',
+                                      fontSize: '10px',
+                                      height: '18px',
+                                      minWidth: '18px',
+                                      lineHeight: '18px'
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {/* Desktop Search Button and Dropdown */}
