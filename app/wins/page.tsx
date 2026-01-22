@@ -66,10 +66,8 @@ export default function Page() {
             }
 
             const { data, error } = await query;
-            console.log("Fetched orders data:", data);
 
             if (error) {
-                console.error('Error fetching orders:', error);
                 return;
             }
 
@@ -82,7 +80,6 @@ export default function Page() {
             setOrders(formattedData);
 
         } catch (error) {
-            console.error('Error fetching orders:', error);
         } finally {
             setIsLoading(false);
         }
@@ -90,16 +87,11 @@ export default function Page() {
 
     // Set contact name when order is selected
     useEffect(() => {
-        console.log('Order selection changed:', formData.orderNumber);
-        console.log('Available orders:', orders);
-
         if (formData.orderNumber) {
             // IMPORTANT: Convert string to number for comparison
             const orderNumber = parseInt(formData.orderNumber);
             const selectedOrder = orders.find(order => order.order_no === orderNumber);
 
-            console.log('Looking for order number:', orderNumber);
-            console.log('Selected order:', selectedOrder);
 
             if (selectedOrder) {
                 // Get product name from the joined data
@@ -107,8 +99,6 @@ export default function Page() {
                     selectedOrder.product_name ||
                     "Standard Device Package";
 
-                console.log('Product name to display:', productName);
-                console.log('Customer name to set:', selectedOrder.company_name);
 
                 // Set the product name for display
                 setProduct(productName);
@@ -125,7 +115,6 @@ export default function Page() {
                     totalDealRevenue: selectedOrder.rev_opportunity?.toString() || prev.totalDealRevenue,
                 }));
             } else {
-                console.log('Order not found in the list');
                 // Reset if order not found
                 setProduct("");
                 setFormData(prev => ({
@@ -135,7 +124,6 @@ export default function Page() {
                 }));
             }
         } else {
-            console.log('No order selected, resetting fields');
             setProduct("");
             setFormData(prev => ({
                 ...prev,
@@ -151,14 +139,12 @@ export default function Page() {
 
         // Check if user is authenticated and verified
         if (!isLoggedIn || !profile?.isVerified) {
-            console.log("User not authenticated, redirecting to login");
             router.replace('/login/?redirect_to=wins');
             return;
         }
 
         // ShopManager should not have access to this page
         if (profile?.role === shopManager) {
-            console.log("ShopManager not authorized for this page");
             router.replace('/product-category/alldevices');
             return;
         }
@@ -222,8 +208,6 @@ export default function Page() {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
 
-        console.log('Handle change:', name, value);
-
         if (type === 'radio') {
             setFormData(prev => ({
                 ...prev,
@@ -242,7 +226,6 @@ export default function Page() {
         } else {
             setFormData(prev => {
                 const newData = { ...prev, [name]: value };
-                console.log('Updated form data:', newData);
                 return newData;
             });
         }
@@ -301,7 +284,6 @@ export default function Page() {
                     updated_at: new Date().toISOString()
                 };
 
-                console.log("Inserting win data:", winData);
 
                 // Insert into wins table
                 const { data, error } = await supabase
@@ -310,11 +292,8 @@ export default function Page() {
                     .select();
 
                 if (error) {
-                    console.error('Supabase error:', error);
                     throw error;
                 }
-
-                console.log("Insert successful, returned data:", data);
 
                 toast.success("Win reported successfully!", {
                     style: { background: "black", color: "white" }
@@ -341,7 +320,6 @@ export default function Page() {
                 setShowOtherInput(false);
 
             } catch (error: any) {
-                console.error('Error submitting win:', error);
                 toast.success(`Error: ${error.message || "Failed to submit win"}`, {
                     style: { background: "red", color: "white" }
                 });

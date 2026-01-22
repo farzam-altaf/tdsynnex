@@ -20,66 +20,177 @@ export default function LoginForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { profile, isLoggedIn, loading, user } = useAuth();
-  const [authChecked, setAuthChecked] = useState(false);
-  const [authInitialized, setAuthInitialized] = useState(false);
-  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [showContent, setShowContent] = useState(false); // New state for controlled content display
+  const [initialLoadingComplete, setInitialLoadingComplete] = useState(false); // Track initial loading
 
-  // Handle auth check for logged-in users - FIXED VERSION
+  // Initial delay to show loading spinner first - NO AUTH CHECK DURING THIS
   useEffect(() => {
-    // Don't do anything if still loading
-    if (loading) {
+    const timer = setTimeout(() => {
+      setShowContent(true);
+      setInitialLoadingComplete(true);
+    }, 2000); // 1.2 seconds delay before checking auth
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Handle auth check ONLY AFTER initial loading is complete
+  useEffect(() => {
+    // Don't check auth until initial loading is complete
+    if (!initialLoadingComplete) return;
+
+    // If still loading auth, wait
+    if (loading) return;
+
+    // Now check if user is already logged in and verified
+    if (isLoggedIn && profile?.isVerified === true) {
+      const redirectTo = searchParams.get("redirect_to");
+      const redirectPath = redirectTo ? `/${redirectTo}` : "/";
+      // Show redirecting state briefly then redirect
+      setTimeout(() => {
+        router.push(redirectPath);
+      }, 10);
+
       return;
     }
 
-    // Mark auth as initialized
-    setAuthInitialized(true);
+  }, [initialLoadingComplete, loading, isLoggedIn, profile, router, searchParams]);
 
-    // Check if user is already logged in and verified
-    if (isLoggedIn && profile?.isVerified === true) {
-      console.log("User is already logged in and verified");
+  // Show loading spinner for initial 1.2 seconds
+  if (!showContent) {
+    return (
+      <div className="relative min-h-screen">
+        {/* Background image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: "url('/computer-mouse-object-background.jpg')",
+          }}
+        />
 
-      // Prevent multiple redirects
-      if (!isRedirecting) {
-        setIsRedirecting(true);
-        const redirectTo = searchParams.get("redirect_to");
-        const redirectPath = redirectTo ? `/${redirectTo}` : "/";
-        console.log("Redirecting to:", redirectPath);
+        {/* White overlay for entire content area */}
+        <div className="absolute inset-0 top-0 bg-white/92"></div>
 
-        // Use setTimeout to ensure redirect happens in next tick
-        setTimeout(() => {
-          router.push(redirectPath);
-        }, 100);
-      }
-    } else {
-      console.log("User not logged in or not verified, staying on login page");
-      setAuthChecked(true);
-    }
-  }, [loading, isLoggedIn, profile, router, searchParams, isRedirecting]);
+        {/* Loading content - Only shows for first 1.2 seconds */}
+        <div className="relative flex items-center justify-center min-h-screen px-3 py-22 lg:px-8">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border-8 border-gray-100 bg-white sm:px-13 px-6 py-14">
+            <div className="sm:mx-auto sm:w-full sm:max-w-sm">
+              {/* Logo */}
+              <div className="flex justify-center mb-8">
+                <img
+                  src="/logo.png"
+                  alt="Company Logo"
+                  className="h-10 object-contain"
+                />
+              </div>
 
-  // Optional: prevent UI flicker - MUST BE AFTER ALL HOOKS
+              {/* Progress bar */}
+              <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                <div
+                  className="bg-[#3ba1da] h-2.5 rounded-full animate-pulse"
+                  style={{ width: '70%' }}>
+                </div>
+              </div>
+
+              {/* Loading text */}
+              <div className="text-center">
+                <p className="text-gray-600">Loading...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If initial loading is complete AND user is logged in AND verified, show redirecting
+  if (initialLoadingComplete && !loading && isLoggedIn && profile?.isVerified === true) {
+    return (
+      <div className="relative min-h-screen">
+        {/* Background image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: "url('/computer-mouse-object-background.jpg')",
+          }}
+        />
+
+        {/* White overlay for entire content area */}
+        <div className="absolute inset-0 top-0 bg-white/92"></div>
+
+        {/* Redirecting content */}
+        <div className="relative flex items-center justify-center min-h-screen px-3 py-22 lg:px-8">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border-8 border-gray-100 bg-white sm:px-13 px-6 py-14">
+            <div className="sm:mx-auto sm:w-full sm:max-w-sm">
+              {/* Logo */}
+              <div className="flex justify-center mb-8">
+                <img
+                  src="/logo.png"
+                  alt="Company Logo"
+                  className="h-10 object-contain"
+                />
+              </div>
+
+              {/* Spinner */}
+              <div className="flex justify-center mb-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3ba1da]"></div>
+              </div>
+
+              {/* Redirecting text */}
+              <div className="text-center">
+                <p className="text-gray-600">Redirecting to your dashboard...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If still loading auth data after initial loading, show auth loading
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3ba1da] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+      <div className="relative min-h-screen">
+        {/* Background image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: "url('/computer-mouse-object-background.jpg')",
+          }}
+        />
+
+        {/* White overlay for entire content area */}
+        <div className="absolute inset-0 top-0 bg-white/92"></div>
+
+        {/* Auth loading content */}
+        <div className="relative flex items-center justify-center min-h-screen px-3 py-22 lg:px-8">
+          <div className="relative z-10 w-full max-w-md rounded-2xl border-8 border-gray-100 bg-white sm:px-13 px-6 py-14">
+            <div className="sm:mx-auto sm:w-full sm:max-w-sm">
+              {/* Logo */}
+              <div className="flex justify-center mb-8">
+                <img
+                  src="/logo.png"
+                  alt="Company Logo"
+                  className="h-10 object-contain"
+                />
+              </div>
+
+              {/* Spinner */}
+              <div className="flex justify-center mb-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3ba1da]"></div>
+              </div>
+
+              {/* Loading text */}
+              <div className="text-center">
+                <p className="text-gray-600">Checking authentication...</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  // If already logged in and redirecting, show loading
-  if (isLoggedIn && profile?.isVerified === true && !authChecked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3ba1da] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Redirecting...</p>
-        </div>
-      </div>
-    );
-  }
-
+  // Normal login form (only shown if user is not logged in)
   const validateForm = () => {
     const newErrors = {
       email: "",
@@ -139,7 +250,6 @@ export default function LoginForm() {
     // ✅ USER LOGIN SUCCESS
     const userId = data.user?.id;
 
-
     if (!userId) return;
 
     // 🔍 CHECK isVerified
@@ -197,7 +307,6 @@ export default function LoginForm() {
     const redirectTo = searchParams.get("redirect_to");
     router.push(redirectTo ? `/${redirectTo}` : "/");
   };
-
 
   return (
     <div className="relative min-h-screen">
@@ -259,24 +368,25 @@ export default function LoginForm() {
                   </div>
                 )}
               </div>
+              <div className="flex w-full gap-4 mt-6">
+                <div className="flex-1">
+                  <Link
+                    href={"/account-registration"}
+                    className="flex items-center justify-center w-full rounded-md bg-white px-6 py-3 font-semibold text-gray-700 transition-all hover:bg-gray-50 hover:shadow-md border border-gray-300"
+                  >
+                    Register
+                  </Link>
+                </div>
 
-              <div className="flex justify-center pt-4">
-                <button
-                  type="submit"
-                  disabled={isloading}
-                  className="w-full rounded-md bg-[#3ba1da] px-6 py-3 cursor-pointer font-semibold text-white transition-colors hover:bg-[#41abd6] disabled:opacity-50"
-                >
-                  {isloading ? "Please wait..." : "Login"}
-                </button>
-              </div>
-
-              <div className="flex justify-center">
-                <Link
-                  href={"/account-registration"}
-                  className="w-full rounded-md text-center bg-[#eeeeee] px-6 py-3 font-normal text-gray-600 transition-colors hover:bg-[#e6e6e6] shadow-lg"
-                >
-                  Register
-                </Link>
+                <div className="flex-1">
+                  <button
+                    type="submit"
+                    disabled={isloading}
+                    className="w-full rounded-md bg-[#3ba1da] px-6 py-3 cursor-pointer font-semibold text-white transition-all hover:bg-[#41abd6] hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isloading ? "Please wait..." : "Login"}
+                  </button>
+                </div>
               </div>
 
               <Link

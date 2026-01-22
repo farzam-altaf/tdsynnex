@@ -154,14 +154,12 @@ export default function Page() {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
-            console.log("User not authenticated, redirecting to login");
             router.replace('/login/?redirect_to=order-details');
             return;
         }
 
         // Check if user has permission to access this page
         if (!isAuthorized) {
-            console.log("User not authorized, redirecting...");
             router.replace('/product-category/alldevices');
             return;
         }
@@ -204,7 +202,6 @@ export default function Page() {
             }
 
         } catch (err: unknown) {
-            console.error('Error fetching orders:', err);
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch orders');
             } else {
@@ -417,7 +414,6 @@ export default function Page() {
             setEditErrors({});
 
         } catch (err: any) {
-            console.error('Error updating order:', err);
             toast.error(err.message || "Failed to update order", { style: { color: "white", backgroundColor: "red" } });
         } finally {
             setIsSubmitting(false);
@@ -740,7 +736,6 @@ export default function Page() {
                         fetchOrders();
                         setIsDeleteDialogOpen(false);
                     } catch (error) {
-                        console.error('Error deleting order:', error);
                         setError('Failed to delete order');
                     }
                 };
@@ -847,7 +842,6 @@ export default function Page() {
                         fetchOrders();
                         setIsDeleteDialogOpen(false);
                     } catch (error) {
-                        console.error('Error deleting order:', error);
                         setError('Failed to delete order');
                     }
                 };
@@ -939,10 +933,7 @@ export default function Page() {
 
             const csvString = convertToCSV(data);
             downloadCSV(csvString, `orders_${new Date().toISOString().split('T')[0]}.csv`);
-
-            console.log("CSV exported successfully");
         } catch (error) {
-            console.error('Error exporting CSV:', error);
             setError('Failed to export CSV');
         }
     };

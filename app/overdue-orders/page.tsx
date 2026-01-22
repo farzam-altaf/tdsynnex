@@ -157,14 +157,12 @@ export default function Page() {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
-            console.log("User not authenticated, redirecting to login");
             router.replace('/login/?redirect_to=overdue-orders');
             return;
         }
 
         // Check if user has permission to access this page
         if (!isAuthorized) {
-            console.log("User not authorized, redirecting...");
             router.replace('/product-category/alldevices');
             return;
         }
@@ -186,25 +184,52 @@ export default function Page() {
     };
 
     // Calculate estimated return date (45 days after shipped date)
-    const calculateEstimatedReturnDate = (shippedDate: string | null): string => {
-        if (!shippedDate) return "-";
+    const calculateEstimatedReturnDate = (shippedDate: string | null): Date | null => {
+        if (!shippedDate) return null;
 
         const shipped = new Date(shippedDate);
         const estimatedReturn = new Date(shipped);
         estimatedReturn.setDate(shipped.getDate() + 45);
 
-        return estimatedReturn.toISOString().split('T')[0];
+        return estimatedReturn;
     };
 
     // Format estimated return date for display
     const formatEstimatedReturnDate = (shippedDate: string | null): string => {
-        const dateStr = calculateEstimatedReturnDate(shippedDate);
-        if (dateStr === "-") return "-";
+        const date = calculateEstimatedReturnDate(shippedDate);
+        if (!date) return "-";
 
-        return new Date(dateStr).toLocaleDateString();
+        return date.toLocaleDateString();
     };
 
-    // Fetch orders data from Supabase - ONLY SHIPPED ORDERS
+    // Check if estimated return date has passed
+    const hasReturnDatePassed = (shippedDate: string | null): boolean => {
+        if (!shippedDate) return false;
+
+        const estimatedReturnDate = calculateEstimatedReturnDate(shippedDate);
+        if (!estimatedReturnDate) return false;
+
+        const today = new Date();
+        // Set both dates to midnight for accurate day comparison
+        const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const returnDateMidnight = new Date(
+            estimatedReturnDate.getFullYear(),
+            estimatedReturnDate.getMonth(),
+            estimatedReturnDate.getDate()
+        );
+
+        return returnDateMidnight < todayMidnight;
+    };
+
+    // Calculate days overdue
+    const calculateDaysOverdue = (shippedDate: string | null): number => {
+        if (!shippedDate) return 0;
+
+        const daysShipped = calculateDaysShipped(shippedDate);
+        return Math.max(0, daysShipped - 45);
+    };
+
+    // Fetch orders data from Supabase - ONLY SHIPPED ORDERS with passed return dates
     const fetchOrders = async () => {
         try {
             setIsLoading(true);
@@ -215,6 +240,8 @@ export default function Page() {
             if (!shippedStatus) {
                 throw new Error("Shipping status environment variable not set");
             }
+
+            let ordersData: Order[] = [];
 
             if (!isActionAuthorized) {
                 const { data, error: supabaseError } = await supabase
@@ -229,9 +256,7 @@ export default function Page() {
                 }
 
                 if (data) {
-                    setOrders(data as Order[]);
-                    // Reset selected rows when data is loaded
-                    setSelectedRows({});
+                    ordersData = data as Order[];
                 }
             } else {
                 const { data, error: supabaseError } = await supabase
@@ -245,14 +270,20 @@ export default function Page() {
                 }
 
                 if (data) {
-                    setOrders(data as Order[]);
-                    // Reset selected rows when data is loaded
-                    setSelectedRows({});
+                    ordersData = data as Order[];
                 }
             }
 
+            // Filter orders where estimated return date has passed (shipped more than 45 days ago)
+            const filteredOrders = ordersData.filter(order => {
+                return hasReturnDatePassed(order.shipped_date);
+            });
+
+            setOrders(filteredOrders);
+            // Reset selected rows when data is loaded
+            setSelectedRows({});
+
         } catch (err: unknown) {
-            console.error('Error fetching orders:', err);
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch orders');
             } else {
@@ -337,15 +368,6 @@ export default function Page() {
             // Get selected orders
             const selectedOrdersData = orders.filter(order => selectedOrderIds.includes(order.id));
 
-            // Here you would implement your reminder sending logic
-            // This could be:
-            // 1. Sending emails
-            // 2. Creating notifications
-            // 3. Logging to database
-            // 4. Calling an API
-
-            // For now, we'll just show a success message
-            console.log("Sending reminders for orders:", selectedOrderIds);
 
             // Simulate API call
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -358,7 +380,6 @@ export default function Page() {
             setSelectedRows({});
 
         } catch (err: any) {
-            console.error('Error sending reminders:', err);
             toast.error(err.message || "Failed to send reminders", {
                 style: { color: "white", backgroundColor: "red" }
             });
@@ -539,7 +560,6 @@ export default function Page() {
             setEditErrors({});
 
         } catch (err: any) {
-            console.error('Error updating order:', err);
             toast.error(err.message || "Failed to update order", { style: { color: "white", backgroundColor: "red" } });
         } finally {
             setIsSubmitting(false);
@@ -652,7 +672,7 @@ export default function Page() {
                         className="hover:bg-transparent hover:text-current cursor-pointer justify-start w-full"
                         onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
                     >
-                        Days Shipped
+                        Days Since Shipped
                         <ArrowUpDown className="ml-2 h-4 w-4" />
                     </Button>
                 )
@@ -662,14 +682,47 @@ export default function Page() {
                 const days = calculateDaysShipped(order.shipped_date);
                 let className = "text-left ps-2 font-medium";
 
-                // Color coding based on days
-                if (days > 25) {
-                    className += " text-red-600"; // Overdue or close to overdue
-                } else if (days > 20) {
-                    className += " text-orange-600"; // Getting close
+                // Color coding based on days overdue
+                const daysOverdue = calculateDaysOverdue(order.shipped_date);
+                if (daysOverdue > 0) {
+                    className += " text-red-600";
+                } else if (days > 40) {
+                    className += " text-orange-600";
+                } else if (days > 35) {
+                    className += " text-yellow-600";
                 }
 
                 return <div className={className}>{days} days</div>
+            },
+        },
+        {
+            id: "days_overdue",
+            header: ({ column }) => {
+                return (
+                    <Button
+                        variant="ghost"
+                        className="hover:bg-transparent hover:text-current cursor-pointer justify-start w-full"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                    >
+                        Days Overdue
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                )
+            },
+            cell: ({ row }) => {
+                const order = row.original;
+                const daysOverdue = calculateDaysOverdue(order.shipped_date);
+                let className = "text-left ps-2 font-medium";
+
+                if (daysOverdue > 0) {
+                    className += " text-red-600 font-semibold";
+                }
+
+                return (
+                    <div className={className}>
+                        {daysOverdue > 0 ? `${daysOverdue} days` : "On time"}
+                    </div>
+                );
             },
         },
         {
@@ -727,11 +780,11 @@ export default function Page() {
             cell: ({ row }) => {
                 const order = row.original;
                 const estimatedDate = formatEstimatedReturnDate(order.shipped_date);
-                const days = calculateDaysShipped(order.shipped_date);
+                const daysOverdue = calculateDaysOverdue(order.shipped_date);
                 let className = "text-left ps-2";
 
-                if (days > 45) {
-                    className += " text-red-600 font-semibold"; // Past estimated return date
+                if (daysOverdue > 0) {
+                    className += " text-red-600 font-semibold";
                 }
 
                 return <div className={className}>{estimatedDate}</div>
@@ -832,7 +885,7 @@ export default function Page() {
                 return <div className="text-left ps-2">{row.getValue("notes") || '-'}</div>
             },
         }
-    ]
+    ];
 
     // Initialize table
     const table = useReactTable({
@@ -854,7 +907,7 @@ export default function Page() {
             rowSelection,
             pagination,
         },
-    })
+    });
 
     // Handle CSV export
     const handleExportCSV = () => {
@@ -868,7 +921,8 @@ export default function Page() {
                 'Order #': order.order_no || '',
                 'Order Date': formatDate(order.order_date),
                 'Shipping Status': order.order_status || '',
-                'Days Shipped': calculateDaysShipped(order.shipped_date),
+                'Days Since Shipped': calculateDaysShipped(order.shipped_date),
+                'Days Overdue': calculateDaysOverdue(order.shipped_date),
                 'Estimated Return Date': formatEstimatedReturnDate(order.shipped_date),
                 'Pipeline Opportunity': order.rev_opportunity || 0,
                 'Budget Per Device': order.dev_budget || 0,
@@ -893,11 +947,8 @@ export default function Page() {
             }));
 
             const csvString = convertToCSV(data);
-            downloadCSV(csvString, `shipped_orders_${new Date().toISOString().split('T')[0]}.csv`);
-
-            console.log("CSV exported successfully");
+            downloadCSV(csvString, `overdue_orders_${new Date().toISOString().split('T')[0]}.csv`);
         } catch (error) {
-            console.error('Error exporting CSV:', error);
             setError('Failed to export CSV');
         }
     };
@@ -961,9 +1012,14 @@ export default function Page() {
     }
 
     return (
-        <div className="container mx-auto py-10 px-5 bg-gr">
+        <div className="container mx-auto py-10 px-5">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="sm:text-3xl text-xl font-bold">Overdue Orders Dashboard</h1>
+                <div>
+                    <h1 className="sm:text-3xl text-xl font-bold">Overdue Orders Dashboard</h1>
+                    <p className="text-sm text-gray-600 mt-1">
+                        Showing {orders.length} order{orders.length !== 1 ? 's' : ''} with passed return dates (shipped more than 45 days ago)
+                    </p>
+                </div>
                 <div className="flex gap-2">
                     <Button
                         variant="outline"
@@ -982,7 +1038,7 @@ export default function Page() {
 
             {/* Send Reminders Button */}
             {selectedCount > 0 && (
-                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="mb-6 p-4 rounded-lg">
                     <div className="flex items-center justify-between">
                         <div>
                             <span className="font-semibold">{selectedCount}</span>
@@ -990,25 +1046,22 @@ export default function Page() {
                                 {selectedCount === 1 ? 'order selected' : 'orders selected'}
                             </span>
                         </div>
-                        <button
-                            onClick={handleSendReminders}
-                            disabled={isSendingReminders}
-                            className="
-                                flex items-center gap-2
-                                !bg-blue-900 hover:!bg-blue-700
-                                !text-white
-                                px-4 py-2
-                                rounded-md
-                                border-none
-                                appearance-none
-                                disabled:opacity-60 disabled:cursor-not-allowed
-                            "
-                        >
-                            <Send className="h-3 w-3" />
-                            {isSendingReminders ? "Sending..." : "Send Reminders"}
-                        </button>
-
-
+                        <div className="send-reminders-button">
+                            <button
+                                onClick={handleSendReminders}
+                                disabled={isSendingReminders}
+                                className="
+                                    flex items-center gap-2
+                                    bg-blue-900 hover:bg-blue-700
+                                    text-white  {/* Changed from text-black */}
+                                    px-4 py-2
+                                    rounded-md
+                                    disabled:opacity-50
+                                "
+                            >
+                                {isSendingReminders ? "Sending..." : "Send Reminders"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -1022,10 +1075,10 @@ export default function Page() {
             <div className="w-full">
                 <div className="flex items-center py-4 gap-4">
                     <Input
-                        placeholder="Filter by Shipping Status..."
-                        value={(table.getColumn("order_status")?.getFilterValue() as string) ?? ""}
+                        placeholder="Filter by Customer Name..."
+                        value={(table.getColumn("company_name")?.getFilterValue() as string) ?? ""}
                         onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                            table.getColumn("order_status")?.setFilterValue(event.target.value)
+                            table.getColumn("company_name")?.setFilterValue(event.target.value)
                         }
                         className="max-w-sm"
                     />
@@ -1109,10 +1162,10 @@ export default function Page() {
                                         {isLoading ? (
                                             <div className="flex items-center justify-center">
                                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                                                <span className="ml-2">Loading orders...</span>
+                                                <span className="ml-2">Loading overdue orders...</span>
                                             </div>
                                         ) : (
-                                            "No shipped orders found."
+                                            "No overdue orders found. All orders are within their 45-day return period."
                                         )}
                                     </TableCell>
                                 </TableRow>
@@ -1317,5 +1370,5 @@ export default function Page() {
                 </div>
             </div>
         </div>
-    )
+    );
 }

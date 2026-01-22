@@ -167,13 +167,11 @@ export default function Page() {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
-            console.log("User not authenticated, redirecting to login");
             router.replace(`/login/?redirect_to=order-details/${orderHash}`);
             return;
         }
 
         if (!isAuthorized) {
-            console.log("User not authorized, redirecting...");
             router.replace('/product-category/alldevices');
             return;
         }
@@ -194,7 +192,6 @@ export default function Page() {
                 setAllProducts(data as Product[]);
             }
         } catch (err) {
-            console.error('Error fetching products:', err);
         }
     };
 
@@ -248,7 +245,6 @@ export default function Page() {
             }
 
         } catch (err: unknown) {
-            console.error('Error fetching orders:', err);
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch orders');
             } else {
@@ -286,7 +282,6 @@ export default function Page() {
             // Refresh data
             fetchOrders();
         } catch (err) {
-            console.error('Error approving order:', err);
         }
     };
 
@@ -328,12 +323,6 @@ export default function Page() {
                             withCustomer: finalWithCustomerQty
                         })
                         .eq('id', order.products.id);
-
-                    if (productUpdateError) {
-                        console.error('Error updating product quantities:', productUpdateError);
-                    } else {
-                        console.log('Product quantities updated on rejection');
-                    }
                 }
             }
 
@@ -358,7 +347,6 @@ export default function Page() {
             // Refresh data
             fetchOrders();
         } catch (err) {
-            console.error('Error rejecting order:', err);
         }
     };
 
@@ -426,13 +414,6 @@ export default function Page() {
                                 withCustomer: finalWithCustomerQty
                             })
                             .eq('id', order.products.id);
-
-                        if (productUpdateError) {
-                            console.error('Error updating product quantities:', productUpdateError);
-                            // Don't throw here - still update order status but log the error
-                        } else {
-                            console.log('Product quantities updated successfully');
-                        }
                     }
 
                     // If status is changing to Returned, update returned_date
@@ -475,11 +456,6 @@ export default function Page() {
                             })
                             .eq('id', order.products.id);
 
-                        if (productUpdateError) {
-                            console.error('Error updating product quantities:', productUpdateError);
-                        } else {
-                            console.log('Product quantities reversed successfully');
-                        }
                     }
 
                     // If changing from Returned to another status, clear returned_date
@@ -562,7 +538,6 @@ export default function Page() {
             setEditingRowId(null);
             setEditedValue("");
         } catch (err) {
-            console.error('Error updating order:', err);
         }
     };
 
@@ -609,7 +584,6 @@ export default function Page() {
             // Close modal
             setIsModalOpen(false);
         } catch (err) {
-            console.error('Error updating tracking data:', err);
         }
     };
 
@@ -637,8 +611,6 @@ export default function Page() {
             const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
             const filePath = `return-labels/${order.order_no}/${fileName}`;
 
-            // First, check if storage bucket exists and is accessible
-            console.log('Uploading file to path:', filePath);
 
             // Upload file to Supabase storage
             const { error: uploadError } = await supabase.storage
@@ -649,7 +621,6 @@ export default function Page() {
                 });
 
             if (uploadError) {
-                console.error('Upload error details:', uploadError);
                 throw uploadError;
             }
 
@@ -658,7 +629,6 @@ export default function Page() {
                 .from('TdSynnex')
                 .getPublicUrl(filePath);
 
-            console.log('File uploaded successfully, public URL:', publicUrl);
 
             // Update order with the file URL
             const { error: updateError } = await supabase
@@ -677,7 +647,6 @@ export default function Page() {
             event.target.value = '';
 
         } catch (err: any) {
-            console.error('Error uploading file:', err);
             setUploadError(err.message || 'Failed to upload file. Please check storage bucket configuration.');
         } finally {
             setIsUploading(false);
@@ -705,7 +674,6 @@ export default function Page() {
             setEditedValue("");
 
         } catch (err) {
-            console.error('Error updating product:', err);
         }
     };
 

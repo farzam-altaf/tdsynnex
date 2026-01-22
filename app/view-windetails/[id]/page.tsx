@@ -101,11 +101,9 @@ export default function WinDetailsPage() {
                 };
 
                 setWin(combinedData);
-                console.log("Fetched win data:", combinedData);
             }
 
         } catch (err: unknown) {
-            console.error('Error fetching win details:', err);
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch win details');
             } else {
@@ -132,8 +130,6 @@ export default function WinDetailsPage() {
                 .eq('id', winId)
                 .single();
 
-            console.log("Fetched data with join:", data);
-
             if (supabaseError) {
                 throw supabaseError;
             }
@@ -143,7 +139,6 @@ export default function WinDetailsPage() {
             }
 
         } catch (err: unknown) {
-            console.error('Error fetching win details:', err);
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch win details');
             } else {

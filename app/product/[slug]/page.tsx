@@ -208,21 +208,15 @@ export default function Page() {
     useEffect(() => {
         // Only run auth check after auth is fully initialized
         if (loading) {
-            // Still loading auth state
-            console.log("AuthContext is still loading...");
             return;
         }
 
-        // AuthContext loading is done, mark as initialized
-        console.log("AuthContext loaded - User:", user, "Profile:", profile, "isLoggedIn:", isLoggedIn);
         setAuthInitialized(true);
 
         // Now check authentication status
         if (!isLoggedIn || profile?.isVerified === false && !profile) {
-            console.log("User not authenticated, redirecting to login");
             router.replace(`/login/?redirect_to=product/${slug}`);
         } else {
-            console.log("User authenticated, setting authChecked to true");
             setAuthChecked(true);
         }
     }, [loading, isLoggedIn, profile, user, router]);
@@ -232,8 +226,6 @@ export default function Page() {
         if (!authChecked || !authInitialized) {
             return; // Don't fetch data until auth is fully checked AND initialized
         }
-
-        console.log("Auth confirmed and initialized, fetching data...");
     }, [authChecked, authInitialized]);
 
     // Optional: prevent UI flicker - MUST BE AFTER ALL HOOKS
@@ -280,7 +272,6 @@ export default function Page() {
                 style: { background: "black", color: "white" },
             })
         } catch (error: any) {
-            console.error('Error removing from cart:', error)
             let errorMessage = 'Failed to remove product from cart. Please try again.'
 
             if (error?.message?.includes('not found')) {
@@ -485,7 +476,6 @@ export default function Page() {
                 return [galleryData];
             }
         } catch (error) {
-            console.error("Error parsing gallery images:", error);
         }
 
         return [];
@@ -527,9 +517,6 @@ export default function Page() {
                     setError("Product not found");
                     return;
                 }
-
-                console.log("Product gallery data:", productData.gallery);
-                console.log("Gallery type:", typeof productData.gallery);
 
                 // Parse gallery images if needed
                 const parsedGallery = parseGalleryImages(productData.gallery);
@@ -602,7 +589,6 @@ export default function Page() {
                 }
 
             } catch (err) {
-                console.error("Error:", err);
                 setError("Failed to load product");
             } finally {
                 setLoading(false);
@@ -638,7 +624,6 @@ export default function Page() {
             // ✅ Redirect after delete
             router.push("/product-category/alldevices");
         } catch (err) {
-            console.error("Unexpected error:", err);
             toast.error("Something went wrong");
         }
     };

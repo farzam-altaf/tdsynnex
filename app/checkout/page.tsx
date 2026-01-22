@@ -60,7 +60,6 @@ export default function Page() {
   });
 
   const cartItem = cartItems[0]?.product;
-  console.log("cartItem", cartItem)
 
   // Initialize form with profile data
   useEffect(() => {
@@ -89,18 +88,14 @@ export default function Page() {
 
   useEffect(() => {
     if (loading) {
-      console.log("AuthContext is still loading...");
       return;
     }
 
-    console.log("AuthContext loaded - User:", user, "Profile:", profile, "isLoggedIn:", isLoggedIn);
     setAuthInitialized(true);
 
     if (!isLoggedIn || (profile?.isVerified === false && !profile)) {
-      console.log("User not authenticated, redirecting to login");
       router.replace('/login/?redirect_to=checkout');
     } else {
-      console.log("User authenticated, setting authChecked to true");
       setAuthChecked(true);
     }
   }, [loading, isLoggedIn, profile, user, router]);
@@ -109,7 +104,6 @@ export default function Page() {
     if (!authChecked || !authInitialized) {
       return;
     }
-    console.log("Auth confirmed and initialized, fetching data...");
   }, [authChecked, authInitialized]);
 
   useEffect(() => {
@@ -336,7 +330,6 @@ export default function Page() {
 
     try {
       const orderData = prepareOrderData();
-      console.log("Submitting order data:", orderData);
 
       // Insert into database
       const { data, error } = await supabase
@@ -362,8 +355,6 @@ export default function Page() {
 
       if (updateError) throw updateError; // FIXED: Throw updateError
 
-      console.log("Order submitted successfully:", data);
-
       // Remove product from cart after successful order
       if (cartItem?.id) {
         await removeFromCart(cartItem.id);
@@ -378,10 +369,9 @@ export default function Page() {
       // Redirect to order confirmation page
       setTimeout(() => {
         router.push('/thanks');
-      }, 2000);
+      }, 50);
 
     } catch (error: any) {
-      console.error("Error submitting order:", error);
 
       // Dismiss loading toast and show error toast
       toast.dismiss(loadingToast);

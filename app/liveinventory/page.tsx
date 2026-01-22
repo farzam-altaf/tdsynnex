@@ -129,14 +129,12 @@ export default function Page() {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
-            console.log("User not authenticated, redirecting to login");
             router.replace('/login/?redirect_to=liveinventory');
             return;
         }
 
         // Check if user has permission to access this page
         if (!isAuthorized) {
-            console.log("User not authorized, redirecting...");
             router.replace('/product-category/alldevices');
             return;
         }
@@ -149,9 +147,6 @@ export default function Page() {
             setIsLoading(true);
             setError(null);
 
-            // First, let's check the structure of the tables
-            console.log("Fetching products data...");
-
             // Fetch products with joins to filters table
             const { data: productsData, error: productsError } = await supabase
                 .from('products')
@@ -163,11 +158,8 @@ export default function Page() {
                 .order('product_name', { ascending: true });
 
             if (productsError) {
-                console.error("Products fetch error:", productsError);
                 throw productsError;
             }
-
-            console.log("Products data fetched:", productsData);
 
             if (productsData) {
                 // Transform the data to match our Product type
@@ -188,7 +180,6 @@ export default function Page() {
                 setProducts(transformedProducts as Product[]);
             }
         } catch (err: unknown) {
-            console.error('Error fetching products:', err);
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch products');
             } else {
@@ -220,9 +211,6 @@ export default function Page() {
 
             if (filtersError) throw filtersError;
 
-            console.log("Products:", productsData);
-            console.log("Filters:", filtersData);
-
             // Create a map of filter IDs to titles
             const filterMap = new Map();
             if (filtersData) {
@@ -247,12 +235,9 @@ export default function Page() {
                 form_factor_title: product.form_factor ? filterMap.get(product.form_factor) || null : null
             }));
 
-            console.log("product: ", productsData)
-
             setProducts(transformedProducts || []);
 
         } catch (err: unknown) {
-            console.error('Error fetching products:', err);
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch products');
             } else {
@@ -306,7 +291,6 @@ export default function Page() {
             setIsEditDialogOpen(false);
             setEditProduct(null);
         } catch (error) {
-            console.error('Error updating product:', error);
             setError('Failed to update product');
         }
     };
@@ -335,7 +319,6 @@ export default function Page() {
                     setFormFactorFilters(data);
                 }
             } catch (err) {
-                console.error('Error fetching filters:', err);
             }
         };
 
@@ -556,7 +539,6 @@ export default function Page() {
                         fetchProducts();
                         setIsDeleteDialogOpen(false);
                     } catch (error) {
-                        console.error('Error deleting product:', error);
                         setError('Failed to delete product');
                     }
                 };
@@ -693,9 +675,7 @@ export default function Page() {
             // Download file
             downloadCSV(csvString, `products_${new Date().toISOString().split('T')[0]}.csv`);
 
-            console.log("CSV exported successfully");
         } catch (error) {
-            console.error('Error exporting CSV:', error);
             setError('Failed to export CSV');
         }
     };

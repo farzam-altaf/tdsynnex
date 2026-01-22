@@ -111,7 +111,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
         .in('id', productIds)
 
       if (error) {
-        console.error('Error fetching product details:', error)
         return cartItems
       }
 
@@ -127,7 +126,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
         product: productMap.get(item.product_id)
       }))
     } catch (error) {
-      console.error('Error enhancing cart:', error)
       return cartItems
     }
   }
@@ -136,20 +134,16 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
   const fetchCartItems = async () => {
     // For guest users, fetch from localStorage
     if (!user?.id) {
-      console.log('No user ID, checking localStorage for guest cart')
       const localCart = localStorage.getItem('guest_cart')
       if (localCart) {
         try {
           const parsedCart = JSON.parse(localCart)
-          console.log('Found guest cart with items:', parsedCart.length)
           const enhancedCart = await enhanceCartWithProductDetails(parsedCart)
           setCartItems(enhancedCart)
         } catch (error) {
-          console.error('Error parsing guest cart:', error)
           setCartItems([])
         }
       } else {
-        console.log('No guest cart found in localStorage')
         setCartItems([])
       }
       setIsLoading(false)
@@ -158,7 +152,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
     // For logged-in users, check verification first
     if (!checkUserVerification()) {
-      console.log('User not verified, cannot fetch cart')
       setCartItems([])
       setIsLoading(false)
       
@@ -167,7 +160,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
     // User is logged in and verified - fetch from database
     setIsLoading(true)
-    console.log('User is logged in and verified, fetching cart from database for user:', user.id)
     try {
       const { data, error } = await supabase
         .from('cart')
@@ -188,10 +180,8 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error fetching cart items:', error)
         setCartItems([])
       } else {
-        console.log('Successfully fetched cart items from database:', data?.length || 0)
         const parsedData = (data || []).map(item => ({
           ...item,
           quantity: parseQuantityFromDB(item.quantity)
@@ -199,7 +189,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
         setCartItems(parsedData)
       }
     } catch (error) {
-      console.error('Error fetching cart items:', error)
       setCartItems([])
     } finally {
       setIsLoading(false)
@@ -217,18 +206,13 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
     // Check verification before syncing
     if (!checkUserVerification()) {
-      console.log('User not verified, cannot sync cart')
-      
       return;
     }
 
     const localCart = localStorage.getItem('guest_cart')
     if (!localCart) {
-      console.log('No guest cart to sync')
       return
     }
-
-    console.log('Syncing guest cart with database...')
     const guestCart = JSON.parse(localCart)
 
     try {
@@ -244,8 +228,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
           .single()
 
         if (existingItem) {
-          // Update quantity if exists
-          console.log('Updating existing item quantity')
           const currentQuantity = parseQuantityFromDB(existingItem.quantity)
           const newQuantity = currentQuantity + item.quantity
 
@@ -254,8 +236,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
             .update({ quantity: prepareQuantityForDB(newQuantity) })
             .eq('id', existingItem.id)
         } else {
-          // Insert new item
-          console.log('Inserting new item from guest cart')
           const { error } = await supabase
             .from('cart')
             .insert({
@@ -265,20 +245,17 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
             })
 
           if (error) {
-            console.error('Error inserting item during sync:', error)
           }
         }
       }
 
       // Clear localStorage after sync
       localStorage.removeItem('guest_cart')
-      console.log('Guest cart synced and cleared from localStorage')
 
       // Refresh cart items to show synced items
       await fetchCartItems()
       setHasSynced(true) // Mark that sync has been done
     } catch (error) {
-      console.error('Error syncing cart:', error)
     } finally {
       setIsUpdating(false)
     }
@@ -286,11 +263,9 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
   // Add item to cart
   const addToCart = async (productId: string, quantity: number = 1) => {
-    console.log('Adding to cart - Product ID:', productId, 'User logged in:', !!user?.id)
 
     // For logged-in users, check verification
     if (user?.id && !checkUserVerification()) {
-      console.log('User not verified, cannot add to cart')
       toast.error('Your account is not verified. Please contact administrator.', {
         style: { background: "red", color: "white" },
       });
@@ -303,18 +278,14 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
     try {
       if (!user?.id) {
-        // Guest user - store ONLY in localStorage
-        console.log('Guest user - storing in localStorage')
         const localCart = localStorage.getItem('guest_cart')
         const guestCart = localCart ? JSON.parse(localCart) : []
 
         const existingIndex = guestCart.findIndex((item: CartItem) => item.product_id === productId)
 
         if (existingIndex >= 0) {
-          console.log('Updating existing item in guest cart')
           guestCart[existingIndex].quantity += quantity
         } else {
-          console.log('Adding new item to guest cart')
           guestCart.push({
             product_id: productId,
             quantity: quantity,
@@ -327,10 +298,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
         // Fetch product details for the new item
         const enhancedCart = await enhanceCartWithProductDetails(guestCart)
         setCartItems(enhancedCart)
-        console.log('Guest cart updated successfully')
       } else {
-        // Logged in AND verified user - store ONLY in database
-        console.log('Logged in and verified user - storing in database')
 
         // First, check if product exists in cart
         const { data: existingItem, error: checkError } = await supabase
@@ -340,14 +308,11 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
           .eq('product_id', productId)
           .single()
 
-        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means no rows returned
-          console.error('Error checking existing item:', checkError)
+        if (checkError && checkError.code !== 'PGRST116') {
           throw checkError
         }
 
         if (existingItem) {
-          // Update quantity
-          console.log('Updating quantity for existing item')
           const currentQuantity = parseQuantityFromDB(existingItem.quantity)
           const newQuantity = currentQuantity + quantity
 
@@ -357,12 +322,9 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
             .eq('id', existingItem.id)
 
           if (error) {
-            console.error('Error updating cart item:', error)
             throw error
           }
         } else {
-          // Insert new item
-          console.log('Inserting new item to cart table')
           const { error } = await supabase
             .from('cart')
             .insert({
@@ -372,22 +334,14 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
             })
 
           if (error) {
-            console.error('Error inserting cart item:', error)
-            console.error('Error details:', {
-              code: error.code,
-              message: error.message,
-              details: error.details
-            })
             throw error
           }
         }
 
         // Refresh cart items
         await fetchCartItems()
-        console.log('Database cart updated successfully')
       }
     } catch (error) {
-      console.error('Error adding to cart:', error)
       throw error
     } finally {
       setIsUpdating(false)
@@ -399,7 +353,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
   const removeFromCart = async (productId: string) => {
     // For logged-in users, check verification
     if (user?.id && !checkUserVerification()) {
-      console.log('User not verified, cannot remove from cart')
       toast.error('Your account is not verified. Please contact administrator.', {
         style: { background: "red", color: "white" },
       });
@@ -410,8 +363,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
     try {
       if (!user?.id) {
-        // Guest user - remove from localStorage
-        console.log('Guest user - removing from localStorage')
         const localCart = localStorage.getItem('guest_cart')
         if (localCart) {
           const guestCart = JSON.parse(localCart)
@@ -423,8 +374,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
           setCartItems(enhancedCart)
         }
       } else {
-        // Logged in AND verified user - remove from database
-        console.log('Logged in and verified user - removing from database')
         const { error } = await supabase
           .from('cart')
           .delete()
@@ -437,7 +386,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
         await fetchCartItems()
       }
     } catch (error) {
-      console.error('Error removing from cart:', error)
       throw error
     } finally {
       setIsUpdating(false)
@@ -453,7 +401,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
     // For logged-in users, check verification
     if (user?.id && !checkUserVerification()) {
-      console.log('User not verified, cannot update quantity')
       toast.error('Your account is not verified. Please contact administrator.', {
         style: { background: "red", color: "white" },
       });
@@ -478,8 +425,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
           setCartItems(enhancedCart)
         }
       } else {
-        // Logged in AND verified user - update in database
-        console.log('Updating quantity in database to:', quantity)
         const { error } = await supabase
           .from('cart')
           .update({ quantity: prepareQuantityForDB(quantity) })
@@ -487,16 +432,13 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
           .eq('product_id', productId)
 
         if (error) {
-          console.error('Error updating quantity in database:', error)
           throw error
         }
 
         // Refresh cart items
         await fetchCartItems()
-        console.log('Quantity updated successfully')
       }
     } catch (error) {
-      console.error('Error updating quantity:', error)
       throw error
     } finally {
       setIsUpdating(false)
@@ -507,7 +449,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
   const clearCart = async () => {
     // For logged-in users, check verification
     if (user?.id && !checkUserVerification()) {
-      console.log('User not verified, cannot clear cart')
       toast.error('Your account is not verified. Please contact administrator.', {
         style: { background: "red", color: "white" },
       });
@@ -534,7 +475,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
         await fetchCartItems()
       }
     } catch (error) {
-      console.error('Error clearing cart:', error)
       throw error
     } finally {
       setIsUpdating(false)
@@ -557,11 +497,8 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
   // Initial fetch and sync when user changes - FIXED VERSION
   useEffect(() => {
     if (authLoading) {
-      console.log('Auth is still loading...')
       return
     }
-
-    console.log('Auth loading complete. User:', user?.id, 'Profile verified:', profile?.isVerified)
     
     if (!user?.id) {
       // Guest user - fetch from localStorage
@@ -569,23 +506,16 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
     } else if (user?.id && checkUserVerification()) {
       // Logged in AND verified user
       if (!hasSynced) {
-        console.log('First time login, checking for guest cart to sync')
-        // Check if there's a guest cart to sync
         const localCart = localStorage.getItem('guest_cart')
         if (localCart) {
-          console.log('Found guest cart, syncing...')
           syncCartWithLocalStorage()
         } else {
-          console.log('No guest cart found, fetching from database directly')
           fetchCartItems()
         }
       } else {
-        console.log('Already synced, fetching cart from database')
         fetchCartItems()
       }
     } else {
-      // Logged in but not verified
-      console.log('User logged in but not verified')
       setCartItems([])
       setIsLoading(false)
     }

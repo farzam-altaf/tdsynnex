@@ -14,7 +14,7 @@ import {
     type VisibilityState,
 } from "@tanstack/react-table"
 import { ArrowUpDown, ChevronDown, MoreHorizontal, Edit, Key, CheckCircle, XCircle } from "lucide-react"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useAuth } from "../context/AuthContext"
 import { TbFileTypeCsv } from "react-icons/tb"
@@ -122,13 +122,13 @@ export default function UsersList() {
     const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
     const isViewAuthorized = profile?.role && viewRoles.includes(profile.role);
     const pathname = usePathname();
+    const searchParams = useSearchParams();
 
     // Handle auth check
     useEffect(() => {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
-            console.log("User not authenticated, redirecting to login");
             let redirectUrl = '/login/?redirect_to=users-list';
 
             // If URL has ?_=true parameter, include it in redirect URL
@@ -147,22 +147,20 @@ export default function UsersList() {
 
         // Check if user has permission to access this page
         if (!isAuthorized) {
-            console.log("User not authorized, redirecting...");
             router.replace('/product-category/alldevices');
             return;
         }
 
-    }, [loading, isLoggedIn, profile, router, isAuthorized]);
+    }, [loading, isLoggedIn, profile, router, isAuthorized]);   
 
-    // Update fetchUsers to detect URL parameter
+    // Update fetchUsers to use searchParams
     const fetchUsers = async () => {
         try {
             setIsLoading(true);
             setError(null);
 
-            // Check current URL for query parameter
-            const urlParams = new URLSearchParams(window.location.search);
-            const hasUnverifiedParam = urlParams.get('_') === 'true';
+            // Use searchParams hook instead of window.location
+            const hasUnverifiedParam = searchParams.get('_') === 'true';
             setIsUnverifiedOnly(hasUnverifiedParam);
 
             let query = supabase
@@ -185,7 +183,6 @@ export default function UsersList() {
                 setUsers(data as User[]);
             }
         } catch (err: unknown) {
-            console.error('Error fetching users:', err);
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch users');
             } else {
@@ -196,12 +193,12 @@ export default function UsersList() {
         }
     };
 
-    // Update the useEffect to include pathname dependency
+    // Update useEffect to depend on searchParams
     useEffect(() => {
         if (!loading && isLoggedIn && profile?.isVerified && isAuthorized) {
             fetchUsers();
         }
-    }, [loading, isLoggedIn, profile, isAuthorized, pathname]); // Add pathname
+    }, [loading, isLoggedIn, profile, isAuthorized, searchParams]); // Add searchParams
 
     // Handle edit user
     const handleEditUser = (user: User) => {
@@ -228,7 +225,6 @@ export default function UsersList() {
             setIsEditDialogOpen(false);
             setEditUser(null);
         } catch (error) {
-            console.error('Error updating user:', error);
             setError('Failed to update user');
         }
     };
@@ -256,7 +252,6 @@ export default function UsersList() {
             setChangeRoleUser(null);
             setSelectedRole("");
         } catch (error) {
-            console.error('Error updating role:', error);
             setError('Failed to update role');
         }
     };
@@ -273,7 +268,6 @@ export default function UsersList() {
 
             fetchUsers(); // Refresh data
         } catch (error) {
-            console.error('Error verifying user:', error);
             setError('Failed to verify user');
         }
     };
@@ -289,7 +283,6 @@ export default function UsersList() {
 
             fetchUsers(); // Refresh data
         } catch (error) {
-            console.error('Error unverifying user:', error);
             setError('Failed to unverify user');
         }
     };
@@ -577,10 +570,7 @@ export default function UsersList() {
 
             // Download file
             downloadCSV(csvString, `users_${new Date().toISOString().split('T')[0]}.csv`);
-
-            console.log("CSV exported successfully");
         } catch (error) {
-            console.error('Error exporting CSV:', error);
             setError('Failed to export CSV');
         }
     };
@@ -643,19 +633,21 @@ export default function UsersList() {
                     {isUnverifiedOnly && (
                         <Button
                             variant="outline"
+                            disabled={isLoading}
                             onClick={() => router.push('/users-list')}
                             className="cursor-pointer"
                         >
-                            View All Users
+                            {isLoading ? "Loading..." : "View All Users"}
                         </Button>
                     )}
                     {!isUnverifiedOnly && (
                         <Button
                             variant="outline"
+                            disabled={isLoading}
                             onClick={() => router.push('/users-list?_=true')}
                             className="cursor-pointer"
                         >
-                            View Pending Approvals
+                            {isLoading ? "Loading..." : "View Pending Approvals"}
                         </Button>
                     )}
                     <Button

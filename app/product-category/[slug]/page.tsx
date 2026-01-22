@@ -148,7 +148,6 @@ export default function Page() {
                 style: { background: "black", color: "white" },
             })
         } catch (error: any) {
-            console.error('Error adding to cart:', error)
             let errorMessage = 'Failed to add product to cart. Please try again.'
 
             if (error?.code === '23505') {
@@ -170,7 +169,6 @@ export default function Page() {
         try {
             await removeFromCart(productId)
         } catch (error) {
-            console.error('Error removing from cart:', error)
         }
     }
 
@@ -212,21 +210,15 @@ export default function Page() {
     useEffect(() => {
         // Only run auth check after auth is fully initialized
         if (loading) {
-            // Still loading auth state
-            console.log("AuthContext is still loading...");
             return;
         }
 
-        // AuthContext loading is done, mark as initialized
-        console.log("AuthContext loaded - User:", user, "Profile:", profile, "isLoggedIn:", isLoggedIn);
         setAuthInitialized(true);
 
         // Now check authentication status
         if (!isLoggedIn || profile?.isVerified === false && !profile) {
-            console.log("User not authenticated, redirecting to login");
             router.replace(`/login/?redirect_to=product-category/${slug}`);
         } else {
-            console.log("User authenticated, setting authChecked to true");
             setAuthChecked(true);
         }
     }, [loading, isLoggedIn, profile, user, router]);
@@ -237,7 +229,6 @@ export default function Page() {
             return; // Don't fetch data until auth is fully checked AND initialized
         }
 
-        console.log("Auth confirmed and initialized, fetching data...");
         fetchDataFromDatabase();
     }, [authChecked, authInitialized]);
 
@@ -247,8 +238,6 @@ export default function Page() {
         try {
             // Decode URL slug if it contains special characters
             const decodedSlug = decodeURIComponent(categorySlug).toLowerCase();
-            console.log("Searching for products matching slug:", decodedSlug);
-
             // First, try to find if this slug matches any filter
             let filterId = null;
             let filterType = null;
@@ -262,12 +251,10 @@ export default function Page() {
                     .ilike("title", `%${decodedSlug}%`); // Case-insensitive search
 
                 if (filterError) {
-                    console.error(`Error checking ${type} filters:`, filterError);
                     continue;
                 }
 
                 if (filterData && filterData.length > 0) {
-                    console.log(`Found matching filter in ${type}:`, filterData[0]);
                     filterId = filterData[0].id;
                     filterType = type;
                     break;
@@ -284,12 +271,8 @@ export default function Page() {
                 const filterColumn = filterType === "form_factor" ? "form_factor" :
                     filterType === "screen_size" ? "screen_size" : filterType;
 
-                console.log(`Filtering products by ${filterType} with ID:`, filterId);
                 productsQuery = productsQuery.eq(filterColumn, filterId);
             } else {
-                // If no filter match, search across multiple product fields
-                console.log("No filter match, searching across product fields");
-                console.log("DS = ", decodedSlug)
                 productsQuery = productsQuery.or(`product_name.ilike.%${decodedSlug}%,sku.ilike.%${decodedSlug}%`);
             }
 
@@ -298,7 +281,6 @@ export default function Page() {
             if (productsError) {
                 setProducts([]);
             } else {
-                console.log("Products fetched successfully:", productsData?.length || 0);
                 if (productsData && productsData.length > 0) {
                     // Use the mappings passed as parameter
                     const productsWithTitles = productsData.map(product => ({
@@ -312,13 +294,11 @@ export default function Page() {
 
                     setProducts(productsWithTitles);
                 } else {
-                    console.log("No products found matching the search");
                     setProducts([]);
                 }
             }
 
         } catch (error) {
-            console.error("Error in fetchProductsBySlug:", error);
             setProducts([]);
         }
     };
@@ -327,7 +307,6 @@ export default function Page() {
     const fetchDataFromDatabase = async () => {
         try {
             setIsLoading(true);
-            console.log("Fetching data from database...");
 
             // 1. Fetch filters from database
             const allFilters: Record<string, string[]> = {};
@@ -342,11 +321,6 @@ export default function Page() {
                     .order("title");
 
                 if (error) {
-                    console.error(`Error fetching ${type} filters:`, {
-                        message: error.message,
-                        code: error.code,
-                        details: error.details
-                    });
                     allFilters[type] = [];
                     mappings[type] = {};
                 } else {
@@ -364,28 +338,21 @@ export default function Page() {
                     });
 
                     mappings[frontendKey] = idToTitle;
-
-                    console.log(`Loaded ${data?.length || 0} ${frontendKey} filters`);
                 }
             }
 
             setDatabaseFilters(allFilters);
             setFilterMappings(mappings);
 
-            // 2. Fetch products based on slug
-            console.log("Current slug:", slug);
             if (slug) {
                 await fetchProductsBySlug(slug, mappings);
             } else {
-                console.log("No slug provided, fetching all products");
-                // Fallback to fetching all products if no slug
                 const { data: productsData, error: productsError } = await supabase
                     .from("products")
                     .select("*")
                     .order("date", { ascending: false });
 
                 if (productsError) {
-                    console.error("Error fetching all products:", productsError);
                     setProducts([]);
                 } else if (productsData) {
                     const productsWithTitles = productsData.map(product => ({
@@ -405,10 +372,7 @@ export default function Page() {
             const allFilterKeys = [...Object.keys(allFilters), ...HARDCODED_FILTER_KEYS];
             setOpenFilters(allFilterKeys);
 
-            console.log("Data fetching completed");
-
         } catch (error) {
-            console.error("Error in fetchDataFromDatabase:", error);
         } finally {
             setIsLoading(false);
         }

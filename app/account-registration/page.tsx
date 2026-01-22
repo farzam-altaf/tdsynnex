@@ -161,7 +161,6 @@ export default function Page() {
       });
       router.push("/login");
     } catch (err: any) {
-      console.error(err);
       toast.error("An unexpected error occurred", {
         style: { background: "black", color: "white" }
       });

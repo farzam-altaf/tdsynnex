@@ -165,7 +165,6 @@ export default function Page() {
                 style: { background: "black", color: "white" },
             })
         } catch (error: any) {
-            console.error('Error adding to cart:', error)
             let errorMessage = 'Failed to add product to cart. Please try again.'
 
             if (error?.code === '23505') {
@@ -187,7 +186,6 @@ export default function Page() {
         try {
             await removeFromCart(productId)
         } catch (error) {
-            console.error('Error removing from cart:', error)
         }
     }
 
@@ -199,27 +197,20 @@ export default function Page() {
     const [showFilters, setShowFilters] = useState(false);
     // Set all filters to be open by default
     const [openFilters, setOpenFilters] = useState<string[]>([]);
-    console.log("profile", profile, loading, isLoggedIn)
 
     // Handle auth check - IMPROVED VERSION
     useEffect(() => {
         // Only run auth check after auth is fully initialized
         if (loading) {
-            // Still loading auth state
-            console.log("AuthContext is still loading...");
             return;
         }
 
-        // AuthContext loading is done, mark as initialized
-        console.log("AuthContext loaded - User:", user, "Profile:", profile, "isLoggedIn:", isLoggedIn);
         setAuthInitialized(true);
 
         // Now check authentication status
         if (!isLoggedIn || profile?.isVerified === false && !profile) {
-            console.log("User not authenticated, redirecting to login");
             router.replace('/login/?redirect_to=product-category/alldevices');
         } else {
-            console.log("User authenticated, setting authChecked to true");
             setAuthChecked(true);
         }
     }, [loading, isLoggedIn, profile, user, router]);
@@ -230,7 +221,6 @@ export default function Page() {
             return; // Don't fetch data until auth is fully checked AND initialized
         }
 
-        console.log("Auth confirmed and initialized, fetching data...");
         fetchDataFromDatabase();
     }, [authChecked, authInitialized]);
 
@@ -253,7 +243,6 @@ export default function Page() {
                         .order("title");
 
                     if (error) {
-                        console.error(`Error fetching ${type} filters:`, error);
                         allFilters[type] = [];
                         mappings[type] = {};
                     } else {
@@ -284,7 +273,6 @@ export default function Page() {
                     .order("date", { ascending: false });
 
                 if (productsError) {
-                    console.error("Error fetching products:", productsError);
                     setProducts([]);
                 } else if (productsData) {
                     // Now that mappings are set, we need to map products with the correct mappings
@@ -307,7 +295,6 @@ export default function Page() {
                 setOpenFilters(allFilterKeys);
             }
         } catch (error) {
-            console.error("Error fetching data:", error);
         } finally {
             setIsLoading(false);
         }

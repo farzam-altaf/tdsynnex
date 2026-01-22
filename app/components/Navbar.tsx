@@ -127,7 +127,6 @@ export default function Navbar() {
         setPendingOrderCount(orderCount || 0);
       }
     } catch (error) {
-      console.error('Error fetching notification counts:', error);
     }
   }, [profile?.role]);
 
@@ -189,7 +188,6 @@ export default function Navbar() {
     try {
       await removeFromCart(productId)
     } catch (error) {
-      console.error('Error removing from cart:', error)
     }
   }
 
@@ -200,8 +198,6 @@ export default function Navbar() {
       const quantity = Math.max(1, newQuantity);
       await updateQuantity(productId, quantity);
     } catch (error) {
-      console.error('Error updating quantity:', error);
-      // Show error message to user
     }
   };
 
@@ -210,7 +206,6 @@ export default function Navbar() {
     try {
       await clearCart()
     } catch (error) {
-      console.error('Error clearing cart:', error)
     }
   }
 
@@ -231,7 +226,6 @@ export default function Navbar() {
         .limit(5)
 
       if (error) {
-        console.error('Search error:', error)
         setSearchResults([])
         setTotalProducts(0)
       } else {
@@ -239,7 +233,6 @@ export default function Navbar() {
         setTotalProducts(count || 0)
       }
     } catch (error) {
-      console.error('Search error:', error)
       setSearchResults([])
       setTotalProducts(0)
     } finally {

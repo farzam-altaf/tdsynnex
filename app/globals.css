@@ -135,3 +135,16 @@
   }
 }
 
+.send-reminders-button button {
+    background-color: #0A4647 !important;
+    cursor: pointer; /* bg-blue-900 */
+}
+
+.send-reminders-button button:hover {
+    background-color: #093636 !important; /* bg-blue-700 */
+}
+
+.send-reminders-button button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

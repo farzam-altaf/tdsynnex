@@ -26,7 +26,6 @@ export default function Page() {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
-            console.log("User not authenticated, redirecting to login");
             router.replace('/login/?redirect_to=edit-profile');
             return;
         }
@@ -80,7 +79,6 @@ export default function Page() {
             toast.success("Profile updated successfully!", { style: { background: "black", color: "white" } });
             // You might want to refresh the auth context here
         } catch (error: any) {
-            console.error('Error updating profile:', error);
             toast.error(error.message || "Failed to update profile", { style: { background: "red", color: "white" } });
         } finally {
             setIsUpdating(false);

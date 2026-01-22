@@ -108,7 +108,6 @@ export default function Page() {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
-            console.log("User not authenticated, redirecting to login");
             router.replace('/login/?redirect_to=view-windetails');
             return;
         }
@@ -208,7 +207,6 @@ export default function Page() {
                 }
             }
         } catch (err: unknown) {
-            console.error('Error fetching wins:', err);
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch wins');
             } else {
@@ -395,7 +393,6 @@ export default function Page() {
             fetchWins(); // Refresh data
 
         } catch (err: any) {
-            console.error('Error updating win:', err);
             toast.error(err.message || "Failed to update win", { style: { color: "white", backgroundColor: "red" } });
         } finally {
             setIsSubmitting(false);
@@ -417,7 +414,6 @@ export default function Page() {
             toast.success("Win deleted successfully!", { style: { color: "white", backgroundColor: "black" } });
 
         } catch (err: any) {
-            console.error('Error deleting win:', err);
             toast.error(err.message || "Failed to delete win", { style: { color: "white", backgroundColor: "red" } });
         }
     };
@@ -471,10 +467,7 @@ export default function Page() {
 
             // Download file
             downloadCSV(csvString, `wins_${new Date().toISOString().split('T')[0]}.csv`);
-
-            console.log("CSV exported successfully");
         } catch (error) {
-            console.error('Error exporting CSV:', error);
             setError('Failed to export CSV');
         }
     };

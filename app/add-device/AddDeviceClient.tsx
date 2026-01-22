@@ -148,7 +148,6 @@ export default function AddDeviceClient() {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
-            console.log("User not authenticated, redirecting to login");
             if(!editSlug){
                 router.replace('/login/?redirect_to=add-device');
             } else{
@@ -159,7 +158,6 @@ export default function AddDeviceClient() {
 
         // Check if user has permission to access this page
         if (!isAuthorized) {
-            console.log("User not authorized, redirecting...");
             router.replace('/product-category/alldevices');
             return;
         }
@@ -171,8 +169,6 @@ export default function AddDeviceClient() {
         if (!authChecked || !authInitialized) {
             return; // Don't fetch data until auth is fully checked AND initialized
         }
-
-        console.log("Auth confirmed and initialized, fetching data...");
     }, [authChecked, authInitialized]);
 
     // Check if we're in edit mode
@@ -198,7 +194,6 @@ export default function AddDeviceClient() {
                 .single();
 
             if (error || !product) {
-                console.error("Error fetching product:", error);
                 toast.error("Product not found", {
                     style: { background: "red", color: "white" }
                 });
@@ -325,7 +320,6 @@ export default function AddDeviceClient() {
             await fetchFilterOptions();
 
         } catch (error) {
-            console.error("Error fetching product for edit:", error);
             toast.error("Failed to load product for editing", {
                 style: { background: "red", color: "white" }
             });
@@ -348,7 +342,6 @@ export default function AddDeviceClient() {
                     .order("title");
 
                 if (error) {
-                    console.error(`Error fetching ${type}:`, error);
                     return { type, items: [] };
                 }
 
@@ -373,7 +366,6 @@ export default function AddDeviceClient() {
 
             setFilterOptions(newOptions);
         } catch (error) {
-            console.error("Error fetching filter options:", error);
             toast.error("Failed to load filter options", {
                 style: { background: "black", color: "white" }
             });
@@ -454,7 +446,6 @@ export default function AddDeviceClient() {
                 .maybeSingle();
 
             if (checkError) {
-                console.error("Check filter error:", checkError);
                 toast.error("Something went wrong while checking filter", {
                     style: { background: "black", color: "white" }
                 });
@@ -477,7 +468,6 @@ export default function AddDeviceClient() {
                 .single();
 
             if (error) {
-                console.error("Insert error:", error);
                 toast.error("Failed to save custom filter. Please try again.", {
                     style: { background: "black", color: "white" }
                 });
@@ -485,7 +475,6 @@ export default function AddDeviceClient() {
             }
             return { id: data.id, title: data.title };
         } catch (err) {
-            console.error("Unexpected error:", err);
             toast.error("Unexpected error occurred", {
                 style: { background: "black", color: "white" }
             });
@@ -597,7 +586,6 @@ export default function AddDeviceClient() {
                     .upload(filePath, primaryImage);
 
                 if (uploadError) {
-                    console.error("Error uploading primary image:", uploadError);
                     throw uploadError;
                 }
 
@@ -621,7 +609,6 @@ export default function AddDeviceClient() {
                     .upload(filePath, image);
 
                 if (uploadError) {
-                    console.error("Error uploading additional image:", uploadError);
                     throw uploadError;
                 }
 
@@ -645,7 +632,6 @@ export default function AddDeviceClient() {
 
             return imageUrls;
         } catch (error) {
-            console.error("Error uploading images:", error);
             throw error;
         }
     };
@@ -959,7 +945,6 @@ export default function AddDeviceClient() {
                     .eq("user_id", profile?.userId);
 
                 if (error) {
-                    console.error("Update error:", error);
                     toast.error("Failed to update device. Please try again.", {
                         style: { background: "red", color: "white" }
                     });
@@ -1033,7 +1018,6 @@ export default function AddDeviceClient() {
                     });
 
                 if (error) {
-                    console.error("Submission error:", error);
                     toast.error("Failed to add device. Please try again.", {
                         style: { background: "red", color: "white" }
                     });
@@ -1052,7 +1036,6 @@ export default function AddDeviceClient() {
             setIsFormLoading(false);
 
         } catch (error) {
-            console.error("Error submitting form:", error);
             toast.error("Failed to process device. Please try again.", {
                 style: { background: "red", color: "white" }
             });
