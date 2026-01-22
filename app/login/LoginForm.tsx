@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
+import { emailTemplates, sendEmail } from "@/lib/email";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -302,10 +303,31 @@ export default function LoginForm() {
       style: { background: "black", color: "white" },
     });
 
+    if (profile?.firstName && profile?.email) {
+      sendLoginEmail(profile.firstName, profile.email);
+    } else {
+      // Fallback to userData from supabase query
+      sendLoginEmail("User", email); // Use the email they logged in with
+    }
+
     setEmail("");
     setPassword("");
     const redirectTo = searchParams.get("redirect_to");
     router.push(redirectTo ? `/${redirectTo}` : "/");
+  };
+
+  const sendLoginEmail = async (name: string, userEmail: string) => {
+    try {
+      const template = emailTemplates.welcomeEmail(name, userEmail);
+
+      const result = await sendEmail({
+        to: userEmail,
+        subject: template.subject,
+        text: template.text,
+        html: template.html,
+      });
+    } catch (emailError) {
+    }
   };
 
   return (

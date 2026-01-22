@@ -1,5 +1,6 @@
 "use client";
 
+import { emailTemplates, sendEmail } from "@/lib/email";
 import { supabase } from "@/lib/supabase/client";
 import { register } from "module";
 import { useRouter } from "next/navigation";
@@ -82,7 +83,6 @@ export default function Page() {
         .eq("email", email);
 
       if (selectError && selectError.code !== "PGRST116") {
-        // PGRST116 = no rows found, safe to ignore
         toast.error("Error checking existing users: " + selectError.message, {
           style: { background: "black", color: "white" }
         });
@@ -113,7 +113,7 @@ export default function Page() {
       }
 
       const userId = authData.user?.id;
-      
+
       if (!userId) {
         toast.error("Signup failed: No user ID returned.", {
           style: { background: "black", color: "white" }
@@ -123,6 +123,7 @@ export default function Page() {
       }
 
       const today = new Date().toISOString().split("T")[0];
+      const registrationDate = formatRegistrationDate(); // Dynamic date
 
       // 3️⃣ Insert user details into users table
       const { error: dbError } = await supabase.from("users").insert({
@@ -135,6 +136,7 @@ export default function Page() {
         registered_at: today,
         login_at: today,
         login_count: 1,
+        isVerified: false
       });
 
       if (dbError) {
@@ -148,7 +150,10 @@ export default function Page() {
       // 4️⃣ Sign out the user immediately after signup
       await supabase.auth.signOut();
 
-      // 5️⃣ Clear form
+      // 5️⃣ Send emails (non-blocking - don't await)
+      sendRegistrationEmails(FirstName, LastName, email, reseller, registrationDate);
+
+      // 6️⃣ Clear form
       setEmail("");
       setFirstName("");
       setLastName("");
@@ -156,9 +161,10 @@ export default function Page() {
       setConfirmPassword("");
       setReseller("");
 
-      toast.success("Signup successful! Please login.", {
+      toast.success("Registration successful! Please wait for admin approval.", {
         style: { background: "black", color: "white" }
       });
+
       router.push("/login");
     } catch (err: any) {
       toast.error("An unexpected error occurred", {
@@ -166,6 +172,112 @@ export default function Page() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Add this function to handle email sending
+  const sendRegistrationEmails = async (
+    firstName: string,
+    lastName: string,
+    userEmail: string,
+    reseller: string,
+    registrationDate: string
+  ) => {
+    try {
+      // Get admin emails from database
+      const adminEmails = await getAdminEmails();
+
+      if (adminEmails.length === 0) {
+        // Fallback to a default admin email if no admins found
+        adminEmails.push("admin@tdsynnex.com"); // Fallback email
+      }
+
+      // Prepare user data
+      const userEmailData = {
+        firstName,
+        lastName,
+        email: userEmail,
+        reseller,
+        registrationDate
+      };
+
+      // 1️⃣ Send email to all admins
+      const adminTemplate = emailTemplates.registrationAdminNotification(userEmailData);
+
+      const adminEmailResult = await sendEmail({
+        // to: adminEmails,
+        to: "farzamaltaf888@gmail.com",
+        subject: adminTemplate.subject,
+        text: adminTemplate.text,
+        html: adminTemplate.html,
+      });
+
+
+      // 2️⃣ Send waiting email to user
+      const userTemplate = emailTemplates.registrationUserWaiting(userEmailData);
+
+      const userEmailResult = await sendEmail({
+        to: userEmailData.email,
+        subject: userTemplate.subject,
+        text: userTemplate.text,
+        html: userTemplate.html,
+      });
+
+      if (userEmailResult.success) {
+
+        // Log user email sent
+        try {
+          // Get user ID for logging
+          const { data: user } = await supabase
+            .from("users")
+            .select("userId")
+            .eq("email", userEmail)
+            .single();
+        } catch (logError) {
+        }
+      }
+    } catch (error) {
+    }
+  };
+
+  // Add this function at the top of your component
+  const formatRegistrationDate = () => {
+    const now = new Date();
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric' as const,
+      month: 'long' as const,
+      day: 'numeric' as const,
+      hour: '2-digit' as const,
+      minute: '2-digit' as const,
+      hour12: true
+    };
+    return now.toLocaleDateString('en-US', options);
+  };
+
+  // Add this function to fetch admin emails
+  const getAdminEmails = async () => {
+    try {
+      const adminRole = process.env.NEXT_PUBLIC_ADMINISTRATOR;
+
+      const { data: admins, error } = await supabase
+        .from("users")
+        .select("email")
+        .eq("role", adminRole)
+        .not("email", "is", null); // Exclude null emails
+
+      if (error) {
+        return [];
+      }
+
+      // Extract emails and filter out any null/undefined
+      const adminEmails = admins
+        .map(admin => admin.email)
+        .filter(email => email && email.trim() !== "");
+
+      return adminEmails;
+
+    } catch (error) {
+      return [];
     }
   };
 
