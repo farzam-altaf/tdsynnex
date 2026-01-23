@@ -8,6 +8,7 @@ import { AiOutlineShoppingCart } from "react-icons/ai";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { emailTemplates, sendEmail } from "@/lib/email";
 
 export default function Page() {
   const router = useRouter();
@@ -335,7 +336,8 @@ export default function Page() {
       const { data, error } = await supabase
         .from('orders')
         .insert([orderData])
-        .select();
+        .select()
+        .single();
 
       if (error) {
         throw error;
@@ -365,6 +367,8 @@ export default function Page() {
       toast.success("Order Placed Successfully!", {
         style: { background: "black", color: "white" }
       });
+      sendCheckoutEmail(data);
+      sendNewOrderEmail(data);
 
       // Redirect to order confirmation page
       setTimeout(() => {
@@ -391,6 +395,171 @@ export default function Page() {
 
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const sendCheckoutEmail = async (oData: any) => {
+    try {
+      const myMail = profile?.email;
+
+      if (!myMail) {
+        throw new Error("User email not found");
+      }
+
+      const orderData = prepareOrderData();
+      const orderNumber = oData.order_no;
+
+      if (!cartItem) {
+        throw new Error("No product in cart");
+      }
+
+      const template = emailTemplates.checkoutEmail({
+        orderNumber: orderNumber, // ya koi order ID generate kar do
+        orderDate: orderData.order_date,
+        customerName: orderData.contact_name,
+        customerEmail: myMail,
+
+        productName: cartItem.product_name,
+        quantity: orderData.quantity,
+
+        salesExecutive: orderData.sales_executive,
+        salesExecutiveEmail: orderData.se_email,
+        salesManager: orderData.sales_manager,
+        salesManagerEmail: orderData.sm_email,
+        reseller: orderData.reseller,
+
+        companyName: orderData.company_name,
+        contactName: orderData.contact_name,
+        contactEmail: orderData.email,
+        shippingAddress: orderData.address,
+        city: orderData.city,
+        state: orderData.state,
+        zip: orderData.zip,
+        deliveryDate: orderData.desired_date,
+
+        deviceUnits: orderData.dev_opportunity,
+        budgetPerDevice: orderData.dev_budget,
+        revenue: orderData.rev_opportunity,
+        crmAccount: orderData.crm_account,
+        vertical: orderData.vertical,
+        segment: orderData.segment,
+        useCase: orderData.use_case,
+        currentDevices: orderData.currently_running,
+        licenses: orderData.licenses,
+        usingCopilot: orderData.isCopilot,
+        securityFactor: orderData.isSecurity,
+        deviceProtection: orderData.current_protection,
+
+        note: orderData.notes || "",
+      });
+
+      await sendEmail({
+        to: myMail, // ✅ always string
+        subject: template.subject,
+        text: template.text,
+        html: template.html,
+      });
+
+    } catch (error) {
+      toast.error("Failed to send checkout email. Please try again.");
+    }
+  };
+
+  const sendNewOrderEmail = async (oData: any) => {
+    try {
+      const myMail = profile?.email;
+
+      if (!myMail) {
+        throw new Error("User email not found");
+      }
+
+      const orderData = prepareOrderData();
+      const orderNumber = oData.order_no;
+
+      if (!cartItem) {
+        throw new Error("No product in cart");
+      }
+
+      const template = emailTemplates.newOrderEmail({
+        orderNumber: orderNumber,
+        orderDate: orderData.order_date,
+        customerName: orderData.contact_name,
+        customerEmail: myMail,
+
+        productName: cartItem.product_name,
+        quantity: orderData.quantity,
+
+        salesExecutive: orderData.sales_executive,
+        salesExecutiveEmail: orderData.se_email,
+        salesManager: orderData.sales_manager,
+        salesManagerEmail: orderData.sm_email,
+        reseller: orderData.reseller,
+
+        companyName: orderData.company_name,
+        contactName: orderData.contact_name,
+        contactEmail: orderData.email,
+        shippingAddress: orderData.address,
+        city: orderData.city,
+        state: orderData.state,
+        zip: orderData.zip,
+        deliveryDate: orderData.desired_date,
+
+        deviceUnits: orderData.dev_opportunity,
+        budgetPerDevice: orderData.dev_budget,
+        revenue: orderData.rev_opportunity,
+        crmAccount: orderData.crm_account,
+        vertical: orderData.vertical,
+        segment: orderData.segment,
+        useCase: orderData.use_case,
+        currentDevices: orderData.currently_running,
+        licenses: orderData.licenses,
+        usingCopilot: orderData.isCopilot,
+        securityFactor: orderData.isSecurity,
+        deviceProtection: orderData.current_protection,
+
+        note: orderData.notes || "",
+      });
+
+      const adminEmails = await getAdminEmails();
+
+
+      await sendEmail({
+        // to: adminEmails,
+        to: "farzamaltaf888@gmail.com",
+        subject: template.subject,
+        text: template.text,
+        html: template.html,
+      });
+
+    } catch (error) {
+      toast.error("Failed to send checkout email. Please try again.");
+    }
+  };
+
+
+  // Add this function to fetch admin emails
+  const getAdminEmails = async () => {
+    try {
+      const adminRole = process.env.NEXT_PUBLIC_ADMINISTRATOR;
+
+      const { data: admins, error } = await supabase
+        .from("users")
+        .select("email")
+        .eq("role", adminRole);
+
+      if (error) {
+        return [];
+      }
+
+      // Extract emails and filter out any null/undefined
+      const adminEmails = admins
+        .map(admin => admin.email)
+        .filter(email => email && email.trim() !== "");
+
+      return adminEmails;
+
+    } catch (error) {
+      return [];
     }
   };
 

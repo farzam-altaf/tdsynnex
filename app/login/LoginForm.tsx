@@ -310,7 +310,7 @@ export default function LoginForm() {
       sendLoginEmail("User", email); // Use the email they logged in with
     }
 
-    setEmail("");
+    setEmail(""); 
     setPassword("");
     const redirectTo = searchParams.get("redirect_to");
     router.push(redirectTo ? `/${redirectTo}` : "/");

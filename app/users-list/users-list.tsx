@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase/client"
+import { emailTemplates, sendEmail } from "@/lib/email"
 
 // Define User type based on your Supabase table
 export type User = {
@@ -151,7 +152,7 @@ export default function UsersList() {
             return;
         }
 
-    }, [loading, isLoggedIn, profile, router, isAuthorized]);   
+    }, [loading, isLoggedIn, profile, router, isAuthorized]);
 
     // Update fetchUsers to use searchParams
     const fetchUsers = async () => {
@@ -257,7 +258,7 @@ export default function UsersList() {
     };
 
     // Handle verify user
-    const handleVerifyUser = async (userId: string) => {
+    const handleVerifyUser = async (userId: string, email: string) => {
         try {
             const { error } = await supabase
                 .from('users')
@@ -265,14 +266,14 @@ export default function UsersList() {
                 .eq('id', userId);
 
             if (error) throw error;
-
+            sendApprovedEmail(email);
             fetchUsers(); // Refresh data
         } catch (error) {
             setError('Failed to verify user');
         }
     };
 
-    const handleUnverifyUser = async (userId: string) => {
+    const handleUnverifyUser = async (userId: string, email: string) => {
         try {
             const { error } = await supabase
                 .from('users')
@@ -280,10 +281,40 @@ export default function UsersList() {
                 .eq('id', userId);
 
             if (error) throw error;
-
+            sendRejectedEmail(email)
             fetchUsers(); // Refresh data
         } catch (error) {
             setError('Failed to unverify user');
+        }
+    };
+
+
+    const sendApprovedEmail = async (userEmail: string) => {
+        try {
+            const template = emailTemplates.approvedUserEmail(userEmail);
+
+            const result = await sendEmail({
+                to: userEmail,
+                subject: template.subject,
+                text: template.text,
+                html: template.html,
+            });
+        } catch (emailError) {
+        }
+    };
+
+
+    const sendRejectedEmail = async (userEmail: string) => {
+        try {
+            const template = emailTemplates.rejectedUserEmail(userEmail);
+
+            const result = await sendEmail({
+                to: userEmail,
+                subject: template.subject,
+                text: template.text,
+                html: template.html,
+            });
+        } catch (emailError) {
         }
     };
 
@@ -451,7 +482,7 @@ export default function UsersList() {
                         <div className="flex space-x-2 ps-2">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                    <Button variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
                                         <span className="sr-only">Open menu</span>
                                         <MoreHorizontal className="h-4 w-4" />
                                     </Button>
@@ -459,6 +490,7 @@ export default function UsersList() {
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                     <DropdownMenuItem
+                                        className="cursor-pointer"
                                         onClick={() => navigator.clipboard.writeText(user.email)}
                                     >
                                         Copy email
@@ -468,12 +500,14 @@ export default function UsersList() {
                                     {smRole !== profile?.role && (
                                         <>
                                             <DropdownMenuItem
+                                                className="cursor-pointer"
                                                 onClick={() => handleEditUser(user)}
                                             >
                                                 <Edit className="mr-2 h-4 w-4" />
                                                 Edit User
                                             </DropdownMenuItem>
                                             <DropdownMenuItem
+                                                className="cursor-pointer"
                                                 onClick={() => handleChangeRole(user)}
                                             >
                                                 <Key className="mr-2 h-4 w-4" />
@@ -483,16 +517,16 @@ export default function UsersList() {
                                     )}
                                     {!user.isVerified ? (
                                         <DropdownMenuItem
-                                            onClick={() => handleVerifyUser(user.id)}
-                                            className="text-green-600"
+                                            onClick={() => handleVerifyUser(user.id, user.email)}
+                                            className="text-green-600 cursor-pointer"
                                         >
                                             <CheckCircle className="mr-2 h-4 w-4" />
                                             Approve User
                                         </DropdownMenuItem>
                                     ) : (
                                         <DropdownMenuItem
-                                            onClick={() => handleUnverifyUser(user.id)}
-                                            className="text-red-600"
+                                            onClick={() => handleUnverifyUser(user.id, user.email)}
+                                            className="text-red-600 cursor-pointer"
                                         >
                                             <XCircle className="mr-2 h-4 w-4" />
                                             Reject User

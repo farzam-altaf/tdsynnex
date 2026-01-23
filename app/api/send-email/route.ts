@@ -1,8 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import { NextRequest, NextResponse } from "next/server";
+import * as nodemailer from "nodemailer";
 
-// Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Create transporter
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: false, // true for 465, false for 587
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,9 +21,9 @@ export async function POST(request: NextRequest) {
     // Validation
     if (!to || !subject || !text) {
       return NextResponse.json(
-        { 
+        {
           success: false,
-          error: 'Missing required fields: to, subject, and text are required' 
+          error: "Missing required fields: to, subject, and text are required",
         },
         { status: 400 }
       );
@@ -24,54 +33,42 @@ export async function POST(request: NextRequest) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(to)) {
       return NextResponse.json(
-        { 
+        {
           success: false,
-          error: 'Invalid email address format' 
+          error: "Invalid email address format",
         },
         { status: 400 }
       );
     }
 
     let senderFrom = from || process.env.EMAIL_FROM;
-    
-    // Check if senderFrom has email format
-    if (!senderFrom.includes('@')) {
-      // Agar sirf name hai, toh Resend ka default email add karein
-      senderFrom = `${senderFrom} <onboarding@resend.dev>`;
+
+    // Agar sirf name ho
+    if (senderFrom && !senderFrom.includes("@")) {
+      senderFrom = `${senderFrom} <${process.env.SMTP_USER}>`;
     }
 
     // Send email
-    const { data, error } = await resend.emails.send({
-      from: senderFrom, // Fixed sender
-      to: Array.isArray(to) ? to : [to],
+    const info = await transporter.sendMail({
+      from: senderFrom,
+      to,
       subject,
       text,
       html: html || `<p>${text}</p>`,
     });
 
-    if (error) {
-      console.error('Resend API Error:', error);
-      return NextResponse.json(
-        { 
-          success: false,
-          error: error.message 
-        },
-        { status: 500 }
-      );
-    }
-
     return NextResponse.json({
       success: true,
-      messageId: data?.id,
-      message: 'Email sent successfully',
+      messageId: info.messageId,
+      message: "Email sent successfully",
     });
-
   } catch (error: any) {
-    console.error('Server Error:', error);
+    console.error("Nodemailer Error:", error);
+
     return NextResponse.json(
-      { 
+      {
         success: false,
-        error: error.message || 'Internal server error' 
+        error: error.message || "Internal server error",
       },
       { status: 500 }
     );

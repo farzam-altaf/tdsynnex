@@ -30,6 +30,8 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import Link from "next/link"
+import { emailTemplates, sendEmail } from "@/lib/email"
+import { toast } from "sonner"
 
 export type Product = {
     id: string;
@@ -112,6 +114,10 @@ export type Order = {
         first_name?: string
         last_name?: string
     }
+    order_by_user?: { // Add this for the join
+        id: string
+        email: string
+    }
 }
 
 export default function Page() {
@@ -129,6 +135,7 @@ export default function Page() {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [pendingStatusChange, setPendingStatusChange] = useState<{ field: string, value: string, rowId: string } | null>(null);
     const [trackingData, setTrackingData] = useState({
         tracking: "",
         return_tracking: "",
@@ -138,6 +145,7 @@ export default function Page() {
         case_type: "",
         password: ""
     });
+
 
     // Order status options from environment variables
     const statusOptions = [
@@ -212,7 +220,8 @@ export default function Page() {
                         form_factor_filter:form_factor(title)
                     ),
                     approved_user:users!orders_approved_by_fkey(id, email),
-                    rejected_user:users!orders_rejected_by_fkey(id, email)
+                    rejected_user:users!orders_rejected_by_fkey(id, email),
+                    order_by_user:users!orders_order_by_fkey(id, email)
                 `)
                 .eq('order_no', orderHash);
 
@@ -280,7 +289,10 @@ export default function Page() {
             if (error) throw error;
 
             // Refresh data
-            fetchOrders();
+            await fetchOrders();
+            // ✅ Send approved order email (after successful approval)
+            sendApprovedOrderEmail(order);
+
         } catch (err) {
         }
     };
@@ -346,6 +358,7 @@ export default function Page() {
 
             // Refresh data
             fetchOrders();
+            sendRejectedOrderEmail(order);
         } catch (err) {
         }
     };
@@ -370,6 +383,28 @@ export default function Page() {
 
                 if (devOpportunity && devBudget) {
                     updateData.rev_opportunity = devOpportunity * devBudget;
+                }
+            }
+
+            if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED) {
+                // Check if tracking details are missing
+                if (!order.tracking || !order.tracking_link || !order.return_tracking || !order.return_tracking_link) {
+                    // Show toast notification
+                    toast.error("Please fill Tracking & Return Tracking details before marking as Shipped", {
+                        duration: 5000,
+                    });
+
+                    // Open the tracking modal
+                    setIsModalOpen(true);
+
+                    // Store the pending status change
+                    setPendingStatusChange({
+                        field: field,
+                        value: editedValue,
+                        rowId: editingRowId || "order"
+                    });
+
+                    return; // Don't proceed with status change
                 }
             }
 
@@ -499,6 +534,29 @@ export default function Page() {
 
             if (error) throw error;
 
+
+            // ✅ Check if status is being changed to "Processing" and send approved email
+            if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
+                // Get the updated order data
+                const updatedOrder = { ...order, ...updateData };
+                sendApprovedOrderEmail(updatedOrder);
+            }
+            if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_REJECTED) {
+                // Get the updated order data
+                const updatedOrder = { ...order, ...updateData };
+                sendRejectedOrderEmail(updatedOrder);
+            }
+            if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
+                // Get the updated order data
+                const updatedOrder = { ...order, ...updateData };
+                sendReturedOrderEmail(updatedOrder);
+            }
+            if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED) {
+                // Get the updated order data
+                const updatedOrder = { ...order, ...updateData };
+                sendShippedOrderEmail(updatedOrder);
+            }
+
             // Update local state without full reload
             setOrders(prev => {
                 const updatedOrder = prev.map(o => {
@@ -542,16 +600,30 @@ export default function Page() {
     };
 
     const handleCancelEdit = () => {
+        if (pendingStatusChange) {
+            setPendingStatusChange(null);
+            toast.info("Status change cancelled");
+        }
         setEditingField(null);
         setEditingRowId(null);
         setEditedValue("");
     };
 
-    // Handle tracking data update
+    useEffect(() => {
+        if (!isModalOpen && pendingStatusChange) {
+            // User closed modal without saving - reset everything
+            setPendingStatusChange(null);
+            setEditingField(null);
+            setEditingRowId(null);
+            setEditedValue("");
+        }
+    }, [isModalOpen, pendingStatusChange]);
+
     const handleTrackingUpdate = async () => {
         if (!order || !isActionAuthorized) return;
 
         try {
+            // First update tracking data
             const { error } = await supabase
                 .from('orders')
                 .update({
@@ -567,23 +639,320 @@ export default function Page() {
 
             if (error) throw error;
 
-            // Update local state
-            setOrders(prev => prev.map(o =>
-                o.id === order.id ? {
-                    ...o,
+            // ✅ Check if there's a pending status change to Shipped
+            if (pendingStatusChange && pendingStatusChange.field === "order_status") {
+                // Close modal first
+                setIsModalOpen(false);
+
+                // Show success toast
+                toast.success("Tracking details saved. Now updating status to Shipped...");
+
+                // Create updated order data with BOTH tracking and status
+                const updatedOrderData = {
+                    ...order,
                     tracking: trackingData.tracking,
                     return_tracking: trackingData.return_tracking,
                     tracking_link: trackingData.tracking_link,
                     return_tracking_link: trackingData.return_tracking_link,
                     username: trackingData.username,
                     case_type: trackingData.case_type,
-                    password: trackingData.password
-                } : o
-            ));
+                    password: trackingData.password,
+                    order_status: pendingStatusChange.value,
+                    shipped_date: new Date().toISOString().split('T')[0]
+                };
 
-            // Close modal
-            setIsModalOpen(false);
+                // Now update the status
+                const { error: statusError } = await supabase
+                    .from('orders')
+                    .update({
+                        order_status: pendingStatusChange.value,
+                        shipped_date: new Date().toISOString().split('T')[0]
+                    })
+                    .eq('id', order.id);
+
+                if (statusError) throw statusError;
+
+                // Update local state
+                setOrders(prev => prev.map(o =>
+                    o.id === order.id ? {
+                        ...o,
+                        ...updatedOrderData
+                    } : o
+                ));
+
+                // Send shipped email with the COMPLETE updated data
+                sendShippedOrderEmail(updatedOrderData);
+
+                // Reset everything
+                setEditingField(null);
+                setEditingRowId(null);
+                setEditedValue("");
+                setPendingStatusChange(null);
+
+                toast.success("Status updated to Shipped successfully!");
+            } else {
+                // Close modal
+                setIsModalOpen(false);
+                toast.success("Tracking details updated successfully");
+            }
+
         } catch (err) {
+            toast.error("Failed to update tracking details");
+        }
+    };
+
+    // Function to send approved order email
+    const sendApprovedOrderEmail = async (orderData: Order) => {
+        try {
+            // Check if order has all required data
+            if (!orderData.order_by_user?.email) {
+                return;
+            }
+
+            if (!orderData.products) {
+                return;
+            }
+
+            const template = emailTemplates.approvedOrderEmail({
+                orderNumber: orderData.order_no,
+                orderDate: orderData.order_date,
+                customerName: orderData.contact_name || "Customer",
+                customerEmail: orderData.order_by_user?.email,
+
+                productName: orderData.products.product_name || "Product",
+                quantity: parseInt(orderData.quantity || "1"),
+
+                salesExecutive: orderData.sales_executive || "",
+                salesExecutiveEmail: orderData.se_email || "",
+                salesManager: orderData.sales_manager || "",
+                salesManagerEmail: orderData.sm_email || "",
+                reseller: orderData.reseller || "",
+
+                companyName: orderData.company_name || "",
+                contactName: orderData.contact_name || "",
+                contactEmail: orderData.email || "",
+                shippingAddress: orderData.address || "",
+                city: orderData.city || "",
+                state: orderData.state || "",
+                zip: orderData.zip || "",
+                deliveryDate: orderData.desired_date || "",
+
+                deviceUnits: orderData.dev_opportunity || 0,
+                budgetPerDevice: orderData.dev_budget || 0,
+                revenue: orderData.rev_opportunity || 0,
+                crmAccount: orderData.crm_account || "",
+                vertical: orderData.vertical || "",
+                segment: orderData.segment || "",
+                useCase: orderData.use_case || "",
+                currentDevices: orderData.currently_running || "",
+                licenses: orderData.licenses || "",
+                usingCopilot: orderData.isCopilot || "",
+                securityFactor: orderData.isSecurity || "",
+                deviceProtection: orderData.current_protection || "",
+
+                note: orderData.notes || "",
+            });
+
+            const result = await sendEmail({
+                to: orderData.order_by_user?.email,
+                subject: template.subject,
+                text: template.text,
+                html: template.html,
+            });
+        } catch (error) {
+        }
+    };
+
+    // Function to send Rejected order email
+    const sendRejectedOrderEmail = async (orderData: Order) => {
+        try {
+            // Check if order has all required data
+            if (!orderData.order_by_user?.email) {
+                return;
+            }
+
+            if (!orderData.products) {
+                return;
+            }
+
+            const template = emailTemplates.rejectedOrderEmail({
+                orderNumber: orderData.order_no,
+                orderDate: orderData.order_date,
+                customerName: orderData.contact_name || "Customer",
+                customerEmail: orderData.order_by_user?.email,
+
+                productName: orderData.products.product_name || "Product",
+                quantity: parseInt(orderData.quantity || "1"),
+
+                salesExecutive: orderData.sales_executive || "",
+                salesExecutiveEmail: orderData.se_email || "",
+                salesManager: orderData.sales_manager || "",
+                salesManagerEmail: orderData.sm_email || "",
+                reseller: orderData.reseller || "",
+
+                companyName: orderData.company_name || "",
+                contactName: orderData.contact_name || "",
+                contactEmail: orderData.email || "",
+                shippingAddress: orderData.address || "",
+                city: orderData.city || "",
+                state: orderData.state || "",
+                zip: orderData.zip || "",
+                deliveryDate: orderData.desired_date || "",
+
+                deviceUnits: orderData.dev_opportunity || 0,
+                budgetPerDevice: orderData.dev_budget || 0,
+                revenue: orderData.rev_opportunity || 0,
+                crmAccount: orderData.crm_account || "",
+                vertical: orderData.vertical || "",
+                segment: orderData.segment || "",
+                useCase: orderData.use_case || "",
+                currentDevices: orderData.currently_running || "",
+                licenses: orderData.licenses || "",
+                usingCopilot: orderData.isCopilot || "",
+                securityFactor: orderData.isSecurity || "",
+                deviceProtection: orderData.current_protection || "",
+
+                note: orderData.notes || "",
+            });
+
+            const result = await sendEmail({
+                to: orderData.order_by_user?.email,
+                subject: template.subject,
+                text: template.text,
+                html: template.html,
+            });
+        } catch (error) {
+        }
+    };
+
+    // Function to send Rejected order email
+    const sendReturedOrderEmail = async (orderData: Order) => {
+        try {
+            // Check if order has all required data
+            if (!orderData.order_by_user?.email) {
+                return;
+            }
+
+            if (!orderData.products) {
+                return;
+            }
+
+            const template = emailTemplates.returnedOrderEmail({
+                orderNumber: orderData.order_no,
+                orderDate: orderData.order_date,
+                customerName: orderData.contact_name || "Customer",
+                customerEmail: orderData.order_by_user?.email,
+
+                productName: orderData.products.product_name || "Product",
+                quantity: parseInt(orderData.quantity || "1"),
+
+                salesExecutive: orderData.sales_executive || "",
+                salesExecutiveEmail: orderData.se_email || "",
+                salesManager: orderData.sales_manager || "",
+                salesManagerEmail: orderData.sm_email || "",
+                reseller: orderData.reseller || "",
+
+                companyName: orderData.company_name || "",
+                contactName: orderData.contact_name || "",
+                contactEmail: orderData.email || "",
+                shippingAddress: orderData.address || "",
+                city: orderData.city || "",
+                state: orderData.state || "",
+                zip: orderData.zip || "",
+                deliveryDate: orderData.desired_date || "",
+
+                deviceUnits: orderData.dev_opportunity || 0,
+                budgetPerDevice: orderData.dev_budget || 0,
+                revenue: orderData.rev_opportunity || 0,
+                crmAccount: orderData.crm_account || "",
+                vertical: orderData.vertical || "",
+                segment: orderData.segment || "",
+                useCase: orderData.use_case || "",
+                currentDevices: orderData.currently_running || "",
+                licenses: orderData.licenses || "",
+                usingCopilot: orderData.isCopilot || "",
+                securityFactor: orderData.isSecurity || "",
+                deviceProtection: orderData.current_protection || "",
+
+                note: orderData.notes || "",
+            });
+
+            const result = await sendEmail({
+                to: orderData.order_by_user?.email,
+                subject: template.subject,
+                text: template.text,
+                html: template.html,
+            });
+        } catch (error) {
+        }
+    };
+
+    // Function to send Shipped order email
+    const sendShippedOrderEmail = async (orderData: Order) => {
+        try {
+            // Check if order has all required data
+            if (!orderData.order_by_user?.email) {
+                return;
+            }
+
+            if (!orderData.products) {
+                return;
+            }
+
+            const template = emailTemplates.shippedOrderEmail({
+                orderNumber: orderData.order_no,
+                orderDate: orderData.order_date,
+                customerName: orderData.contact_name || "Customer",
+                customerEmail: orderData.order_by_user?.email,
+
+                orderTracking: orderData.tracking || "",
+                orderTrackingLink: orderData.tracking_link || "",
+                returnTracking: orderData.return_tracking || "",
+                returnTrackingLink: orderData.return_tracking_link || "",
+                caseType: orderData.case_type || "",
+                fileLink: orderData.return_label || "",
+
+                productName: orderData.products.product_name || "Product",
+                quantity: parseInt(orderData.quantity || "1"),
+
+                salesExecutive: orderData.sales_executive || "",
+                salesExecutiveEmail: orderData.se_email || "",
+                salesManager: orderData.sales_manager || "",
+                salesManagerEmail: orderData.sm_email || "",
+                reseller: orderData.reseller || "",
+
+                companyName: orderData.company_name || "",
+                contactName: orderData.contact_name || "",
+                contactEmail: orderData.email || "",
+                shippingAddress: orderData.address || "",
+                city: orderData.city || "",
+                state: orderData.state || "",
+                zip: orderData.zip || "",
+                deliveryDate: orderData.desired_date || "",
+
+                deviceUnits: orderData.dev_opportunity || 0,
+                budgetPerDevice: orderData.dev_budget || 0,
+                revenue: orderData.rev_opportunity || 0,
+                crmAccount: orderData.crm_account || "",
+                vertical: orderData.vertical || "",
+                segment: orderData.segment || "",
+                useCase: orderData.use_case || "",
+                currentDevices: orderData.currently_running || "",
+                licenses: orderData.licenses || "",
+                usingCopilot: orderData.isCopilot || "",
+                securityFactor: orderData.isSecurity || "",
+                deviceProtection: orderData.current_protection || "",
+
+                note: orderData.notes || "",
+            });
+
+            const result = await sendEmail({
+                to: orderData.order_by_user?.email,
+                subject: template.subject,
+                text: template.text,
+                html: template.html,
+            });
+        } catch (error) {
         }
     };
 
@@ -762,16 +1131,20 @@ export default function Page() {
         );
     };
 
-    // Helper function to render status dropdown
     const renderStatusDropdown = (field: string, value: any, rowId: string = "order") => {
         const displayValue = value || "-";
         const isEditing = editingField === field && editingRowId === rowId;
 
-        if (isEditing) {
+        // Check if there's a pending status change for this field
+        const isPendingShipped = pendingStatusChange &&
+            pendingStatusChange.field === field &&
+            pendingStatusChange.rowId === rowId;
+
+        if (isEditing || isPendingShipped) {
             return (
                 <div className="flex items-center gap-2">
                     <Select
-                        value={editedValue}
+                        value={isPendingShipped ? pendingStatusChange.value : editedValue}
                         onValueChange={setEditedValue}
                     >
                         <SelectTrigger className="flex-1">
@@ -790,7 +1163,7 @@ export default function Page() {
                         onClick={() => handleSaveEdit(field)}
                         className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
                     >
-                        Save
+                        {isPendingShipped ? "Awaiting Tracking..." : "Save"}
                     </Button>
                     <Button
                         size="sm"
@@ -800,6 +1173,11 @@ export default function Page() {
                     >
                         Cancel
                     </Button>
+                    {isPendingShipped && (
+                        <div className="text-xs text-amber-600 ml-2">
+                            Please complete tracking details
+                        </div>
+                    )}
                 </div>
             );
         }

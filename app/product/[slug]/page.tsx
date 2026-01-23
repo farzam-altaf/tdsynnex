@@ -27,6 +27,8 @@ import type { CarouselRef } from "antd/es/carousel";
 import { toast } from "sonner";
 import { BiRadioCircle } from "react-icons/bi";
 import { useCart } from "@/app/context/CartContext";
+import { FaBell } from "react-icons/fa";
+import { emailTemplates, sendEmail } from "@/lib/email";
 
 // Loading skeleton component
 const ProductSkeleton = () => {
@@ -175,6 +177,8 @@ export default function Page() {
     const [selectedImage, setSelectedImage] = useState(0);
     const [quantity, setQuantity] = useState(1);
     const [isWishlisted, setIsWishlisted] = useState(false);
+    const [isAddingToWaitlist, setIsAddingToWaitlist] = useState(false);
+    const [showWaitlistModal, setShowWaitlistModal] = useState(false);
 
     // Carousel ref for manual control
     const carouselRef = useRef<CarouselRef>(null);
@@ -221,12 +225,112 @@ export default function Page() {
         }
     }, [loading, isLoggedIn, profile, user, router]);
 
+    // Handle add to waitlist
+    const handleAddToWaitlist = async () => {
+        if (!product || !profile?.email) {
+            toast.error("Please login to join waitlist");
+            return;
+        }
+
+        try {
+            setIsAddingToWaitlist(true);
+
+            // Check if already in waitlist
+            const { data: existingWaitlist, error: checkError } = await supabase
+                .from('waitlist')
+                .select('id')
+                .eq('product_id', product.id)
+                .eq('user_id', profile?.id)
+                .single();
+
+            if (existingWaitlist) {
+                toast.error("You are already on the waitlist for this product");
+                setIsAddingToWaitlist(false);
+                return;
+            }
+
+            // Add to waitlist
+            const { error } = await supabase
+                .from('waitlist')
+                .insert({
+                    product_id: product.id,
+                    user_id: profile?.id,
+                    email: profile?.email,
+                    date: new Date().toISOString(),
+                });
+
+            if (error) {
+                if (error.code === '23505') { // Unique constraint violation
+                    toast.error("You are already on the waitlist for this product");
+                } else {
+                    throw error;
+                }
+            } else {
+                toast.success("Added to waitlist! You'll be notified when this product is back in stock");
+                sendWinEmail();
+                setShowWaitlistModal(false);
+            }
+
+        } catch (error: any) {
+            toast.error(error.message || "Failed to add to waitlist. Please try again.");
+        } finally {
+            setIsAddingToWaitlist(false);
+        }
+    };
+
+    // Check if user is already on waitlist for this product
+    useEffect(() => {
+        const checkWaitlistStatus = async () => {
+            if (!product || !profile?.id) return;
+
+            try {
+                const { data } = await supabase
+                    .from('waitlist')
+                    .select('id')
+                    .eq('product_id', product.id)
+                    .eq('user_id', profile.id)
+                    .single();
+
+                // You can use this data to show different UI if already on waitlist
+                // For example, you can set a state to disable the waitlist button
+            } catch (error) {
+                // User is not on waitlist (404 is expected)
+            }
+        };
+
+        if (product && profile?.id) {
+            checkWaitlistStatus();
+        }
+    }, [product, profile?.id]);
+
     // Fetch data only after auth is confirmed AND initialized
     useEffect(() => {
         if (!authChecked || !authInitialized) {
             return; // Don't fetch data until auth is fully checked AND initialized
         }
     }, [authChecked, authInitialized]);
+
+    
+        const sendWinEmail = async () => {
+            try {
+                const template = emailTemplates.waitListEmail({
+                    email: profile?.email || "",
+                    sku: product?.sku || "",
+                    product: product?.product_name || ""
+                });
+    
+                await sendEmail({
+                    // to: profile?.email || "",
+                    to: "farzamaltaf888@gmail.com",
+                    subject: template.subject,
+                    text: template.text,
+                    html: template.html,
+                });
+    
+            } catch (error) {
+                toast.error("Failed to send checkout email. Please try again.");
+            }
+        };
 
     // Optional: prevent UI flicker - MUST BE AFTER ALL HOOKS
     if (isLoggedIn === null) {
@@ -891,17 +995,66 @@ export default function Page() {
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    <h1 className="text-red-500 font-bold text-lg">Out of stock</h1>
-                                    <div className="border py-3 px-5">
-                                        <h1 className="text-xl">Get an alert when the product is in stock</h1>
-                                        <div className="border ps-2 py-2 my-4">
-                                            {profile?.email}
-                                        </div>
-                                        <div className="">
-                                            <button className="border rounded cursor-pointer text-base px-4 py-1.5 border-black mt-5">
-                                                Add to Waitlist
-                                            </button>
-                                        </div>
+                                    <div className="flex items-center gap-2 text-red-500 font-bold text-lg">
+                                        <FaBell className="h-5 w-5" />
+                                        <span>Out of stock</span>
+                                    </div>
+                                    <div className="border border-gray-200 rounded-lg p-6 bg-gray-50">
+                                        <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                                            Get notified when available
+                                        </h2>
+                                        <p className="text-gray-600 mb-6">
+                                            Join the waitlist and be the first to know when this product is back in stock.
+                                        </p>
+
+                                        {!profile?.email ? (
+                                            <div className="space-y-4">
+                                                <p className="text-sm text-gray-500">
+                                                    Please login to join the waitlist
+                                                </p>
+                                                <Link href={`/login/?redirect_to=product/${slug}`}>
+                                                    <button className="px-6 py-3 bg-[#0A4647] text-white rounded-md hover:bg-[#08393a] transition-colors">
+                                                        Login to Continue
+                                                    </button>
+                                                </Link>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                <div className="border border-gray-300 rounded-md p-4 bg-white">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <p className="font-medium text-gray-900">Your Email</p>
+                                                            <p className="text-sm text-gray-500 mt-1">{profile.email}</p>
+                                                        </div>
+                                                        <div className="text-sm text-gray-500">
+                                                            {profile.email ? "✓ Verified" : "Unverified"}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    onClick={handleAddToWaitlist}
+                                                    disabled={isAddingToWaitlist}
+                                                    className="w-full px-6 py-3 bg-[#0A4647] text-white rounded-md hover:bg-[#08393a] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                                                >
+                                                    {isAddingToWaitlist ? (
+                                                        <>
+                                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                            <span>Adding to Waitlist...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <FaBell className="h-4 w-4" />
+                                                            <span>Add to Waitlist</span>
+                                                        </>
+                                                    )}
+                                                </button>
+
+                                                <p className="text-xs text-gray-500 text-center mt-2">
+                                                    You'll receive an email notification when this product is back in stock.
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}

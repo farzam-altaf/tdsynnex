@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
+import { emailTemplates, sendEmail } from "@/lib/email";
 
 // Role constants
 const shopManager = process.env.NEXT_PUBLIC_SHOPMANAGER;
@@ -144,10 +145,10 @@ export default function Page() {
         }
 
         // ShopManager should not have access to this page
-        if (profile?.role === shopManager) {
-            router.replace('/product-category/alldevices');
-            return;
-        }
+        // if (profile?.role === shopManager) {
+        //     router.replace('/product-category/alldevices');
+        //     return;
+        // }
 
         // User is authorized, fetch orders
         fetchOrders();
@@ -299,6 +300,14 @@ export default function Page() {
                     style: { background: "black", color: "white" }
                 });
 
+                sendWinEmail({
+                    ...winData,
+                    order_no: selectedOrder.order_no,
+                    order_date: selectedOrder.order_date,
+                    product_sku: selectedOrder.products?.sku || "",
+                    quantity: selectedOrder.quantity || "1"
+                });
+
                 // Reset form
                 setFormData({
                     orderNumber: "",
@@ -334,6 +343,39 @@ export default function Page() {
             }
         }
     };
+
+
+    const sendWinEmail = async (oData: any) => {
+        try {
+            const template = emailTemplates.reportWinEmail({
+                orderNumber: oData.orderHash,
+                orderDate: oData.order_date,
+                customerName: oData.customerName,
+                submittedEmail: oData.submitted_by,
+
+                productName: oData.product_sku,
+                quantity: oData.quantity,
+
+                resellerAccount: oData.resellerAccount,
+                units: oData.units,
+                pType: oData.purchaseType,
+                dealRev: oData.deal_rev,
+                reseller: oData.reseller,
+                notes: oData.notes,
+            });
+
+            await sendEmail({
+                to: oData.submitted_by,
+                subject: template.subject,
+                text: template.text,
+                html: template.html,
+            });
+
+        } catch (error) {
+            toast.error("Failed to send checkout email. Please try again.");
+        }
+    };
+
 
     if (loading || isLoading) {
         return (
@@ -691,7 +733,7 @@ export default function Page() {
                     <div className="flex justify-center pt-4">
                         <button
                             type="submit"
-                            className="w-48 rounded-lg bg-[#3ba1da] px-6 py-2.5 text-base font-semibold text-white transition-all duration-300 hover:bg-[#41abd6] hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#3ba1da]/50"
+                            className="w-48 rounded-lg bg-[#3ba1da] cursor-pointer px-6 py-2.5 text-base font-semibold text-white transition-all duration-300 hover:bg-[#41abd6] hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#3ba1da]/50"
                         >
                             Submit
                         </button>
