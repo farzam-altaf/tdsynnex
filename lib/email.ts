@@ -1,3 +1,5 @@
+import axios, { AxiosError } from 'axios';
+
 // Email sending utility
 export interface EmailData {
     to: string | string[];
@@ -13,20 +15,20 @@ export async function sendEmail(data: EmailData): Promise<{
     error?: string;
 }> {
     try {
-        const response = await fetch('/api/send-email', {
-            method: 'POST',
+        const response = await axios.post('/api/send-email', data, {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(data),
+            timeout: 10000, // 10 seconds timeout
+            validateStatus: (status) => status >= 200 && status < 500,
         });
 
-        const result = await response.json();
+        const result = response.data;
 
-        if (!response.ok || !result.success) {
+        if (response.status >= 400 || !result.success) {
             return {
                 success: false,
-                error: result.error || 'Failed to send email'
+                error: result.error || `HTTP ${response.status}: Failed to send email`
             };
         }
 
@@ -35,11 +37,106 @@ export async function sendEmail(data: EmailData): Promise<{
             message: result.message
         };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Email sending error:', error);
+
+        if (axios.isAxiosError(error)) {
+            const axiosError = error as AxiosError;
+
+            if (axiosError.code === 'ECONNABORTED') {
+                return {
+                    success: false,
+                    error: 'Request timeout. Please try again.'
+                };
+            }
+
+            if (axiosError.response) {
+                // Server responded with error status
+                return {
+                    success: false,
+                    error: `Server error (${axiosError.response.status}): ${'Unknown error'}`
+                };
+            }
+
+            if (axiosError.request) {
+                // Request made but no response
+                return {
+                    success: false,
+                    error: 'No response from server. Please check your connection.'
+                };
+            }
+        }
+
+        // Generic error
         return {
             success: false,
-            error: error.message || 'Network error'
+            error: error instanceof Error ? error.message : 'Unknown error occurred'
+        };
+    }
+}
+
+export async function sendCronEmail(data: EmailData): Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+}> {
+    try {
+        const response = await axios.post(`${process.env.NEXT_PUBLIC_APP_URL}/api/send-email`, data, {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            timeout: 10000, // 10 seconds timeout
+            validateStatus: (status) => status >= 200 && status < 500,
+        });
+
+        const result = response.data;
+
+        if (response.status >= 400 || !result.success) {
+            return {
+                success: false,
+                error: result.error || `HTTP ${response.status}: Failed to send email`
+            };
+        }
+
+        return {
+            success: true,
+            message: result.message
+        };
+
+    } catch (error: unknown) {
+        console.error('Email sending error:', error);
+
+        if (axios.isAxiosError(error)) {
+            const axiosError = error as AxiosError;
+
+            if (axiosError.code === 'ECONNABORTED') {
+                return {
+                    success: false,
+                    error: 'Request timeout. Please try again.'
+                };
+            }
+
+            if (axiosError.response) {
+                // Server responded with error status
+                return {
+                    success: false,
+                    error: `Server error (${axiosError.response.status}): ${'Unknown error'}`
+                };
+            }
+
+            if (axiosError.request) {
+                // Request made but no response
+                return {
+                    success: false,
+                    error: 'No response from server. Please check your connection.'
+                };
+            }
+        }
+
+        // Generic error
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error occurred'
         };
     }
 }
@@ -126,6 +223,7 @@ export const emailTemplates = {
       </div>
     `,
     }),
+
 
     // Registration Email to User (Waiting for Approval)
     registrationUserWaiting: (userData: {
@@ -254,6 +352,7 @@ export const emailTemplates = {
                 `,
     }),
 
+
     // Welcome/Login Email
     welcomeEmail: (name: string, email: string) => ({
         subject: `Welcome to TD SYNNEX, ${name}!`,
@@ -335,6 +434,7 @@ export const emailTemplates = {
     </div>
     `,
     }),
+
 
     checkoutEmail: ({
         orderNumber,
@@ -1248,7 +1348,6 @@ export const emailTemplates = {
 
             Best regards,
             The TD SYNNEX Team`,
-
         html: `
         <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
         <table width="100%" cellpadding="0" cellspacing="0">
@@ -1893,6 +1992,7 @@ export const emailTemplates = {
         `,
     }),
 
+
     returnedOrderEmail: ({
         orderNumber,
         orderDate,
@@ -2056,7 +2156,7 @@ export const emailTemplates = {
                                         helped you close, you can Report a Win on the program.</strong></p>
                                 <!-- CTA Button -->
                                 <div style="text-align:center; margin:30px 0;">
-                                    <a href="https://tdsynnex-surface.com/wins" style="
+                                    <a href="${process.env.NEXT_PUBLIC_APP_URL}/wins" style="
                                             background:#0A4647;
                                             color:#ffffff;
                                             padding:14px 34px;
@@ -2748,6 +2848,461 @@ export const emailTemplates = {
     }),
 
 
+    returnReminderEmail: ({
+        orderNumber,
+        orderDate,
+        productName,
+        productSlug,
+        quantity,
+        returnTracking,
+        fileLink,
+        salesExecutive,
+        salesExecutiveEmail,
+        salesManager,
+        salesManagerEmail,
+        companyName,
+        contactEmail,
+        shippedDate,
+    }: {
+        orderNumber: string | number;
+        orderDate: string;
+        customerName: string;
+        customerEmail: string;
+
+        productName: string;
+        productSlug: string;
+        quantity: number;
+
+        returnTracking: string;
+        fileLink: string;
+
+        salesExecutive: string;
+        salesExecutiveEmail: string;
+        salesManager: string;
+        salesManagerEmail: string;
+
+        companyName: string;
+        contactEmail: string;
+        shippedDate: string;
+    }) => ({
+        subject: `Return Reminder - Order #${orderNumber} (${companyName}) | TD SYNNEX SURFACE`,
+        text: `Return Reminder Notification | TD SYNNEX SURFACE
+
+            Return Reminder - Order #${orderNumber} (${companyName}) 
+            Placed On: ${orderDate}
+
+            Hello,
+
+            Thank you for using TD SYNNEX SURFACE! We hope your experience was very positive.
+
+            Your order for ${companyName} is now due for return. 
+            You can view your return label using the link below or request it via email at support@tdsynnex-surface.com:
+
+            View Return Label: ${fileLink}
+
+            ORDER ITEMS
+            Product: ${productName}
+            Quantity: ${quantity}
+
+            ORDER DETAILS
+            Sales Executive: ${salesExecutive}
+            Sales Executive Email: ${salesExecutiveEmail}
+            Sales Manager: ${salesManager}
+            Sales Manager Email: ${salesManagerEmail}
+            Customer Company Name: ${companyName}
+            Customer Contact Email: ${contactEmail}
+            Shipped Date: ${shippedDate}
+            Returned Tracking: ${returnTracking}
+
+            If you have any questions, please contact us at support@tdsynnex-surface.com.
+
+            Best regards,
+            The TD SYNNEX Team`,
+        html: `
+        <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+                <td align="center">
+
+                    <table width="720" cellpadding="0" cellspacing="0"
+                        style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
+
+                        <!-- HEADER -->
+                        <tr>
+                            <td style="background:#0A4647; padding:30px; text-align:center;">
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
+                                    style="max-width:160px; margin-bottom:12px;" />
+                                <h1 style="color:#ffffff; margin:0; font-size:26px;">
+                                    Return Reminder Notification Order #${orderNumber} (${companyName}) | TD SYNNEX
+                                    SURFACE
+                                </h1>
+                            </td>
+                        </tr>
+
+                        <!-- INTRO -->
+                        <tr>
+                            <td style="padding:30px 30px 0 30px; color:#333;">
+                                <p style="margin:0 0 8px;  font-size:20px;"><strong>Return Reminder Order
+                                        #${orderNumber}</strong></p>
+                                <p style="margin:0 0 8px;  font-size:14px;">Placed On ${orderDate}</p>
+                                <p style="font-size:15px; line-height:1.6;">
+                                    Thank you for using TD SYNNEX SURFACE! We hope your experience was very positive.
+                                </p>
+                                <p>
+                                    Your order for ${companyName} is now due for return. You can also
+                                    obtain a soft copy of the return label by clicking on the below or sending a request
+                                    at support@tdsynnex-surface.com,
+                                </p>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="padding:0; color:#333;">
+                                <div style="text-align:center; margin:30px 0;">
+                                    <a href=${fileLink} style="
+                                            background:#0A4647;
+                                            color:#ffffff;
+                                            padding:14px 34px;
+                                            text-decoration:none;
+                                            border-radius:6px;
+                                            font-size:16px;
+                                            font-weight:600;
+                                            display:inline-block;
+                                        ">
+                                        View Return Label
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- PRODUCTS -->
+                        <tr>
+                            <td style="padding:0 30px 30px;">
+                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                    <tr>
+                                        <th colspan="2"
+                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                            Order Items
+                                        </th>
+                                    </tr>
+                                    <tr style="background:#f1f3f5;">
+                                        <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
+                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
+                                        </th>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><a href=${`${process.env.NEXT_PUBLIC_APP_URL}/product/${productSlug}`}>${productName}</a></td>
+                                        <td style="padding:10px; border:1px solid #ddd; text-align:center;">${quantity}
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+
+                        <!-- Order DETAILS -->
+                        <tr>
+                            <td style="padding:0 30px 30px;">
+                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                    <tr>
+                                        <th colspan="2"
+                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                            Order Details
+                                        </th>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales
+                                                Executive</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive
+                                                Email</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong>
+                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager
+                                                Email</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Customer Company
+                                                Name</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${companyName}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Customer Contact
+                                                Name</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipped Date</strong>
+                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${shippedDate}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Returned
+                                                Tracking</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${returnTracking}</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+
+                        <!-- Footer -->
+                        <tr>
+                            <td
+                                style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666;">
+                                <p style="margin:0;">
+                                    Best regards,<br>
+                                    <strong>The TD SYNNEX Team</strong>
+                                </p>
+                            </td>
+                        </tr>
+
+                    </table>
+
+                </td>
+            </tr>
+        </table>
+    </div>
+        `,
+    }),
+
+
+    returnReminderCronEmail: ({
+        orderNumber,
+        orderDate,
+        productName,
+        productSlug,
+        quantity,
+        daysCount,
+        returnTracking,
+        fileLink,
+        salesExecutive,
+        salesExecutiveEmail,
+        salesManager,
+        salesManagerEmail,
+        companyName,
+        contactEmail,
+        shippedDate,
+    }: {
+        orderNumber: string | number;
+        orderDate: string;
+        customerName: string;
+        customerEmail: string;
+
+        productName: string;
+        productSlug: string;
+        quantity: number;
+
+        returnTracking: string;
+        fileLink: string;
+
+        salesExecutive: string;
+        salesExecutiveEmail: string;
+        salesManager: string;
+        salesManagerEmail: string;
+        daysCount: string;
+
+        companyName: string;
+        contactEmail: string;
+        shippedDate: string;
+    }) => ({
+        subject: `Overdue Reminder - Order #${orderNumber} (${companyName}) | TD SYNNEX SURFACE`,
+        text: `Overdue Reminder Notification | TD SYNNEX SURFACE
+
+            Return Reminder - Order #${orderNumber} (${companyName}) 
+            Placed On: ${orderDate}
+
+            Hello,
+
+            Thank you for using TD SYNNEX SURFACE! We hope your experience was very positive.
+
+            Your order for ${companyName} is now due for return. 
+            You can view your return label using the link below or request it via email at support@tdsynnex-surface.com:
+
+            View Return Label: ${fileLink}
+
+            ORDER ITEMS
+            Product: ${productName}
+            Quantity: ${quantity}
+
+            ORDER DETAILS
+            Sales Executive: ${salesExecutive}
+            Sales Executive Email: ${salesExecutiveEmail}
+            Sales Manager: ${salesManager}
+            Sales Manager Email: ${salesManagerEmail}
+            Customer Company Name: ${companyName}
+            Customer Contact Email: ${contactEmail}
+            Shipped Date: ${shippedDate}
+            Returned Tracking: ${returnTracking}
+
+            If you have any questions, please contact us at support@tdsynnex-surface.com.
+
+            Best regards,
+            The TD SYNNEX Team`,
+        html: `
+        <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+                <td align="center">
+
+                    <table width="720" cellpadding="0" cellspacing="0"
+                        style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
+
+                        <!-- HEADER -->
+                        <tr>
+                            <td style="background:#0A4647; padding:30px; text-align:center;">
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
+                                    style="max-width:160px; margin-bottom:12px;" />
+                                <h1 style="color:#ffffff; margin:0; font-size:26px;">
+                                    Overdue Reminder Notification Order #${orderNumber} (${companyName}) | TD SYNNEX
+                                    SURFACE
+                                </h1>
+                            </td>
+                        </tr>
+
+                        <!-- INTRO -->
+                        <tr>
+                            <td style="padding:30px 30px 0 30px; color:#333;">
+                                <p style="margin:0 0 8px;  font-size:20px;"><strong>Return Reminder Order
+                                        #${orderNumber}</strong></p>
+                                <p style="margin:0 0 8px;  font-size:14px;">Placed On ${orderDate}</p>
+                                <p style="font-size:15px; line-height:1.6;">
+                                     This is a message from the TD SYNNEX SURFACE team that <b>Order #${orderNumber}</b> for <b>(${companyName})</b> has now
+                                    been shipped for a period of <b>${daysCount}</b> against the 30-day trial period.
+                                </p>
+                                <p>
+                                    Your order for ${companyName} is now due for return. You can also
+                                    obtain a soft copy of the return label by clicking on the below or sending a request
+                                    at support@tdsynnex-surface.com,
+                                </p>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="padding:0; color:#333;">
+                                <div style="text-align:center; margin:30px 0;">
+                                    <a href=${fileLink} style="
+                                            background:#0A4647;
+                                            color:#ffffff;
+                                            padding:14px 34px;
+                                            text-decoration:none;
+                                            border-radius:6px;
+                                            font-size:16px;
+                                            font-weight:600;
+                                            display:inline-block;
+                                        ">
+                                        View Return Label
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- PRODUCTS -->
+                        <tr>
+                            <td style="padding:0 30px 30px;">
+                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                    <tr>
+                                        <th colspan="2"
+                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                            Order Items
+                                        </th>
+                                    </tr>
+                                    <tr style="background:#f1f3f5;">
+                                        <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
+                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
+                                        </th>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><a href=${`${process.env.NEXT_PUBLIC_APP_URL}/product/${productSlug}`}>${productName}</a></td>
+                                        <td style="padding:10px; border:1px solid #ddd; text-align:center;">${quantity}
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+
+                        <!-- Order DETAILS -->
+                        <tr>
+                            <td style="padding:0 30px 30px;">
+                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                    <tr>
+                                        <th colspan="2"
+                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                            Order Details
+                                        </th>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales
+                                                Executive</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive
+                                                Email</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong>
+                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager
+                                                Email</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Customer Company
+                                                Name</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${companyName}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Customer Contact
+                                                Name</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipped Date</strong>
+                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${shippedDate}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Returned
+                                                Tracking</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;">${returnTracking}</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+
+                        <!-- Footer -->
+                        <tr>
+                            <td
+                                style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666;">
+                                <p style="margin:0;">
+                                    Best regards,<br>
+                                    <strong>The TD SYNNEX Team</strong>
+                                </p>
+                            </td>
+                        </tr>
+
+                    </table>
+
+                </td>
+            </tr>
+        </table>
+    </div>
+        `,
+    }),
+
+
     reportWinEmail: ({
         orderNumber,
         orderDate,
@@ -3023,6 +3578,103 @@ export const emailTemplates = {
         `,
     }),
 
+
+    backInStockEmail: ({
+        product,
+        sku,
+        email,
+        productUrl,
+    }: {
+        product: string;
+        sku: string;
+        email: string;
+        productUrl: string;
+    }) => ({
+        subject: `Product Back In Stock | TD SYNNEX SURFACE`,
+        text: `Product Back In Stock | TD SYNNEX SURFACE
+            Hello ${email},
+
+            Your subscribed product is now back in stock.
+
+            PRODUCT DETAILS
+            Product: ${product}
+            SKU: ${sku}
+
+            You can now add this product directly to your cart using the link below:
+            ${productUrl}
+
+            Thank you for using TD SYNNEX SURFACE.
+
+            If you have any questions, please contact us at support@tdsynnex-surface.com.
+
+            Best regards,
+            The TD SYNNEX Team`,
+        html: `
+        <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+                <td align="center">
+
+                    <table width="720" cellpadding="0" cellspacing="0"
+                        style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
+
+                        <!-- HEADER -->
+                        <tr>
+                            <td style="background:#0A4647; padding:30px; text-align:center;">
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
+                                    style="max-width:160px; margin-bottom:12px;" />
+                                <h1 style="color:#ffffff; margin:0; font-size:26px;">
+                                    Product Back In Stock | TD SYNNEX SURFACE
+                                </h1>
+                            </td>
+                        </tr>
+
+                        <!-- INTRO -->
+                        <tr>
+                            <td style="padding:30px 30px 0 30px; color:#333;">
+                                <p style="margin:0 0 8px; font-size:14px;"><strong>Hello 
+                                    </strong>${email},</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:0 30px; color:#333;">
+                                <p style="font-size:15px; line-height:1.6;">
+                                    Your Subscribed Product <b>${product} (${sku})</b> is now back in stock!
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:0 30px; color:#333;">
+                                <p style="font-size:15px; line-height:1.6;">
+                                    You can now add this product directly to your cart ${productUrl}
+                                </p>
+                                <p>
+                                    Thank you for using TD SYNNEX SURFACE!
+                                </p>
+                            </td>
+                        </tr>
+
+                        <!-- Footer -->
+                        <tr>
+                            <td
+                                style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666;">
+                                <p style="margin:0;">
+                                    Best regards,<br>
+                                    <strong>The TD SYNNEX Team</strong>
+                                </p>
+                            </td>
+                        </tr>
+
+                    </table>
+
+                </td>
+            </tr>
+        </table>
+    </div>
+        `,
+    }),
+
+
     approvedUserEmail: (email: string) => ({
         subject: `User Approved | TD SYNNEX SURFACE`,
         text: `Hi ${email},
@@ -3031,7 +3683,7 @@ export const emailTemplates = {
 
             You can now log in and start using the TD SYNNEX portal.
 
-            Login: https://tdsynnex.vercel.app/login
+            Login: ${process.env.NEXT_PUBLIC_APP_URL}/login
 
             If you have any questions or experience issues accessing your account,
             please contact our support team.
@@ -3105,6 +3757,7 @@ export const emailTemplates = {
         </table>
     </div>`,
     }),
+
 
     rejectedUserEmail: (email: string) => ({
         subject: `User Rejected | TD SYNNEX SURFACE`,
@@ -3209,6 +3862,7 @@ The TD SYNNEX Team`,
     `,
     }),
 
+
     // Order Confirmation Email
     orderConfirmation: (orderNo: string, customerName: string, orderDetails: any) => ({
         subject: `Order Confirmation - ${orderNo}`,
@@ -3239,6 +3893,7 @@ The TD SYNNEX Team`,
       </div>
     `,
     }),
+
 
     // Simple Notification Email
     notification: (title: string, message: string, recipientName: string) => ({

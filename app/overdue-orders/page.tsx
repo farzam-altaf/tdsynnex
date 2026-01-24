@@ -43,6 +43,7 @@ import { toast } from "sonner"
 import { supabase } from "@/lib/supabase/client"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import Link from "next/link"
+import { emailTemplates, sendEmail } from "@/lib/email"
 
 // Define Order type based on your Supabase table
 export type Order = {
@@ -351,7 +352,8 @@ export default function Page() {
         }));
     };
 
-    // Handle sending reminders
+    // Replace the existing handleSendReminders function with this updated version:
+
     const handleSendReminders = async () => {
         const selectedOrderIds = Object.keys(selectedRows).filter(id => selectedRows[id]);
 
@@ -365,16 +367,167 @@ export default function Page() {
         setIsSendingReminders(true);
 
         try {
-            // Get selected orders
-            const selectedOrdersData = orders.filter(order => selectedOrderIds.includes(order.id));
+            // Get selected orders with user data
+            const { data: selectedOrdersData, error: orderError } = await supabase
+                .from('orders')
+                .select(`
+                *,
+                users:order_by (
+                    id,
+                    email
+                )
+            `)
+                .in('id', selectedOrderIds);
 
+            if (orderError) throw orderError;
 
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            if (!selectedOrdersData || selectedOrdersData.length === 0) {
+                toast.error("No orders found", {
+                    style: { color: "white", backgroundColor: "red" }
+                });
+                return;
+            }
 
-            toast.success(`Reminders sent successfully for ${selectedOrderIds.length} order(s)`, {
-                style: { color: "white", backgroundColor: "black" }
+            // Prepare and send emails for each order
+            const emailPromises = selectedOrdersData.map(async (order) => {
+                // Check if user has email
+                if (!order.users?.email) {
+                    console.warn(`No email found for user with ID: ${order.order_by}`);
+                    return {
+                        success: false,
+                        orderId: order.id,
+                        orderNumber: order.order_no,
+                        reason: 'User email not found'
+                    };
+                }
+
+                try {
+                    // Get product details if available
+                    let productName = "Standard Device Package";
+                    let productSlug = "-";
+                    let quantity = 1;
+
+                    if (order.product_id) {
+                        const { data: productData } = await supabase
+                            .from('products')
+                            .select('product_name, slug')
+                            .eq('id', order.product_id)
+                            .single();
+
+                        if (productData) {
+                            productName = productData.product_name;
+                            productSlug = productData.slug;
+                        }
+                    }
+
+                    const daysSinceShipped = calculateDaysShipped(order.shipped_date);
+                    const daysOverdue = calculateDaysOverdue(order.shipped_date);
+
+                    // Prepare days count text with overdue info
+                    let daysCountText = `${daysSinceShipped} days`;
+                    if (daysOverdue > 0) {
+                        daysCountText += ` (${daysOverdue} days overdue)`;
+                    }
+
+                    // Prepare email data
+                    const emailData = {
+                        orderNumber: order.order_no,
+                        orderDate: formatDate(order.order_date),
+                        productName: productName,
+                        productSlug: productSlug,
+                        quantity: quantity,
+                        returnTracking: order.return_tracking || "Not provided yet",
+                        fileLink: order.return_label || "https://tdsynnex.vercel.app",
+                        salesExecutive: order.sales_executive || "N/A",
+                        salesExecutiveEmail: order.se_email || "N/A",
+                        salesManager: order.sales_manager || "N/A",
+                        salesManagerEmail: order.sm_email || "N/A",
+                        companyName: order.company_name || "N/A",
+                        contactEmail: order.email || "N/A",
+                        shippedDate: formatDate(order.shipped_date),
+                        daysCount: daysCountText,
+                        note: order.notes || "Please return the device as soon as possible.",
+                        customerName: order.company_name || "Customer",
+                        customerEmail: order.users.email
+                    };
+
+                    // Get email template
+                    const template = emailTemplates.returnReminderCronEmail({
+                        orderNumber: emailData.orderNumber,
+                        orderDate: emailData.orderDate,
+                        customerName: emailData.customerName,
+                        customerEmail: emailData.customerEmail,
+                        productName: emailData.productName,
+                        quantity: emailData.quantity,
+                        returnTracking: emailData.returnTracking,
+                        fileLink: emailData.fileLink,
+                        salesExecutive: emailData.salesExecutive,
+                        salesExecutiveEmail: emailData.salesExecutiveEmail,
+                        salesManager: emailData.salesManager,
+                        salesManagerEmail: emailData.salesManagerEmail,
+                        companyName: emailData.companyName,
+                        contactEmail: emailData.contactEmail,
+                        shippedDate: emailData.shippedDate,
+                        productSlug: emailData.productSlug,
+                        daysCount: emailData.daysCount
+                    });
+
+                    // Send email
+                    await sendEmail({
+                        to: order.users.email,
+                        subject: template.subject,
+                        text: template.text,
+                        html: template.html,
+                    });
+
+                    // Log email sent in orders table (optional)
+                    await supabase
+                        .from('orders')
+                        .update({
+                            notes: order.notes
+                                ? `${order.notes}\n[Reminder sent on ${new Date().toLocaleDateString()}]`
+                                : `[Reminder sent on ${new Date().toLocaleDateString()}]`,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', order.id);
+
+                    return {
+                        success: true,
+                        orderId: order.id,
+                        orderNumber: order.order_no,
+                        email: order.users.email
+                    };
+
+                } catch (emailError: any) {
+                    console.error(`Failed to send email for order ${order.order_no}:`, emailError);
+                    return {
+                        success: false,
+                        orderId: order.id,
+                        orderNumber: order.order_no,
+                        reason: emailError.message || 'Email sending failed'
+                    };
+                }
             });
+
+            // Wait for all emails to be sent
+            const results = await Promise.all(emailPromises);
+
+            // Count success and failures
+            const successful = results.filter(r => r.success).length;
+            const failed = results.filter(r => !r.success).length;
+
+            // Show summary toast
+            if (successful > 0) {
+                toast.success(`Reminders sent successfully for ${successful} order(s)${failed > 0 ? `, ${failed} failed` : ''}`, {
+                    style: { color: "white", backgroundColor: "black" }
+                });
+            }
+
+            if (failed > 0) {
+                toast.error(`Failed to send ${failed} reminder(s)`, {
+                    style: { color: "white", backgroundColor: "red" }
+                });
+            }
 
             // Clear selection after sending
             setSelectedRows({});

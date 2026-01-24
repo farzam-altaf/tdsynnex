@@ -310,27 +310,26 @@ export default function Page() {
         }
     }, [authChecked, authInitialized]);
 
-    
-        const sendWinEmail = async () => {
-            try {
-                const template = emailTemplates.waitListEmail({
-                    email: profile?.email || "",
-                    sku: product?.sku || "",
-                    product: product?.product_name || ""
-                });
-    
-                await sendEmail({
-                    // to: profile?.email || "",
-                    to: "farzamaltaf888@gmail.com",
-                    subject: template.subject,
-                    text: template.text,
-                    html: template.html,
-                });
-    
-            } catch (error) {
-                toast.error("Failed to send checkout email. Please try again.");
-            }
-        };
+
+    const sendWinEmail = async () => {
+        try {
+            const template = emailTemplates.waitListEmail({
+                email: profile?.email || "",
+                sku: product?.sku || "",
+                product: product?.product_name || ""
+            });
+
+            await sendEmail({
+                to: profile?.email || "",
+                subject: template.subject,
+                text: template.text,
+                html: template.html,
+            });
+
+        } catch (error) {
+            toast.error("Failed to send checkout email. Please try again.");
+        }
+    };
 
     // Optional: prevent UI flicker - MUST BE AFTER ALL HOOKS
     if (isLoggedIn === null) {
@@ -1035,7 +1034,7 @@ export default function Page() {
                                                 <button
                                                     onClick={handleAddToWaitlist}
                                                     disabled={isAddingToWaitlist}
-                                                    className="w-full px-6 py-3 bg-[#0A4647] text-white rounded-md hover:bg-[#08393a] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                                                    className="w-full px-6 py-3 bg-[#0A4647] cursor-pointer text-white rounded-md hover:bg-[#08393a] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                                                 >
                                                     {isAddingToWaitlist ? (
                                                         <>
@@ -1158,4 +1157,4 @@ export default function Page() {
             </div>
         </div>
     );
-}
+}   
