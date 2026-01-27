@@ -152,7 +152,7 @@ export const emailTemplates = {
         formId?: string;
     }) => ({
         subject: `New User Registration | TD SYNNEX (Awaiting Approval)`,
-        text: `Dear Program Manager(s),\n\nYou have received a new user registration on TD Synnex.\nPlease review to approve or reject this user.\n\nReview Pending User(s)\n\nBelow are the details for this user:\n \nEmail (Username): ${userData.email}\nFirst Name: ${userData.firstName}\nLast Name: ${userData.lastName}\nReseller: ${userData.reseller}\n\nPlease login to the admin panel to review this user.\n\nBest regards,\nTDsynnex Team`,
+        text: `Dear Program Manager(s),\n\nYou have received a new user registration on TD Synnex.\nPlease review to approve or reject this user.\n\nReview Pending User(s)\n\nBelow are the details for this user:\n \nEmail (Username): ${userData.email}\nFirst Name: ${userData.firstName}\nLast Name: ${userData.lastName}\nReseller: ${userData.reseller}\n\nPlease login to the admin panel to review this user.\n\nBest regards,\nTD SYNNEX Team`,
         html: `
       <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 0;">
         <!-- Header with Logo -->
@@ -2425,7 +2425,7 @@ export const emailTemplates = {
                                 style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666;">
                                 <p style="margin:0;">
                                     Best regards,<br>
-                                    <strong>The TDsynnex Team</strong>
+                                    <strong>The TD SYNNEX Team</strong>
                                 </p>
                             </td>
                         </tr>
@@ -2887,7 +2887,7 @@ export const emailTemplates = {
                                 style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666;">
                                 <p style="margin:0;">
                                     Best regards,<br>
-                                    <strong>The TDsynnex Team</strong>
+                                    <strong>The TD SYNNEX Team</strong>
                                 </p>
                             </td>
                         </tr>
@@ -3902,8 +3902,8 @@ The TD SYNNEX Team`,
 
     // Password Reset Email
     passwordReset: (name: string, resetLink: string) => ({
-        subject: 'Reset Your TDsynnex Password',
-        text: `Hello ${name},\n\nYou requested to reset your password. Click the link below:\n\n${resetLink}\n\nThis link will expire in 1 hour.\n\nIf you didn't request this, please ignore this email.\n\nBest regards,\nTDsynnex Team`,
+        subject: 'Reset Your TD SYNNEX Password',
+        text: `Hello ${name},\n\nYou requested to reset your password. Click the link below:\n\n${resetLink}\n\nThis link will expire in 1 hour.\n\nIf you didn't request this, please ignore this email.\n\nBest regards,\nTD SYNNEX Team`,
         html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2 style="color: #3ba1da; text-align: center;">Reset Your Password</h2>
@@ -3922,7 +3922,7 @@ The TD SYNNEX Team`,
         </p>
         
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
-          <p>Best regards,<br><strong>TDsynnex Team</strong></p>
+          <p>Best regards,<br><strong>TD SYNNEX Team</strong></p>
         </div>
       </div>
     `,
@@ -3932,7 +3932,7 @@ The TD SYNNEX Team`,
     // Order Confirmation Email
     orderConfirmation: (orderNo: string, customerName: string, orderDetails: any) => ({
         subject: `Order Confirmation - ${orderNo}`,
-        text: `Hello ${customerName},\n\nThank you for your order!\n\nOrder Number: ${orderNo}\nStatus: ${orderDetails.status}\nTotal: $${orderDetails.total}\n\nBest regards,\nTDsynnex Team`,
+        text: `Hello ${customerName},\n\nThank you for your order!\n\nOrder Number: ${orderNo}\nStatus: ${orderDetails.status}\nTotal: $${orderDetails.total}\n\nBest regards,\nTD SYNNEX Team`,
         html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2 style="color: #3ba1da; text-align: center;">✅ Order Confirmed!</h2>
@@ -3954,7 +3954,7 @@ The TD SYNNEX Team`,
         </div>
         
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
-          <p>Best regards,<br><strong>TDsynnex Team</strong></p>
+          <p>Best regards,<br><strong>TD SYNNEX Team</strong></p>
         </div>
       </div>
     `,
@@ -3964,7 +3964,7 @@ The TD SYNNEX Team`,
     // Simple Notification Email
     notification: (title: string, message: string, recipientName: string) => ({
         subject: `Notification: ${title}`,
-        text: `Hello ${recipientName},\n\n${message}\n\nBest regards,\nTDsynnex Team`,
+        text: `Hello ${recipientName},\n\n${message}\n\nBest regards,\nTD SYNNEX Team`,
         html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2 style="color: #3ba1da;">📢 ${title}</h2>
@@ -3973,7 +3973,7 @@ The TD SYNNEX Team`,
           <p style="margin: 0; font-size: 16px; line-height: 1.6;">${message}</p>
         </div>
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
-          <p>Best regards,<br><strong>TDsynnex Team</strong></p>
+          <p>Best regards,<br><strong>TD SYNNEX Team</strong></p>
         </div>
       </div>
     `,
