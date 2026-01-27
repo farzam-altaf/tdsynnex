@@ -524,6 +524,17 @@ export const emailTemplates = {
             Once your order is approved, you will receive a confirmation email,
             after which it will be shipped to your customer.
 
+            <tr>
+                <td style="padding:0 0 30px 0;">
+                    <img 
+                        src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step1.png" 
+                        alt="Thank you for your order" 
+                        style="width:100%; max-width:720px; height:auto; display:block;"
+                        width="720"
+                    />
+                </td>
+            </tr>
+
             ORDER ITEMS
             Product: ${productName}
             Quantity: ${quantity}
@@ -991,6 +1002,16 @@ export const emailTemplates = {
                             </td>
                         </tr>
 
+                        <tr>
+                            <td style="padding:0 0 30px 0;">
+                                <img 
+                                    src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step1.png" 
+                                    alt="Thank you for your order" 
+                                    style="width:100%; max-width:720px; height:auto; display:block;"
+                                    width="720"
+                                />
+                            </td>
+                        </tr>
                         <!-- PRODUCTS -->
                         <tr>
                             <td style="padding:0 30px 30px;">
@@ -1383,6 +1404,17 @@ export const emailTemplates = {
                                 <p>
                                     If you have any questions please contact us at support@tdsynnex-surface.com.
                                 </p>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="padding:0 0 30px 0;">
+                                <img 
+                                    src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step1.png" 
+                                    alt="Thank you for your order" 
+                                    style="width:100%; max-width:720px; height:auto; display:block;"
+                                    width="720"
+                                />
                             </td>
                         </tr>
 
@@ -2172,6 +2204,17 @@ export const emailTemplates = {
                             </td>
                         </tr>
 
+                        
+                        <tr>
+                            <td style="padding:0 0 30px 0;">
+                                <img 
+                                    src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step4.png" 
+                                    alt="Thank you for your order" 
+                                    style="width:100%; max-width:720px; height:auto; display:block;"
+                                    width="720"
+                                />
+                            </td>
+                        </tr>
 
                         <!-- PRODUCTS -->
                         <tr>
@@ -2560,6 +2603,18 @@ export const emailTemplates = {
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Order Shipped #${orderNumber}
                                 </h1>
+                            </td>
+                        </tr>
+
+                        
+                        <tr>
+                            <td style="padding:0 0 30px 0;">
+                                <img 
+                                    src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step1.png" 
+                                    alt="Thank you for your order" 
+                                    style="width:100%; max-width:720px; height:auto; display:block;"
+                                    width="720"
+                                />
                             </td>
                         </tr>
 
@@ -3387,6 +3442,18 @@ export const emailTemplates = {
                             <td style="padding:30px 30px 0 30px; color:#333;">
                                 <p style="margin:0 0 8px; font-size:14px;"><strong>Submitted by:
                                     </strong>${submittedEmail}</p>
+                            </td>
+                        </tr>
+
+                                    
+                        <tr>
+                            <td style="padding:0 0 30px 0;">
+                                <img 
+                                    src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step1.png" 
+                                    alt="Thank you for your order" 
+                                    style="width:100%; max-width:720px; height:auto; display:block;"
+                                    width="720"
+                                />
                             </td>
                         </tr>
 
