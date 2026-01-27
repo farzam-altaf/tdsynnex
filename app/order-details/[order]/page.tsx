@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Pencil } from "lucide-react"
+import { ChevronDown, ExternalLink, Pencil } from "lucide-react"
 import {
     Select,
     SelectContent,
@@ -32,6 +32,7 @@ import {
 import Link from "next/link"
 import { emailTemplates, sendEmail } from "@/lib/email"
 import { toast } from "sonner"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 export type Product = {
     id: string;
@@ -118,6 +119,11 @@ export type Order = {
         id: string
         email: string
     }
+    wins?: { // Add this for the join
+        id: string;
+        order_id: string;
+        created_at: string;
+    }[];
 }
 
 export default function Page() {
@@ -213,16 +219,17 @@ export default function Page() {
             let query = supabase
                 .from('orders')
                 .select(`
-                    *,
-                    products!inner(
                         *,
-                        processor_filter:processor(title),
-                        form_factor_filter:form_factor(title)
-                    ),
-                    approved_user:users!orders_approved_by_fkey(id, email),
-                    rejected_user:users!orders_rejected_by_fkey(id, email),
-                    order_by_user:users!orders_order_by_fkey(id, email)
-                `)
+                        products!inner(
+                            *,
+                            processor_filter:processor(title),
+                            form_factor_filter:form_factor(title)
+                        ),
+                        approved_user:users!orders_approved_by_fkey(id, email),
+                        rejected_user:users!orders_rejected_by_fkey(id, email),
+                        order_by_user:users!orders_order_by_fkey(id, email),
+                        wins:wins(*) 
+                    `)
                 .eq('order_no', orderHash);
 
             const { data, error: supabaseError } = await query;
@@ -232,6 +239,8 @@ export default function Page() {
             }
 
             if (data) {
+
+                console.log("data :", data)
 
                 if (sRole == profile?.role && data[0].order_by !== profile?.id) {
                     router.back();
@@ -295,6 +304,62 @@ export default function Page() {
 
         } catch (err) {
         }
+    };
+
+    // Helper functions for date calculations
+    const calculateDaysShipped = (shippedDate: string | null): number => {
+        if (!shippedDate) return 0;
+
+        const shipped = new Date(shippedDate);
+        const today = new Date();
+
+        // Calculate difference in days
+        const diffTime = Math.abs(today.getTime() - shipped.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        return diffDays;
+    };
+
+    const calculateEstimatedReturnDate = (shippedDate: string | null): Date | null => {
+        if (!shippedDate) return null;
+
+        const shipped = new Date(shippedDate);
+        const estimatedReturn = new Date(shipped);
+        estimatedReturn.setDate(shipped.getDate() + 45);
+
+        return estimatedReturn;
+    };
+
+    const formatEstimatedReturnDate = (shippedDate: string | null): string => {
+        const date = calculateEstimatedReturnDate(shippedDate);
+        if (!date) return "-";
+
+        return date.toLocaleDateString();
+    };
+
+    const hasReturnDatePassed = (shippedDate: string | null): boolean => {
+        if (!shippedDate) return false;
+
+        const estimatedReturnDate = calculateEstimatedReturnDate(shippedDate);
+        if (!estimatedReturnDate) return false;
+
+        const today = new Date();
+        // Set both dates to midnight for accurate day comparison
+        const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const returnDateMidnight = new Date(
+            estimatedReturnDate.getFullYear(),
+            estimatedReturnDate.getMonth(),
+            estimatedReturnDate.getDate()
+        );
+
+        return returnDateMidnight < todayMidnight;
+    };
+
+    const calculateDaysOverdue = (shippedDate: string | null): number => {
+        if (!shippedDate) return 0;
+
+        const daysShipped = calculateDaysShipped(shippedDate);
+        return Math.max(0, daysShipped - 45);
     };
 
     const handleReject = async () => {
@@ -1343,15 +1408,17 @@ export default function Page() {
 
         return (
             <div className="flex items-start justify-between">
-                <div className="flex-1">
-                    <b>Notes: </b>
-                    <span>{order.notes || "-"}</span>
+                <div className="flex-1 min-w-0">
+                    <b className="block mb-2">Notes:</b>
+                    <div className="whitespace-pre-wrap wrap-break-word max-h-30 overflow-y-auto pr-2 border border-gray-200 rounded p-2 bg-white">
+                        {order.notes || "No notes available"}
+                    </div>
                 </div>
                 {isActionAuthorized && (
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="group-hover:opacity-100 transition-opacity h-6 w-6 p-0 ml-2 cursor-pointer"
+                        className="group-hover:opacity-100 transition-opacity h-6 w-6 p-0 ml-2 cursor-pointer shrink-0"
                         onClick={() => handleEditClick("notes", order.notes || "", "notes")}
                     >
                         <Pencil className="h-3 w-3" />
@@ -1845,7 +1912,7 @@ export default function Page() {
                                     </TableCell>
                                 </TableRow>
                                 <TableRow>
-                                    <TableCell colSpan={2}>
+                                    <TableCell colSpan={2} className="py-3">
                                         {renderNotesCell()}
                                     </TableCell>
                                 </TableRow>
@@ -1875,6 +1942,129 @@ export default function Page() {
                     </div>
 
                     {renderTrackingSection()}
+
+                    {/* Days Since Shipped & Overdue Status Section */}
+                    {order.shipped_date && (
+                        <div>
+                            <Table className="border">
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }} colSpan={2}>
+                                            Shipment Status
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    <TableRow>
+                                        <TableCell className="font-semibold">Days Since Shipped</TableCell>
+                                        <TableCell className="border-l">
+                                            <div className="flex items-center">
+                                                {order.shipped_date ? (
+                                                    (() => {
+                                                        const daysShipped = calculateDaysShipped(order.shipped_date);
+                                                        const daysOverdue = calculateDaysOverdue(order.shipped_date);
+                                                        const isOverdue = daysOverdue > 0;
+
+                                                        return (
+                                                            <span className={isOverdue ? "text-red-600 font-semibold" : ""}>
+                                                                {daysShipped} days
+                                                                {isOverdue && ` (${daysOverdue} days overdue)`}
+                                                            </span>
+                                                        );
+                                                    })()
+                                                ) : (
+                                                    <span className="text-gray-500">Not shipped yet</span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                        <TableCell className="font-semibold">Estimated Return Date</TableCell>
+                                        <TableCell className="border-l">
+                                            <div className="flex items-center">
+                                                {order.shipped_date ? (
+                                                    (() => {
+                                                        const estimatedDate = calculateEstimatedReturnDate(order.shipped_date);
+                                                        const hasPassed = hasReturnDatePassed(order.shipped_date);
+
+                                                        return (
+                                                            <span className={hasPassed ? "text-red-600 font-semibold" : ""}>
+                                                                {formatEstimatedReturnDate(order.shipped_date)}
+                                                                {hasPassed && " (Passed)"}
+                                                            </span>
+                                                        );
+                                                    })()
+                                                ) : (
+                                                    <span className="text-gray-500">Not shipped yet</span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                        <TableCell className="font-semibold">Win Status</TableCell>
+                                        <TableCell className="border-l">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center">
+                                                    {order.wins && order.wins.length > 0 ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-green-600 font-semibold">
+                                                                Win Reported
+                                                            </span>
+                                                            {order.wins[0]?.id && (
+                                                                <Link
+                                                                    href={`/view-windetails/${order.wins[0].id}`}
+                                                                    target="_blank"
+                                                                    className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                                                    title="View Win Details"
+                                                                >
+                                                                    <ExternalLink className="h-4 w-4 ml-1" />
+                                                                </Link>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-amber-600 font-semibold">
+                                                            Win Not Reported
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* Agar multiple wins hain toh dropdown show karein */}
+                                                {order.wins && order.wins.length > 1 && (
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-6 w-6 p-0 cursor-pointer"
+                                                            >
+                                                                <ChevronDown className="h-3 w-3" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuLabel>Multiple Wins</DropdownMenuLabel>
+                                                            <DropdownMenuSeparator />
+                                                            {order.wins.map((win, index) => (
+                                                                <DropdownMenuItem key={win?.id}>
+                                                                    <Link
+                                                                        href={`/view-windetails/${win?.id}`}
+                                                                        target="_blank"
+                                                                        className="flex items-center gap-2 w-full cursor-pointer"
+                                                                    >
+                                                                        <ExternalLink className="h-3 w-3" />
+                                                                        Win #{index + 1}
+                                                                    </Link>
+                                                                </DropdownMenuItem>
+                                                            ))}
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
