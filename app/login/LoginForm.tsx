@@ -56,24 +56,37 @@ export default function LoginForm() {
 
   }, [initialLoadingComplete, loading, isLoggedIn, profile, router, searchParams]);
 
+
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    let current = 0;
+
+    const interval = setInterval(() => {
+      current += 2; // speed control (2% per tick)
+
+      if (current >= 90) {
+        current = 90;
+        clearInterval(interval);
+      }
+
+      setProgress(current);
+    }, 30); // smooth animation
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Show loading spinner for initial 1.2 seconds
   if (!showContent) {
     return (
       <div className="relative min-h-screen">
         {/* Background image */}
         <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: "url('/computer-mouse-object-background.jpg')",
-          }}
+          className="bg-white"
         />
-
-        {/* White overlay for entire content area */}
-        <div className="absolute inset-0 top-0 bg-white/92"></div>
 
         {/* Loading content - Only shows for first 1.2 seconds */}
         <div className="relative flex items-center justify-center min-h-screen px-3 py-22 lg:px-8">
-          <div className="relative z-10 w-full max-w-md rounded-2xl border-8 border-gray-100 bg-white sm:px-13 px-6 py-14">
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white sm:px-13 px-6 py-14">
             <div className="sm:mx-auto sm:w-full sm:max-w-sm">
               {/* Logo */}
               <div className="flex justify-center mb-8">
@@ -87,8 +100,8 @@ export default function LoginForm() {
               {/* Progress bar */}
               <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
                 <div
-                  className="bg-[#3ba1da] h-2.5 rounded-full animate-pulse"
-                  style={{ width: '70%' }}>
+                  className="bg-[#35c8dc] h-2.5 rounded-full animate-pulse"
+                  style={{ width: `${progress}%` }}>
                 </div>
               </div>
 
@@ -109,18 +122,12 @@ export default function LoginForm() {
       <div className="relative min-h-screen">
         {/* Background image */}
         <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: "url('/computer-mouse-object-background.jpg')",
-          }}
+          className="bg-white"
         />
-
-        {/* White overlay for entire content area */}
-        <div className="absolute inset-0 top-0 bg-white/92"></div>
 
         {/* Redirecting content */}
         <div className="relative flex items-center justify-center min-h-screen px-3 py-22 lg:px-8">
-          <div className="relative z-10 w-full max-w-md rounded-2xl border-8 border-gray-100 bg-white sm:px-13 px-6 py-14">
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white sm:px-13 px-6 py-14">
             <div className="sm:mx-auto sm:w-full sm:max-w-sm">
               {/* Logo */}
               <div className="flex justify-center mb-8">
@@ -133,7 +140,7 @@ export default function LoginForm() {
 
               {/* Spinner */}
               <div className="flex justify-center mb-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3ba1da]"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#35c8dc]"></div>
               </div>
 
               {/* Redirecting text */}
@@ -153,18 +160,12 @@ export default function LoginForm() {
       <div className="relative min-h-screen">
         {/* Background image */}
         <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: "url('/computer-mouse-object-background.jpg')",
-          }}
+          className="bg-white"
         />
-
-        {/* White overlay for entire content area */}
-        <div className="absolute inset-0 top-0 bg-white/92"></div>
 
         {/* Auth loading content */}
         <div className="relative flex items-center justify-center min-h-screen px-3 py-22 lg:px-8">
-          <div className="relative z-10 w-full max-w-md rounded-2xl border-8 border-gray-100 bg-white sm:px-13 px-6 py-14">
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white sm:px-13 px-6 py-14">
             <div className="sm:mx-auto sm:w-full sm:max-w-sm">
               {/* Logo */}
               <div className="flex justify-center mb-8">
@@ -177,7 +178,7 @@ export default function LoginForm() {
 
               {/* Spinner */}
               <div className="flex justify-center mb-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3ba1da]"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#35c8dc]"></div>
               </div>
 
               {/* Loading text */}
@@ -310,7 +311,7 @@ export default function LoginForm() {
       sendLoginEmail("User", email); // Use the email they logged in with
     }
 
-    setEmail(""); 
+    setEmail("");
     setPassword("");
     const redirectTo = searchParams.get("redirect_to");
     router.push(redirectTo ? `/${redirectTo}` : "/");

@@ -1003,7 +1003,7 @@ export const emailTemplates = {
                         </tr>
 
                         <tr>
-                            <td style="padding:0 0 30px 0;">
+                            <td style="padding: 30px;">
                                 <img 
                                     src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step1.png" 
                                     alt="Thank you for your order" 
@@ -1408,7 +1408,7 @@ export const emailTemplates = {
                         </tr>
 
                         <tr>
-                            <td style="padding:0 0 30px 0;">
+                            <td style="padding: 30px;">
                                 <img 
                                     src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step2.png" 
                                     alt="Thank you for your order" 
@@ -2206,7 +2206,7 @@ export const emailTemplates = {
 
                         
                         <tr>
-                            <td style="padding:0 0 30px 0;">
+                            <td style="padding:30px;">
                                 <img 
                                     src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step4.png" 
                                     alt="Thank you for your order" 
@@ -2606,18 +2606,6 @@ export const emailTemplates = {
                             </td>
                         </tr>
 
-                        
-                        <tr>
-                            <td style="padding:0 0 30px 0;">
-                                <img 
-                                    src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step3.png" 
-                                    alt="Thank you for your order" 
-                                    style="width:100%; max-width:720px; height:auto; display:block;"
-                                    width="720"
-                                />
-                            </td>
-                        </tr>
-
                         <!-- INTRO -->
                         <tr>
                             <td style="padding:30px 30px 0 30px; color:#333;">
@@ -2629,6 +2617,17 @@ export const emailTemplates = {
                                 <p style="color:#666; margin:0 0 20px; font-size:15px;">Your order on TD SYNNEX has been
                                     shipped. You can find below Tracking information and Return Label for your order.
                                 </p>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="padding: 30px;">
+                                <img 
+                                    src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step3.png" 
+                                    alt="Thank you for your order" 
+                                    style="width:100%; max-width:720px; height:auto; display:block;"
+                                    width="720"
+                                />
                             </td>
                         </tr>
 
@@ -3447,7 +3446,7 @@ export const emailTemplates = {
 
                                     
                         <tr>
-                            <td style="padding:0 0 30px 0;">
+                            <td style="padding:30px;">
                                 <img 
                                     src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step5.png" 
                                     alt="Thank you for your order" 
