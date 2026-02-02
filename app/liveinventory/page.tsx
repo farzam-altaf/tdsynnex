@@ -14,6 +14,7 @@ import {
     type VisibilityState,
 } from "@tanstack/react-table"
 import { ArrowUpDown, ChevronDown, MoreHorizontal, Edit, Key, CheckCircle, XCircle, View, Eye, Trash } from "lucide-react"
+import { logActivity, logError, logSuccess, logInfo, logWarning } from "@/lib/logger";
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useAuth } from "../context/AuthContext"
@@ -57,6 +58,7 @@ import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase/client"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { PlusOutlined } from "@ant-design/icons"
+import { toast } from "sonner";
 
 // Define Product type based on your Supabase table
 export type Product = {
@@ -143,6 +145,21 @@ export default function Page() {
 
     // Fetch products data from Supabase with joins to filters table
     const fetchProducts = async () => {
+        const startTime = Date.now();
+
+        // Log fetch attempt
+        await logActivity({
+            type: 'product',
+            level: 'info',
+            action: 'products_fetch_attempt',
+            message: 'Attempting to fetch products',
+            userId: profile?.id || null,
+            details: {
+                userRole: profile?.role,
+                isActionAuthorized
+            }
+        });
+
         try {
             setIsLoading(true);
             setError(null);
@@ -158,6 +175,19 @@ export default function Page() {
                 .order('product_name', { ascending: true });
 
             if (productsError) {
+                await logActivity({
+                    type: 'product',
+                    level: 'error',
+                    action: 'products_fetch_failed',
+                    message: `Failed to fetch products: ${productsError.message}`,
+                    userId: profile?.id || null,
+                    details: {
+                        error: productsError,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
                 throw productsError;
             }
 
@@ -177,9 +207,37 @@ export default function Page() {
                     processor_title: product.processor_filter?.title || null,
                     form_factor_title: product.form_factor_filter?.title || null
                 }));
+
+                await logActivity({
+                    type: 'product',
+                    level: 'success',
+                    action: 'products_fetch_success',
+                    message: `Successfully fetched ${transformedProducts.length} products`,
+                    userId: profile?.id || null,
+                    details: {
+                        productsCount: transformedProducts.length,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'completed'
+                });
+
                 setProducts(transformedProducts as Product[]);
             }
         } catch (err: unknown) {
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'products_fetch_error',
+                message: 'Failed to fetch products',
+                userId: profile?.id || null,
+                details: {
+                    error: err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch products');
             } else {
@@ -192,6 +250,19 @@ export default function Page() {
 
     // Alternative fetch method if the above doesn't work
     const fetchProductsAlternative = async () => {
+        const startTime = Date.now();
+
+        await logActivity({
+            type: 'product',
+            level: 'info',
+            action: 'products_alternative_fetch_attempt',
+            message: 'Attempting alternative method to fetch products',
+            userId: profile?.id || null,
+            details: {
+                userRole: profile?.role
+            }
+        });
+
         try {
             setIsLoading(true);
             setError(null);
@@ -202,14 +273,44 @@ export default function Page() {
                 .select('*')
                 .order('product_name', { ascending: true });
 
-            if (productsError) throw productsError;
+            if (productsError) {
+                await logActivity({
+                    type: 'product',
+                    level: 'error',
+                    action: 'products_fetch_failed',
+                    message: `Failed to fetch products: ${productsError.message}`,
+                    userId: profile?.id || null,
+                    details: {
+                        error: productsError,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
+                throw productsError;
+            }
 
             // Fetch filters
             const { data: filtersData, error: filtersError } = await supabase
                 .from('filters')
                 .select('id, title');
 
-            if (filtersError) throw filtersError;
+            if (filtersError) {
+                await logActivity({
+                    type: 'product',
+                    level: 'error',
+                    action: 'filters_fetch_failed',
+                    message: `Failed to fetch filters: ${filtersError.message}`,
+                    userId: profile?.id || null,
+                    details: {
+                        error: filtersError,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
+                throw filtersError;
+            }
 
             // Create a map of filter IDs to titles
             const filterMap = new Map();
@@ -235,9 +336,37 @@ export default function Page() {
                 form_factor_title: product.form_factor ? filterMap.get(product.form_factor) || null : null
             }));
 
+            await logActivity({
+                type: 'product',
+                level: 'success',
+                action: 'products_fetch_success',
+                message: `Successfully fetched ${transformedProducts?.length || 0} products using alternative method`,
+                userId: profile?.id || null,
+                details: {
+                    productsCount: transformedProducts?.length || 0,
+                    filtersCount: filtersData?.length || 0,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
+
             setProducts(transformedProducts || []);
 
         } catch (err: unknown) {
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'products_fetch_error',
+                message: 'Failed to fetch products using alternative method',
+                userId: profile?.id || null,
+                details: {
+                    error: err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch products');
             } else {
@@ -257,22 +386,77 @@ export default function Page() {
     }, [loading, isLoggedIn, profile, isAuthorized]);
 
     // Handle view product
-    const handleViewProduct = (product: Product) => {
+    const handleViewProduct = async (product: Product) => {
+        await logActivity({
+            type: 'ui',
+            level: 'info',
+            action: 'product_view_clicked',
+            message: `User clicked to view product ${product.product_name}`,
+            userId: profile?.id || null,
+            productId: product.id,
+            details: {
+                productName: product.product_name,
+                sku: product.sku,
+                userRole: profile?.role
+            }
+        });
+
         router.push(`/product/${product.slug}`)
     };
 
     // Handle edit product
-    const handleEditProduct = (product: Product) => {
+    const handleEditProduct = async (product: Product) => {
+        await logActivity({
+            type: 'ui',
+            level: 'info',
+            action: 'product_edit_clicked',
+            message: `User clicked to edit product ${product.product_name}`,
+            userId: profile?.id || null,
+            productId: product.id,
+            details: {
+                productName: product.product_name,
+                sku: product.sku,
+                userRole: profile?.role
+            }
+        });
+
         router.push(`/add-device?_=${product.slug}`)
     };
 
     // Handle add product
-    const handleAddProduct = () => {
+    const handleAddProduct = async () => {
+        await logActivity({
+            type: 'ui',
+            level: 'info',
+            action: 'product_add_clicked',
+            message: 'User clicked to add new product',
+            userId: profile?.id || null,
+            details: {
+                userRole: profile?.role
+            }
+        });
         router.push(`/add-device`)
     };
 
     const handleSaveEdit = async () => {
         if (!editProduct) return;
+
+        const startTime = Date.now();
+
+        // Log edit attempt
+        await logActivity({
+            type: 'product',
+            level: 'info',
+            action: 'product_edit_save_attempt',
+            message: `Attempting to save edits for product ${editProduct.product_name}`,
+            userId: profile?.id || null,
+            productId: editProduct.id,
+            details: {
+                productName: editProduct.product_name,
+                sku: editProduct.sku,
+                userRole: profile?.role
+            }
+        });
 
         try {
             const { error } = await supabase
@@ -285,12 +469,62 @@ export default function Page() {
                 })
                 .eq('id', editProduct.id);
 
-            if (error) throw error;
+            if (error) {
+                await logActivity({
+                    type: 'product',
+                    level: 'error',
+                    action: 'product_edit_save_failed',
+                    message: `Failed to save product edits: ${error.message}`,
+                    userId: profile?.id || null,
+                    productId: editProduct.id,
+                    details: {
+                        productName: editProduct.product_name,
+                        error: error,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
+                throw error;
+            }
+
+            await logActivity({
+                type: 'product',
+                level: 'success',
+                action: 'product_edit_save_success',
+                message: `Successfully saved edits for product ${editProduct.product_name}`,
+                userId: profile?.id || null,
+                productId: editProduct.id,
+                details: {
+                    productName: editProduct.product_name,
+                    sku: editProduct.sku,
+                    stockQuantity: editProduct.stock_quantity,
+                    totalInventory: editProduct.total_inventory,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
 
             fetchProducts(); // Refresh data
             setIsEditDialogOpen(false);
             setEditProduct(null);
         } catch (error) {
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'product_edit_save_error',
+                message: `Failed to save product edits`,
+                userId: profile?.id || null,
+                productId: editProduct.id,
+                details: {
+                    productName: editProduct.product_name,
+                    error: error,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             setError('Failed to update product');
         }
     };
@@ -301,6 +535,19 @@ export default function Page() {
 
     useEffect(() => {
         const fetchFilters = async () => {
+            const startTime = Date.now();
+
+            // Log filters fetch attempt
+            await logActivity({
+                type: 'product',
+                level: 'info',
+                action: 'filters_fetch_attempt',
+                message: 'Attempting to fetch filters for edit modal',
+                userId: profile?.id || null,
+                details: {
+                    userRole: profile?.role
+                }
+            });
             try {
                 // Assuming you have a way to identify processor vs form_factor filters
                 // You might need to adjust this based on your filters table structure
@@ -310,15 +557,54 @@ export default function Page() {
                     .or('type.eq.processor,type.eq.form_factor')
                     .order('title', { ascending: true });
 
-                if (error) throw error;
+                if (error) {
+                    await logActivity({
+                        type: 'product',
+                        level: 'error',
+                        action: 'filters_fetch_failed',
+                        message: `Failed to fetch filters: ${error.message}`,
+                        userId: profile?.id || null,
+                        details: {
+                            error: error,
+                            executionTimeMs: Date.now() - startTime,
+                            userRole: profile?.role
+                        },
+                        status: 'failed'
+                    });
+                    throw error;
+                }
 
                 if (data) {
-                    // You might need to separate these based on your data structure
-                    // For now, we'll use all filters
                     setProcessorFilters(data);
                     setFormFactorFilters(data);
+                    await logActivity({
+                        type: 'product',
+                        level: 'success',
+                        action: 'filters_fetch_success',
+                        message: `Successfully fetched ${data.length} filters`,
+                        userId: profile?.id || null,
+                        details: {
+                            filtersCount: data.length,
+                            executionTimeMs: Date.now() - startTime,
+                            userRole: profile?.role
+                        },
+                        status: 'completed'
+                    });
                 }
             } catch (err) {
+                await logActivity({
+                    type: 'product',
+                    level: 'error',
+                    action: 'filters_fetch_error',
+                    message: 'Failed to fetch filters',
+                    userId: profile?.id || null,
+                    details: {
+                        error: err,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
             }
         };
 
@@ -527,18 +813,88 @@ export default function Page() {
                 };
 
                 const handleConfirmDelete = async () => {
+                    const startTime = Date.now();
+
+                    // Log delete attempt
+                    await logActivity({
+                        type: 'product',
+                        level: 'warning',
+                        action: 'product_delete_attempt',
+                        message: `Attempting to delete product ${product.product_name}`,
+                        userId: profile?.id || null,
+                        productId: product.id,
+                        details: {
+                            productName: product.product_name,
+                            sku: product.sku,
+                            userRole: profile?.role,
+                            deletedBy: profile?.email
+                        }
+                    });
+
                     try {
                         const { error } = await supabase
                             .from('products')
                             .delete()
                             .eq('id', product.id);
 
-                        if (error) throw error;
+                        if (error) {
+                            await logActivity({
+                                type: 'product',
+                                level: 'error',
+                                action: 'product_delete_failed',
+                                message: `Failed to delete product: ${error.message}`,
+                                userId: profile?.id || null,
+                                productId: product.id,
+                                details: {
+                                    productName: product.product_name,
+                                    error: error,
+                                    executionTimeMs: Date.now() - startTime,
+                                    userRole: profile?.role
+                                },
+                                status: 'failed'
+                            });
+                            throw error;
+                        }
+
+                        await logActivity({
+                            type: 'product',
+                            level: 'success',
+                            action: 'product_delete_success',
+                            message: `Successfully deleted product ${product.product_name}`,
+                            userId: profile?.id || null,
+                            productId: product.id,
+                            details: {
+                                productName: product.product_name,
+                                sku: product.sku,
+                                stockQuantity: product.stock_quantity,
+                                totalInventory: product.total_inventory,
+                                executionTimeMs: Date.now() - startTime,
+                                userRole: profile?.role,
+                                deletedBy: profile?.email
+                            },
+                            status: 'completed'
+                        });
+
 
                         // Refresh the products list
                         fetchProducts();
                         setIsDeleteDialogOpen(false);
                     } catch (error) {
+                        await logActivity({
+                            type: 'product',
+                            level: 'error',
+                            action: 'product_delete_error',
+                            message: `Failed to delete product ${product.product_name}`,
+                            userId: profile?.id || null,
+                            productId: product.id,
+                            details: {
+                                productName: product.product_name,
+                                error: error,
+                                executionTimeMs: Date.now() - startTime,
+                                userRole: profile?.role
+                            },
+                            status: 'failed'
+                        });
                         setError('Failed to delete product');
                     }
                 };
@@ -653,9 +1009,37 @@ export default function Page() {
 
     const handleExportCSV = () => {
         if (products.length === 0) {
-            alert("No data to export");
+            logActivity({
+                type: 'export',
+                level: 'warning',
+                action: 'csv_export_empty',
+                message: 'Attempted to export CSV with no products data',
+                userId: profile?.id || null,
+                details: {
+                    productsCount: products.length,
+                    userRole: profile?.role
+                },
+                status: 'skipped'
+            });
+            toast.info("No data to export");
             return;
         }
+
+
+        const startTime = Date.now();
+
+        // Log export attempt
+        logActivity({
+            type: 'export',
+            level: 'info',
+            action: 'csv_export_attempt',
+            message: 'Attempting to export products to CSV',
+            userId: profile?.id || null,
+            details: {
+                productsCount: products.length,
+                userRole: profile?.role
+            }
+        });
 
         try {
             // Prepare the data
@@ -675,7 +1059,36 @@ export default function Page() {
             // Download file
             downloadCSV(csvString, `products_${new Date().toISOString().split('T')[0]}.csv`);
 
+
+            logActivity({
+                type: 'export',
+                level: 'success',
+                action: 'csv_export_success',
+                message: `Successfully exported ${products.length} products to CSV`,
+                userId: profile?.id || null,
+                details: {
+                    productsCount: products.length,
+                    fileName: `products_${new Date().toISOString().split('T')[0]}.csv`,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
+
         } catch (error) {
+            logActivity({
+                type: 'export',
+                level: 'error',
+                action: 'csv_export_failed',
+                message: `Failed to export products to CSV`,
+                userId: profile?.id || null,
+                details: {
+                    errorDetails: error,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             setError('Failed to export CSV');
         }
     };

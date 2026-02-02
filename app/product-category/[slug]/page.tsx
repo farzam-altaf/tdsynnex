@@ -11,6 +11,7 @@ import { useAuth } from "@/app/context/AuthContext";
 import { FaPlus } from "react-icons/fa6";
 import { useCart } from "@/app/context/CartContext";
 import { toast } from "sonner";
+import { logActivity } from "@/lib/logger";
 
 // Filter types to fetch from database
 const FILTER_TYPES = ["form_factor", "processor", "screen_size", "memory", "storage"];
@@ -131,6 +132,8 @@ export default function Page() {
     const subscriber = process.env.NEXT_PUBLIC_SUBSCRIBER;
     const pathname = usePathname();
 
+    const source = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}${pathname}`;
+
     const {
         addToCart,
         removeFromCart,
@@ -143,12 +146,67 @@ export default function Page() {
 
     const handleAddToCart = async (productId: string) => {
         try {
+            const product = products.find(p => p.id === productId);
+
+            // Log add to cart attempt
+            await logActivity({
+                type: 'product',
+                level: 'info',
+                action: 'add_to_cart_attempt',
+                message: `User attempted to add product to cart: ${product?.product_name || 'Unknown product'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    productName: product?.product_name,
+                    sku: product?.sku,
+                    userRole: profile?.role,
+                    isPublished: product?.post_status === 'Publish',
+                    stockQuantity: product?.stock_quantity,
+                    slug: product?.slug,
+                    categorySlug: slug
+                }
+            });
+
             await addToCart(productId, 1)
+
+            // Log success
+            await logActivity({
+                type: 'product',
+                level: 'success',
+                action: 'add_to_cart_success',
+                message: `Product added to cart successfully: ${product?.product_name || 'Unknown product'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    productName: product?.product_name,
+                    sku: product?.sku,
+                    slug: product?.slug,
+                    categorySlug: slug
+                },
+                status: 'completed'
+            });
+
             toast.success('Product added to cart!', {
                 style: { background: "black", color: "white" },
             })
         } catch (error: any) {
             let errorMessage = 'Failed to add product to cart. Please try again.'
+
+            // Log error
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'add_to_cart_failed',
+                message: `Failed to add product to cart: ${error?.message || 'Unknown error'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    errorCode: error?.code,
+                    errorMessage: error?.message,
+                    errorDetails: error
+                },
+                status: 'failed'
+            });
 
             if (error?.code === '23505') {
                 errorMessage = 'This product is already in your cart.'
@@ -166,9 +224,57 @@ export default function Page() {
 
     // Handle cart item removal
     const handleRemoveFromCart = async (productId: string) => {
+        const product = products.find(p => p.id === productId);
+
+        // Log removal attempt
+        await logActivity({
+            type: 'product',
+            level: 'info',
+            action: 'remove_from_cart_attempt',
+            message: `User attempted to remove product from cart: ${product?.product_name || 'Unknown product'}`,
+            userId: user?.id || null,
+            productId: productId,
+            details: {
+                productName: product?.product_name,
+                sku: product?.sku,
+                slug: product?.slug,
+                categorySlug: slug
+            }
+        });
+
         try {
-            await removeFromCart(productId)
+            await removeFromCart(productId);
+
+            // Log successful removal
+            await logActivity({
+                type: 'product',
+                level: 'success',
+                action: 'remove_from_cart_success',
+                message: `Product removed from cart successfully: ${product?.product_name || 'Unknown product'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    productName: product?.product_name,
+                    sku: product?.sku,
+                    slug: product?.slug,
+                    categorySlug: slug
+                },
+                status: 'completed'
+            });
+
         } catch (error) {
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'remove_from_cart_failed',
+                message: `Failed to remove product from cart`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    errorDetails: error
+                },
+                status: 'failed'
+            });
         }
     }
 
@@ -235,6 +341,22 @@ export default function Page() {
 
     // Function to fetch products based on slug
     const fetchProductsBySlug = async (categorySlug: string, mappings: Record<string, Record<string, string>>) => {
+        const startTime = Date.now();
+
+        // Log fetch attempt
+        await logActivity({
+            type: 'product',
+            level: 'info',
+            action: 'category_products_fetch_attempt',
+            message: `Attempting to fetch products for category: ${categorySlug}`,
+            userId: user?.id || null,
+            details: {
+                categorySlug: categorySlug,
+                userRole: profile?.role,
+                isLoggedIn: isLoggedIn
+            }
+        });
+
         try {
             // Decode URL slug if it contains special characters
             const decodedSlug = decodeURIComponent(categorySlug).toLowerCase();
@@ -279,6 +401,21 @@ export default function Page() {
             const { data: productsData, error: productsError } = await productsQuery;
 
             if (productsError) {
+                await logActivity({
+                    type: 'product',
+                    level: 'error',
+                    action: 'category_products_fetch_failed',
+                    message: `Failed to fetch products for category: ${categorySlug}`,
+                    userId: user?.id || null,
+                    details: {
+                        categorySlug: categorySlug,
+                        error: productsError,
+                        executionTimeMs: Date.now() - startTime,
+                        filterId: filterId,
+                        filterType: filterType
+                    },
+                    status: 'failed'
+                });
                 setProducts([]);
             } else {
                 if (productsData && productsData.length > 0) {
@@ -293,18 +430,82 @@ export default function Page() {
                     }));
 
                     setProducts(productsWithTitles);
+
+                    await logActivity({
+                        type: 'product',
+                        level: 'success',
+                        action: 'category_products_fetch_success',
+                        message: `Successfully fetched ${productsData.length} products for category: ${categorySlug}`,
+                        userId: user?.id || null,
+                        details: {
+                            categorySlug: categorySlug,
+                            totalProducts: productsData.length,
+                            publishedProducts: productsData.filter(p => p.post_status === 'Publish').length,
+                            outOfStockProducts: productsData.filter(p => p.stock_quantity === 0).length,
+                            executionTimeMs: Date.now() - startTime,
+                            filterId: filterId,
+                            filterType: filterType
+                        },
+                        status: 'completed'
+                    });
                 } else {
                     setProducts([]);
+
+                    // Log no products found
+                    await logActivity({
+                        type: 'product',
+                        level: 'info',
+                        action: 'category_no_products_found',
+                        message: `No products found for category: ${categorySlug}`,
+                        userId: user?.id || null,
+                        details: {
+                            categorySlug: categorySlug,
+                            executionTimeMs: Date.now() - startTime,
+                            filterId: filterId,
+                            filterType: filterType
+                        },
+                        status: 'completed'
+                    });
                 }
             }
 
         } catch (error) {
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'category_products_fetch_error',
+                message: `Unexpected error while fetching products for category: ${categorySlug}`,
+                userId: user?.id || null,
+                details: {
+                    categorySlug: categorySlug,
+                    error: error,
+                    executionTimeMs: Date.now() - startTime
+                },
+                status: 'failed'
+            });
+
             setProducts([]);
         }
     };
 
     // Fetch all data from database
     const fetchDataFromDatabase = async () => {
+
+        await logActivity({
+            type: 'product',
+            level: 'info',
+            action: 'products_fetch_attempt',
+            message: 'Attempting to fetch products from database',
+            userId: user?.id || null,
+            details: {
+                categorySlug: slug,
+                isLoggedIn: isLoggedIn,
+                userRole: profile?.role
+            }
+        });
+
+        const startTime = Date.now();
+
         try {
             setIsLoading(true);
 
@@ -353,6 +554,18 @@ export default function Page() {
                     .order("date", { ascending: false });
 
                 if (productsError) {
+                    await logActivity({
+                        type: 'product',
+                        level: 'error',
+                        action: 'products_fetch_failed',
+                        message: 'Failed to fetch all products from database',
+                        userId: user?.id || null,
+                        details: {
+                            error: productsError,
+                            executionTimeMs: Date.now() - startTime
+                        },
+                        status: 'failed'
+                    });
                     setProducts([]);
                 } else if (productsData) {
                     const productsWithTitles = productsData.map(product => ({
@@ -365,6 +578,22 @@ export default function Page() {
                     }));
 
                     setProducts(productsWithTitles);
+
+                    await logActivity({
+                        type: 'product',
+                        level: 'success',
+                        action: 'products_fetch_success',
+                        message: `Successfully fetched ${productsData.length} products from database`,
+                        userId: user?.id || null,
+                        details: {
+                            totalProducts: productsData.length,
+                            publishedProducts: productsData.filter(p => p.post_status === 'Publish').length,
+                            outOfStockProducts: productsData.filter(p => p.stock_quantity === 0).length,
+                            executionTimeMs: Date.now() - startTime
+                        },
+                        status: 'completed'
+                    });
+
                 }
             }
 
@@ -373,6 +602,18 @@ export default function Page() {
             setOpenFilters(allFilterKeys);
 
         } catch (error) {
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'products_fetch_error',
+                message: 'Unexpected error while fetching products from database',
+                userId: user?.id || null,
+                details: {
+                    error: error,
+                    executionTimeMs: Date.now() - startTime
+                },
+                status: 'failed'
+            });
         } finally {
             setIsLoading(false);
         }

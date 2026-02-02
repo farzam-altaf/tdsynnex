@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Lock } from "lucide-react";
-import { toast } from "sonner"; // Optional: for notifications
+import { toast } from "sonner";
+import { logActivity, logError, logSuccess, logInfo } from "@/lib/logger";
 
 export default function Page() {
     const router = useRouter();
@@ -26,9 +27,36 @@ export default function Page() {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
+            logActivity({
+                type: 'auth',
+                level: 'warning',
+                action: 'unauthorized_profile_access_attempt',
+                message: 'User attempted to access profile page without proper authentication',
+                userId: profile?.id || null,
+                details: {
+                    isLoggedIn,
+                    isVerified: profile?.isVerified,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             router.replace('/login/?redirect_to=edit-profile');
             return;
         }
+
+        // Log successful profile page access
+        logActivity({
+            type: 'ui',
+            level: 'info',
+            action: 'profile_page_accessed',
+            message: 'User accessed profile edit page',
+            userId: profile?.id || null,
+            details: {
+                userRole: profile?.role,
+                email: profile?.email
+            },
+            status: 'completed'
+        });
 
     }, [loading, isLoggedIn, profile, router]);
 
@@ -39,13 +67,49 @@ export default function Page() {
                 firstName: profile.firstName || "",
                 lastName: profile.lastName || "",
                 email: profile.email || "",
-                reseller: profile.reseller || "" // Assuming reseller field exists
+                reseller: profile.reseller || ""
+            });
+
+            // Log profile data loaded
+            logActivity({
+                type: 'user',
+                level: 'info',
+                action: 'profile_data_loaded',
+                message: 'Profile data loaded for editing',
+                userId: profile.id,
+                details: {
+                    hasFirstName: !!profile.firstName,
+                    hasLastName: !!profile.lastName,
+                    hasReseller: !!profile.reseller,
+                    userRole: profile.role
+                },
+                status: 'completed'
             });
         }
     }, [profile]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
+        const oldValue = formData[name as keyof typeof formData];
+        
+        // Log field change
+        if (oldValue !== value) {
+            logActivity({
+                type: 'ui',
+                level: 'info',
+                action: 'profile_field_changed',
+                message: `User changed ${name} field`,
+                userId: profile?.id || null,
+                details: {
+                    field: name,
+                    oldValue,
+                    newValue: value,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
+        }
+        
         setFormData(prev => ({
             ...prev,
             [name]: value
@@ -56,13 +120,42 @@ export default function Page() {
         e.preventDefault();
 
         if (!user?.id) {
-            toast.error("User not found",
-                { style: { background: "red", color: "white" } }
-            );
+            logActivity({
+                type: 'validation',
+                level: 'error',
+                action: 'profile_update_user_not_found',
+                message: 'Attempted to update profile but user ID not found',
+                userId: profile?.id || null,
+                details: {
+                    userObject: user,
+                    profileObject: profile
+                },
+                status: 'failed'
+            });
+            toast.error("User not found", { style: { background: "red", color: "white" } });
             return;
         }
 
+        const startTime = Date.now();
         setIsUpdating(true);
+
+        // Log update attempt
+        await logActivity({
+            type: 'user',
+            level: 'info',
+            action: 'profile_update_attempt',
+            message: `Attempting to update profile for user ${profile?.email}`,
+            userId: profile?.id || null,
+            details: {
+                oldData: {
+                    firstName: profile?.firstName,
+                    lastName: profile?.lastName,
+                    reseller: profile?.reseller
+                },
+                newData: formData,
+                userRole: profile?.role
+            }
+        });
 
         try {
             const { error } = await supabase
@@ -70,27 +163,101 @@ export default function Page() {
                 .update({
                     firstName: formData.firstName,
                     lastName: formData.lastName,
-                    reseller: formData.reseller
+                    reseller: formData.reseller,
+                    updated_at: new Date().toISOString()
                 })
                 .eq('id', profile?.id);
 
-            if (error) throw error;
+            if (error) {
+                await logActivity({
+                    type: 'user',
+                    level: 'error',
+                    action: 'profile_update_failed',
+                    message: `Failed to update profile: ${error.message}`,
+                    userId: profile?.id || null,
+                    details: {
+                        error: error,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
+                throw error;
+            }
 
-            toast.success("Profile updated successfully!", { style: { background: "black", color: "white" } });
-            // You might want to refresh the auth context here
+            await logActivity({
+                type: 'user',
+                level: 'success',
+                action: 'profile_update_success',
+                message: `Successfully updated profile for user ${profile?.email}`,
+                userId: profile?.id || null,
+                details: {
+                    changes: {
+                        firstName: profile?.firstName !== formData.firstName,
+                        lastName: profile?.lastName !== formData.lastName,
+                        reseller: profile?.reseller !== formData.reseller
+                    },
+                    newValues: formData,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
+
+            toast.success("Profile updated successfully!", { 
+                style: { background: "black", color: "white" } 
+            });
+
         } catch (error: any) {
-            toast.error(error.message || "Failed to update profile", { style: { background: "red", color: "white" } });
+            await logActivity({
+                type: 'user',
+                level: 'error',
+                action: 'profile_update_error',
+                message: `Failed to update profile: ${error.message || 'Unknown error'}`,
+                userId: profile?.id || null,
+                details: {
+                    error: error,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
+            toast.error(error.message || "Failed to update profile", { 
+                style: { background: "red", color: "white" } 
+            });
         } finally {
             setIsUpdating(false);
         }
     };
 
     const handlePasswordReset = () => {
+        logActivity({
+            type: 'ui',
+            level: 'info',
+            action: 'password_reset_navigation',
+            message: 'User clicked to navigate to password reset',
+            userId: profile?.id || null,
+            details: {
+                userRole: profile?.role,
+                email: profile?.email
+            },
+            status: 'completed'
+        });
+
         router.push('/password-reset');
     };
 
     // Show loading state
     if (loading) {
+        logActivity({
+            type: 'ui',
+            level: 'info',
+            action: 'profile_page_loading',
+            message: 'Profile page is loading',
+            userId: profile?.id || null,
+            status: 'processing'
+        });
+
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="flex flex-col items-center">
@@ -170,7 +337,6 @@ export default function Page() {
                         className="focus:ring-2 focus:ring-[#35c8dc] focus:border-transparent selection:bg-blue-500"
                     />
                 </div>
-
 
                 {/* Submit Button */}
                 <div className="pt-6">

@@ -43,6 +43,7 @@ import { toast } from "sonner"
 import { supabase } from "@/lib/supabase/client"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import Link from "next/link"
+import { logAuth, logError, logInfo, logSuccess, logWarning } from "@/lib/logger"
 
 // Define Order type based on your Supabase table
 export type Product = {
@@ -99,8 +100,10 @@ export type Order = {
     zip: string | null
     desired_date: string | null
     notes: string | null
-    product_id: string | null
+    product_id: string[] | null
+    quantity: number[] | null
     products?: Product
+    products_array?: Product[] // یہ add کریں
     tracking: string | null
     return_tracking: string | null
     tracking_link: string | null
@@ -109,6 +112,13 @@ export type Order = {
     case_type: string | null
     password: string | null
     return_label: string | null
+    order_by: string | null
+    total_items: number | null
+    total_products: number | null
+    created_at: string | null
+    updated_at: string | null
+    total_quantity?: number
+    product_count?: number
 }
 
 export default function Page() {
@@ -121,6 +131,8 @@ export default function Page() {
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+
+    const source = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/sku-order-detail`;
 
     // Table states
     const [sorting, setSorting] = useState<SortingState>([])
@@ -147,14 +159,13 @@ export default function Page() {
         "order_no": "Order #",
         "order_date": "Order Date",
         "order_status": "Shipping Status",
+        "product_info": "Products", // Update id
         "company_name": "Customer Name",
         "se_email": "Sales Executive Email",
         "sm_email": "Sales Manager Email",
         "crm_account": "CRM Account #",
-        "product_name": "Product Name",
-        "processor": "Processor",
-        "form_factor": "Form Factor",
-        "quantity": "Quantity",
+        "total_quantity": "Total Device Qty",
+        "product_count": "# of Products",
         "currently_running": "OS",
         "shipped_date": "Shipped Date",
         "returned_date": "Returned Date",
@@ -182,78 +193,226 @@ export default function Page() {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
+            logAuth(
+                'access_denied',
+                'Unauthorized access to SKU order detail page',
+                profile?.id,
+                {
+                    isLoggedIn,
+                    isVerified: profile?.isVerified,
+                    role: profile?.role
+                },
+                'failed',
+                source
+            );
+
             router.replace('/login/?redirect_to=sku-order-detail');
             return;
         }
 
         // Check if user has permission to access this page
         if (!isAuthorized) {
+            logWarning(
+                'auth',
+                'unauthorized_access',
+                `User attempted to access SKU order detail without permission`,
+                {
+                    email: profile?.email,
+                    role: profile?.role,
+                    allowedRoles
+                },
+                profile?.id,
+                source
+            );
+
             router.replace('/product-category/alldevices');
             return;
         }
 
+        // Log successful access
+        logAuth(
+            'page_access',
+            `User accessed SKU order detail page`,
+            profile.id,
+            {
+                role: profile.role,
+                email: profile.email,
+                isActionAuthorized,
+                isViewAuthorized
+            },
+            'completed',
+            source
+        );
+
     }, [loading, isLoggedIn, profile, router, isAuthorized]);
 
-    // Fetch orders function ko update karein:
     const fetchOrders = async () => {
+        const startTime = Date.now();
         try {
             setIsLoading(true);
             setError(null);
 
+            logInfo(
+                'db',
+                'orders_fetch_started',
+                'Started fetching orders for SKU order detail',
+                {
+                    isActionAuthorized,
+                    userId: profile?.id,
+                    role: profile?.role
+                },
+                profile?.id,
+                source
+            );
+
+            let query = supabase
+                .from('orders')
+                .select('*')
+                .order('order_no', { ascending: false });
+
+            // Apply user-specific filter if not action authorized
             if (!isActionAuthorized) {
-                const { data, error: supabaseError } = await supabase
-                    .from('orders')
-                    .select(`
-                    *,
-                    products!inner(
-                        *,
-                        processor_filter:processor(title),
-                        form_factor_filter:form_factor(title)
-                    )
-                `)
-                    .order('order_no', { ascending: false })
-                    .eq("order_by", profile?.id);
+                query = query.eq("order_by", profile?.id);
+            }
 
-                if (supabaseError) {
-                    throw supabaseError;
-                }
+            const { data, error: supabaseError } = await query;
 
-                if (data) {
-                    setOrders(data as Order[]);
-                }
-            } else {
-                const { data, error: supabaseError } = await supabase
-                    .from('orders')
-                    .select(`
-                    *,
-                    products!inner(
-                        *,
-                        processor_filter:processor(title),
-                        form_factor_filter:form_factor(title)
-                    )
-                `)
-                    .order('order_no', { ascending: false });
+            if (supabaseError) {
+                throw supabaseError;
+            }
 
-                if (supabaseError) {
-                    throw supabaseError;
-                }
+            if (data) {
+                // Process data to combine multiple products into single order entries
+                const processedOrders = await processOrdersWithMultipleProducts(data);
 
-                if (data) {
-                    setOrders(data as Order[]);
-                }
+                const executionTime = Date.now() - startTime;
+                logSuccess(
+                    'db',
+                    'orders_fetch_success',
+                    `Successfully fetched ${processedOrders.length} orders`,
+                    {
+                        rawCount: data.length,
+                        processedCount: processedOrders.length,
+                        executionTime,
+                        isActionAuthorized
+                    },
+                    profile?.id,
+                    source
+                );
+                setOrders(processedOrders);
             }
 
         } catch (err: unknown) {
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch orders');
+                logError(
+                    'db',
+                    'orders_fetch_failed',
+                    `Failed to fetch orders: ${err.message}`,
+                    err,
+                    profile?.id,
+                    source
+                );
             } else {
                 setError('Failed to fetch orders');
+                logError(
+                    'db',
+                    'orders_fetch_failed',
+                    'Failed to fetch orders',
+                    { error: err },
+                    profile?.id,
+                    source
+                );
             }
         } finally {
             setIsLoading(false);
         }
     };
 
+    const processOrdersWithMultipleProducts = async (ordersData: any[]): Promise<Order[]> => {
+        const orderMap = new Map<string, Order>();
+        const allProductIds: string[] = [];
+
+        // پہلے تمام unique product IDs collect کریں
+        ordersData.forEach(order => {
+            let productIds: string[] = [];
+            let quantities: number[] = [];
+
+            try {
+                if (order.product_id) {
+                    if (typeof order.product_id === 'string') {
+                        productIds = JSON.parse(order.product_id);
+                    } else if (Array.isArray(order.product_id)) {
+                        productIds = order.product_id;
+                    }
+                }
+                if (order.quantity) {
+                    if (typeof order.quantity === 'string') {
+                        quantities = JSON.parse(order.quantity);
+                    } else if (Array.isArray(order.quantity)) {
+                        quantities = order.quantity;
+                    }
+                }
+            } catch (error) {
+                console.error('Error parsing arrays:', error);
+            }
+
+            // Calculate total quantity
+            const totalQuantity = quantities.reduce((sum: number, qty: number) => sum + (qty || 0), 0);
+
+            // تمام product IDs جمع کریں
+            productIds.forEach(id => {
+                if (!allProductIds.includes(id)) {
+                    allProductIds.push(id);
+                }
+            });
+
+            // Create or update order entry
+            if (!orderMap.has(order.order_no)) {
+                const processedOrder: Order = {
+                    ...order,
+                    product_id: productIds,
+                    quantity: quantities,
+                    total_quantity: totalQuantity,
+                    product_count: productIds.length,
+                    products: undefined
+                };
+                orderMap.set(order.order_no, processedOrder);
+            }
+        });
+
+        // تمام products کے details fetch کریں
+        let productDetailsMap = new Map<string, Product>();
+        if (allProductIds.length > 0) {
+            const products = await fetchProductDetails(allProductIds);
+            products.forEach(product => {
+                productDetailsMap.set(product.id, product);
+            });
+        }
+
+        // اب ہر order کے لئے products array کو populate کریں
+        const processedOrders: Order[] = [];
+
+        orderMap.forEach((order, orderNo) => {
+            // اس order کے products کے details جمع کریں
+            const orderProducts: Product[] = [];
+            if (order.product_id) {
+                order.product_id.forEach((productId, index) => {
+                    const product = productDetailsMap.get(productId);
+                    if (product) {
+                        orderProducts.push(product);
+                    }
+                });
+            }
+
+            processedOrders.push({
+                ...order,
+                products_array: orderProducts // products array شامل کریں
+            });
+        });
+
+        return processedOrders;
+    };
 
     // Fetch data when authorized
     useEffect(() => {
@@ -290,6 +449,20 @@ export default function Page() {
         setSelectedOrder(order);
         setEditErrors({});
         setIsEditDrawerOpen(true);
+
+
+        logInfo(
+            'ui',
+            'edit_order_clicked',
+            `Edit order clicked for order #${order.order_no}`,
+            {
+                orderId: order.id,
+                orderNo: order.order_no,
+                customerName: order.company_name
+            },
+            profile?.id,
+            source
+        );
     };
 
     // Handle form input changes
@@ -418,12 +591,63 @@ export default function Page() {
         }
 
         setEditErrors(newErrors);
+
+
+        if (!isValid) {
+            logWarning(
+                'validation',
+                'order_validation_failed',
+                `Order edit form validation failed with ${Object.keys(newErrors).length} errors`,
+                {
+                    orderId: selectedOrder.id,
+                    orderNo: selectedOrder.order_no,
+                    errors: newErrors,
+                    errorCount: Object.keys(newErrors).length
+                },
+                profile?.id,
+                source
+            );
+        }
+
         return isValid;
+    };
+
+    const fetchProductDetails = async (productIds: string[]): Promise<Product[]> => {
+        if (!productIds || productIds.length === 0) return [];
+
+        try {
+            const { data, error } = await supabase
+                .from('products')
+                .select('id, product_name, sku, thumbnail, stock_quantity, withCustomer')
+                .in('id', productIds);
+
+            if (error) throw error;
+
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching product details:', error);
+            return [];
+        }
     };
 
     // Update order in Supabase
     const handleUpdateOrder = async () => {
         if (!selectedOrder) return;
+
+        const startTime = Date.now();
+
+        logInfo(
+            'order',
+            'order_update_started',
+            `Started updating order #${selectedOrder.order_no}`,
+            {
+                orderId: selectedOrder.id,
+                orderNo: selectedOrder.order_no,
+                customerName: selectedOrder.company_name
+            },
+            profile?.id,
+            source
+        );
 
         if (!validateEditForm()) {
             toast.error("Please fill in all required fields correctly", { style: { color: "white", backgroundColor: "red" } });
@@ -433,13 +657,20 @@ export default function Page() {
         setIsSubmitting(true);
 
         try {
-            // Prepare updated order data - REMOVE products object
-            const { products, ...orderWithoutProducts } = selectedOrder;
+            // Only remove fields that DON'T exist in Supabase database
+            const {
+                product_count,
+                products,
+                products_array,
+                product_id, quantity, total_quantity,
+                ...orderData
+            } = selectedOrder;
 
             const updatedOrder = {
-                ...orderWithoutProducts,
+                ...orderData,
                 updated_at: new Date().toISOString()
             };
+
 
             const { error } = await supabase
                 .from('orders')
@@ -448,13 +679,36 @@ export default function Page() {
 
             if (error) throw error;
 
-            // Update local state
+            // Update local state - preserve all computed/joined fields
             setOrders(prev => prev.map(order =>
                 order.id === selectedOrder.id ? {
-                    ...orderWithoutProducts,
-                    products: products // Keep products in local state
+                    ...selectedOrder,
+                    product_count: product_count,      // Keep computed field
+                    products: products,               // Keep joined object
+                    products_array: products_array    // Keep joined array
                 } : order
             ));
+
+            const executionTime = Date.now() - startTime;
+            logSuccess(
+                'order',
+                'order_update_success',
+                `Successfully updated order #${selectedOrder.order_no}`,
+                {
+                    orderId: selectedOrder.id,
+                    orderNo: selectedOrder.order_no,
+                    customerName: selectedOrder.company_name,
+                    executionTime,
+                    updatedBy: profile?.email,
+                    fieldsUpdated: Object.keys(selectedOrder).length,
+                    arraysPreserved: {
+                        product_id_length: selectedOrder.product_id?.length || 0,
+                        quantity_length: selectedOrder.quantity?.length || 0
+                    }
+                },
+                profile?.id,
+                source
+            );
 
             toast.success("Order updated successfully!", { style: { color: "white", backgroundColor: "black" } });
             setIsEditDrawerOpen(false);
@@ -462,11 +716,30 @@ export default function Page() {
             setEditErrors({});
 
         } catch (err: any) {
+            const executionTime = Date.now() - startTime;
+            logError(
+                'db',
+                'order_update_failed',
+                `Failed to update order #${selectedOrder.order_no}`,
+                {
+                    error: err.message,
+                    orderId: selectedOrder.id,
+                    executionTime,
+                    dataSent: {
+                        has_product_id: !!selectedOrder.product_id,
+                        has_quantity: !!selectedOrder.quantity,
+                        has_total_quantity: selectedOrder.total_quantity !== undefined
+                    }
+                },
+                profile?.id,
+                source
+            );
             toast.error(err.message || "Failed to update order", { style: { color: "white", backgroundColor: "red" } });
         } finally {
             setIsSubmitting(false);
         }
     };
+
     // Get error class for form fields
     const getErrorClass = (fieldName: string) => {
         return editErrors[fieldName]
@@ -474,7 +747,6 @@ export default function Page() {
             : "border-gray-300 focus:ring-[#0A4647] focus:border-[#0A4647]";
     };
 
-    // Define columns for orders
     const columns: ColumnDef<Order>[] = [
         {
             accessorKey: "order_no",
@@ -534,8 +806,9 @@ export default function Page() {
                 return <div className="text-left ps-2 capitalize">{order_status}</div>
             },
         },
+        // Update wala product_name column rakhein (sirf ek hi)
         {
-            id: "product_name",
+            id: "product_info",
             header: ({ column }) => {
                 return (
                     <Button
@@ -543,54 +816,76 @@ export default function Page() {
                         className="hover:bg-transparent hover:text-current cursor-pointer justify-start w-full"
                         onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
                     >
-                        Product Name
+                        Products
                         <ArrowUpDown className="ml-2 h-4 w-4" />
                     </Button>
                 )
             },
             cell: ({ row }) => {
-                const productName = row.original.products?.product_name || '-';
-                return <div className="text-left ps-2">{productName}</div>
-            },
-        },
-        {
-            id: "processor",
-            header: ({ column }) => {
+                const order = row.original;
+                const productCount = order.product_count || 0;
+                const products = order.products_array || [];
+                const quantities = order.quantity || [];
+
+                if (productCount === 0) {
+                    return <div className="text-left ps-2">-</div>;
+                }
+
+                if (productCount === 1) {
+                    // Single product - show name and SKU
+                    const product = products[0];
+                    const quantity = quantities[0] || 0;
+
+                    return (
+                        <div className="text-left ps-2">
+                            <div className="font-medium truncate max-w-xs">
+                                {product?.product_name || 'Product'}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                                SKU: {product?.sku || 'N/A'}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                                Qty: {quantity}
+                            </div>
+                        </div>
+                    );
+                }
+
+                // Multiple products - show all SKUs
                 return (
-                    <Button
-                        variant="ghost"
-                        className="hover:bg-transparent hover:text-current cursor-pointer justify-start w-full"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                    >
-                        Processor
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                )
-            },
-            cell: ({ row }) => {
-                const processor = row.original.products?.processor_filter?.title || '-';
-                return <div className="text-left ps-2">{processor}</div>
-            },
-        },
-        {
-            id: "form_factor",
-            header: ({ column }) => {
-                return (
-                    <Button
-                        variant="ghost"
-                        className="hover:bg-transparent hover:text-current cursor-pointer justify-start w-full"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                    >
-                        Form Factor
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                )
-            },
-            cell: ({ row }) => {
-                const formFactor = row.original.products?.form_factor_filter?.title || '-';
-                return <div className="text-left ps-2">{formFactor}</div>
+                    <div className="text-left ps-2">
+                        <div className="font-medium">Multiple Products</div>
+                        <div className="text-xs space-y-1 mt-1">
+                            {products.map((product, index) => {
+                                const quantity = quantities[index] || 0;
+                                return (
+                                    <div key={product?.id || index} className="flex justify-between items-center">
+                                        <span className="text-gray-600 truncate max-w-[200px]">
+                                            {product?.product_name || `Product ${index + 1}`}
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-gray-500 text-xs">
+                                                SKU: {product?.sku || 'N/A'}
+                                            </span>
+                                            <span className="text-gray-700 font-medium text-xs">
+                                                (x{quantity})
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2">
+                            <div className="flex justify-between">
+                                <span>Total Products: {productCount}</span>
+                                <span>Total Units: {order.total_quantity}</span>
+                            </div>
+                        </div>
+                    </div>
+                );
             },
         },
+        // Remove duplicate processor and form_factor columns
         {
             accessorKey: "company_name",
             header: ({ column }) => {
@@ -655,8 +950,9 @@ export default function Page() {
             },
             cell: ({ row }) => <div className="text-left ps-2">{row.getValue("crm_account") || '-'}</div>,
         },
+        // Quantity column ko update karein
         {
-            accessorKey: "quantity",
+            accessorKey: "total_quantity",
             header: ({ column }) => {
                 return (
                     <Button
@@ -664,13 +960,43 @@ export default function Page() {
                         className="hover:bg-transparent hover:text-current cursor-pointer justify-start w-full"
                         onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
                     >
-                        Device Qty
+                        Total Device Qty
                         <ArrowUpDown className="ml-2 h-4 w-4" />
                     </Button>
                 )
             },
             cell: ({ row }) => {
-                return <div className="text-left ps-2">{row.getValue("quantity") || '-'}</div>
+                const order = row.original;
+                return (
+                    <div className="text-left ps-2">
+                        <div className="font-medium">{order.total_quantity || 0}</div>
+                        {order.product_count && order.product_count > 1 && (
+                            <div className="text-xs text-gray-500">
+                                ({order.product_count} products)
+                            </div>
+                        )}
+                    </div>
+                )
+            },
+        },
+        // Product Count column add karein
+        {
+            id: "product_count",
+            header: ({ column }) => {
+                return (
+                    <Button
+                        variant="ghost"
+                        className="hover:bg-transparent hover:text-current cursor-pointer justify-start w-full"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                    >
+                        # of Products
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                )
+            },
+            cell: ({ row }) => {
+                const productCount = row.original.product_count || 0;
+                return <div className="text-left ps-2">{productCount}</div>
             },
         },
         {
@@ -825,6 +1151,22 @@ export default function Page() {
                 };
 
                 const handleConfirmDelete = async () => {
+                    const startTime = Date.now();
+
+                    logWarning(
+                        'order',
+                        'order_delete_requested',
+                        `Delete requested for order #${order.order_no}`,
+                        {
+                            orderId: order.id,
+                            orderNo: order.order_no,
+                            customerName: order.company_name,
+                            deletedBy: profile?.email
+                        },
+                        profile?.id,
+                        source
+                    );
+
                     try {
                         const { error } = await supabase
                             .from('orders')
@@ -836,8 +1178,38 @@ export default function Page() {
                         // Refresh the orders list
                         fetchOrders();
                         setIsDeleteDialogOpen(false);
+
+
+                        const executionTime = Date.now() - startTime;
+                        logSuccess(
+                            'order',
+                            'order_delete_success',
+                            `Successfully deleted order #${order.order_no}`,
+                            {
+                                orderId: order.id,
+                                orderNo: order.order_no,
+                                customerName: order.company_name,
+                                executionTime,
+                                deletedBy: profile?.email
+                            },
+                            profile?.id,
+                            source
+                        );
+
                     } catch (error) {
+                        const executionTime = Date.now() - startTime;
                         setError('Failed to delete order');
+                        logError(
+                            'db',
+                            'order_delete_failed',
+                            `Failed to delete order #${order.order_no}`,
+                            {
+                                orderId: order.id,
+                                executionTime
+                            },
+                            profile?.id,
+                            source
+                        );
                     }
                 };
                 return (
@@ -972,48 +1344,91 @@ export default function Page() {
         },
     })
 
-    // Handle CSV export
     const handleExportCSV = () => {
         if (orders.length === 0) {
-            alert("No data to export");
+            logWarning(
+                'export',
+                'csv_export_empty',
+                'Attempted to export CSV with no orders data',
+                {
+                    ordersCount: orders.length
+                },
+                profile?.id,
+                source
+            );
+            toast.info("No data to export");
             return;
         }
 
         try {
-            const data = orders.map(order => ({
-                'Order #': order.order_no || '',
-                'Order Date': formatDate(order.order_date),
-                'Shipping Status': order.order_status || '',
-                'Product Name': order.products?.product_name || '',
-                'Processor': order.products?.processor_filter?.title || '-',
-                'Form Factor': order.products?.form_factor_filter?.title || '-',
-                'Pipeline Opportunity': order.rev_opportunity || 0,
-                'Budget Per Device': order.dev_budget || 0,
-                'Device Opportunity Size': order.dev_opportunity || 0,
-                'Account #': order.crm_account || '',
-                'Sales Executive Email': order.se_email || '',
-                'Customer Name': order.company_name || '',
-                'Shipped Date': formatDate(order.shipped_date),
-                'Returned Date': formatDate(order.returned_date),
-                'Vertical': order.vertical || '',
-                'Segment': order.segment || '',
-                'Order Month': order.order_month || '',
-                'Order Quarter': order.order_quarter || '',
-                'Order Year': order.order_year || '',
-                'Tracking Number': order.tracking || '',
-                'Return Tracking': order.return_tracking || '',
-                'Tracking Link': order.tracking_link || '',
-                'Return Tracking Link': order.return_tracking_link || '',
-                'Username': order.username || '',
-                'Case Type': order.case_type || '',
-                'Return Label': order.return_label || ''
-            }));
+            const data = orders.map(order => {
+                // Products string بنائیں
+                let productsString = '';
+                if (order.products_array && order.products_array.length > 0) {
+                    const productDetails = order.products_array.map((product, index) => {
+                        const quantity = order.quantity?.[index] || 0;
+                        return `${product.product_name} (SKU: ${product.sku || 'N/A'}) x${quantity}`;
+                    });
+                    productsString = productDetails.join('; ');
+                }
+
+                return {
+                    'Order #': order.order_no || '',
+                    'Order Date': formatDate(order.order_date),
+                    'Shipping Status': order.order_status || '',
+                    'Products': productsString,
+                    '# of Products': order.product_count || 0,
+                    'Total Quantity': order.total_quantity || 0,
+                    'Pipeline Opportunity': order.rev_opportunity || 0,
+                    'Budget Per Device': order.dev_budget || 0,
+                    'Device Opportunity Size': order.dev_opportunity || 0,
+                    'Account #': order.crm_account || '',
+                    'Sales Executive Email': order.se_email || '',
+                    'Customer Name': order.company_name || '',
+                    'Shipped Date': formatDate(order.shipped_date),
+                    'Returned Date': formatDate(order.returned_date),
+                    'Vertical': order.vertical || '',
+                    'Segment': order.segment || '',
+                    'Order Month': order.order_month || '',
+                    'Order Quarter': order.order_quarter || '',
+                    'Order Year': order.order_year || '',
+                    'Tracking Number': order.tracking || '',
+                    'Return Tracking': order.return_tracking || '',
+                    'Tracking Link': order.tracking_link || '',
+                    'Return Tracking Link': order.return_tracking_link || '',
+                    'Username': order.username || '',
+                    'Case Type': order.case_type || '',
+                    'Return Label': order.return_label || ''
+                };
+            });
 
             const csvString = convertToCSV(data);
             downloadCSV(csvString, `orders_${new Date().toISOString().split('T')[0]}.csv`);
 
+            logSuccess(
+                'export',
+                'csv_export_success',
+                `Successfully exported ${orders.length} orders to CSV`,
+                {
+                    ordersCount: orders.length,
+                    exportDate: new Date().toISOString()
+                },
+                profile?.id,
+                source
+            );
+
         } catch (error) {
             setError('Failed to export CSV');
+            logError(
+                'export',
+                'csv_export_failed',
+                `Failed to export CSV`,
+                {
+                    ordersCount: orders.length
+                },
+                profile?.id,
+                source
+            );
         }
     };
 
@@ -1079,7 +1494,20 @@ export default function Page() {
                 <div className="flex gap-2">
                     <Button
                         variant="outline"
-                        onClick={fetchOrders}
+                        onClick={() => {
+                            logInfo(
+                                'ui',
+                                'manual_refresh',
+                                'Manually refreshing orders data',
+                                {
+                                    currentCount: orders.length,
+                                    lastRefresh: new Date().toISOString()
+                                },
+                                profile?.id,
+                                source
+                            );
+                            fetchOrders();
+                        }}
                         disabled={isLoading}
                         className="cursor-pointer"
                     >

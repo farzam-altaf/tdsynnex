@@ -11,6 +11,7 @@ import { useAuth } from "@/app/context/AuthContext";
 import { FaMinus, FaPlus } from "react-icons/fa6";
 import { useCart } from "@/app/context/CartContext";
 import { toast } from "sonner";
+import { logActivity } from "@/lib/logger";
 
 // Filter types to fetch from database
 const FILTER_TYPES = ["form_factor", "processor", "screen_size", "memory", "storage"];
@@ -160,12 +161,62 @@ export default function Page() {
 
     const handleAddToCart = async (productId: string) => {
         try {
+            const product = products.find(p => p.id === productId);
+
+            // Log add to cart attempt
+            await logActivity({
+                type: 'product',
+                level: 'info',
+                action: 'add_to_cart_attempt',
+                message: `User attempted to add product to cart: ${product?.product_name || 'Unknown product'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    productName: product?.product_name,
+                    sku: product?.sku,
+                    userRole: profile?.role,
+                    isPublished: product?.post_status === 'Publish',
+                    stockQuantity: product?.stock_quantity
+                }
+            });
+
             await addToCart(productId, 1)
+
+            // Log success
+            await logActivity({
+                type: 'product',
+                level: 'success',
+                action: 'add_to_cart_success',
+                message: `Product added to cart successfully: ${product?.product_name || 'Unknown product'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    productName: product?.product_name,
+                    sku: product?.sku
+                },
+                status: 'completed'
+            });
+
             toast.success('Product added to cart!', {
                 style: { background: "black", color: "white" },
             })
         } catch (error: any) {
             let errorMessage = 'Failed to add product to cart. Please try again.'
+
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'add_to_cart_failed',
+                message: `Failed to add product to cart: ${error?.message || 'Unknown error'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    errorCode: error?.code,
+                    errorMessage: error?.message,
+                    errorDetails: error
+                },
+                status: 'failed'
+            });
 
             if (error?.code === '23505') {
                 errorMessage = 'This product is already in your cart.'
@@ -183,9 +234,52 @@ export default function Page() {
 
     // Handle cart item removal
     const handleRemoveFromCart = async (productId: string) => {
+        const product = products.find(p => p.id === productId);
+
+        // Log removal attempt
+        await logActivity({
+            type: 'product',
+            level: 'info',
+            action: 'remove_from_cart_attempt',
+            message: `User attempted to remove product from cart: ${product?.product_name || 'Unknown product'}`,
+            userId: user?.id || null,
+            productId: productId,
+            details: {
+                productName: product?.product_name,
+                sku: product?.sku
+            }
+        });
+
         try {
-            await removeFromCart(productId)
+            await removeFromCart(productId);
+
+            // Log successful removal
+            await logActivity({
+                type: 'product',
+                level: 'success',
+                action: 'remove_from_cart_success',
+                message: `Product removed from cart successfully: ${product?.product_name || 'Unknown product'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    productName: product?.product_name,
+                    sku: product?.sku
+                },
+                status: 'completed'
+            });
         } catch (error) {
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'remove_from_cart_failed',
+                message: `Failed to remove product from cart`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    errorDetails: error
+                },
+                status: 'failed'
+            });
         }
     }
 
@@ -227,12 +321,28 @@ export default function Page() {
     // Fetch all data from database
     const fetchDataFromDatabase = async () => {
         if (!authChecked) return;
+        await logActivity({
+            type: 'product',
+            level: 'info',
+            action: 'products_fetch_attempt',
+            message: 'Attempting to fetch products from database',
+            userId: user?.id || null,
+            details: {
+                authChecked,
+                authInitialized,
+                isLoggedIn,
+                userRole: profile?.role
+            }
+        });
+
+        const startTime = Date.now();
         try {
             setIsLoading(true);
 
             // 1. Fetch filters from database
             const allFilters: Record<string, string[]> = {};
             const mappings: Record<string, Record<string, string>> = {};
+
             if (isLoggedIn) {
                 // Fetch each filter type
                 for (const type of FILTER_TYPES) {
@@ -273,6 +383,18 @@ export default function Page() {
                     .order("date", { ascending: false });
 
                 if (productsError) {
+                    await logActivity({
+                        type: 'product',
+                        level: 'error',
+                        action: 'products_fetch_failed',
+                        message: `Failed to fetch products: ${productsError.message}`,
+                        userId: user?.id || null,
+                        details: {
+                            error: productsError,
+                            executionTimeMs: Date.now() - startTime
+                        },
+                        status: 'failed'
+                    });
                     setProducts([]);
                 } else if (productsData) {
                     // Now that mappings are set, we need to map products with the correct mappings
@@ -288,6 +410,22 @@ export default function Page() {
                     }));
 
                     setProducts(productsWithTitles);
+
+                    await logActivity({
+                        type: 'product',
+                        level: 'success',
+                        action: 'products_fetch_success',
+                        message: `Successfully fetched ${productsData.length} products from database`,
+                        userId: user?.id || null,
+                        details: {
+                            totalProducts: productsData.length,
+                            publishedProducts: productsData.filter(p => p.post_status === 'Publish').length,
+                            outOfStockProducts: productsData.filter(p => p.stock_quantity === 0).length,
+                            executionTimeMs: Date.now() - startTime
+                        },
+                        status: 'completed'
+                    });
+
                 }
 
                 // Initialize open filters with all available keys
@@ -295,6 +433,19 @@ export default function Page() {
                 setOpenFilters(allFilterKeys);
             }
         } catch (error) {
+            // Log unexpected error
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'products_fetch_error',
+                message: `Unexpected error while fetching products`,
+                userId: user?.id || null,
+                details: {
+                    error: error,
+                    executionTimeMs: Date.now() - startTime
+                },
+                status: 'failed'
+            });
         } finally {
             setIsLoading(false);
         }

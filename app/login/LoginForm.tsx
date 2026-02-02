@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import { emailTemplates, sendEmail } from "@/lib/email";
+import { logger, logAuth, logError, logSuccess } from "@/lib/logger";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -23,6 +24,8 @@ export default function LoginForm() {
   const { profile, isLoggedIn, loading, user } = useAuth();
   const [showContent, setShowContent] = useState(false); // New state for controlled content display
   const [initialLoadingComplete, setInitialLoadingComplete] = useState(false); // Track initial loading
+
+  const source = `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/login`;
 
   // Initial delay to show loading spinner first - NO AUTH CHECK DURING THIS
   useEffect(() => {
@@ -46,6 +49,10 @@ export default function LoginForm() {
     if (isLoggedIn && profile?.isVerified === true) {
       const redirectTo = searchParams.get("redirect_to");
       const redirectPath = redirectTo ? `/${redirectTo}` : "/";
+
+      // Log auto-redirect
+      logAuth('auto_redirect', `User already logged in, redirecting to ${redirectPath}`, user?.id, undefined, 'completed', source);
+
       // Show redirecting state briefly then redirect
       setTimeout(() => {
         router.push(redirectPath);
@@ -54,7 +61,7 @@ export default function LoginForm() {
       return;
     }
 
-  }, [initialLoadingComplete, loading, isLoggedIn, profile, router, searchParams]);
+  }, [initialLoadingComplete, loading, isLoggedIn, profile, router, searchParams, user?.id, source]);
 
 
   const [progress, setProgress] = useState(0);
@@ -219,8 +226,9 @@ export default function LoginForm() {
   const signin = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitted(true);
-
+    const startTime = Date.now();
     if (!validateForm()) {
+      await logger.warning('auth', 'validation_failed', 'Login form validation failed', { email }, '', source);
       toast.error("Please fill in all required fields", {
         style: { background: "black", color: "white" },
       });
@@ -229,12 +237,21 @@ export default function LoginForm() {
 
     setLoading(true);
 
+
+    // Log login attempt start
+    await logAuth('login_attempt', `Login attempt for email: ${email}`, '', { email }, 'pending', source);
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
+    const executionTime = Date.now() - startTime;
+
     if (error) {
+
+      await logError('auth', 'login_failed', `Login failed: ${error.message}`, error, '', source);
+
       if (error.message === "Email not confirmed") {
         toast.error(
           "Your email address has not been confirmed yet. Please check your inbox and confirm your email to continue.",
@@ -252,16 +269,21 @@ export default function LoginForm() {
     // ✅ USER LOGIN SUCCESS
     const userId = data.user?.id;
 
-    if (!userId) return;
+    if (!userId) {
+      await logError('auth', 'user_id_missing', 'No user ID returned after successful login', { email }, '', source);
+      setLoading(false);
+      return;
+    }
 
     // 🔍 CHECK isVerified
     const { data: userData, error: userError } = await supabase
       .from("users")
-      .select("isVerified")
+      .select("isVerified, firstName, lastName, email, login_count")
       .eq("userId", userId)
       .single();
 
     if (userError) {
+      await logError('db', 'user_fetch_failed', `Failed to fetch user data: ${userError.message}`, userError, userId, source);
       toast.error("Unable to verify account status", {
         style: { background: "black", color: "white" },
       });
@@ -272,6 +294,9 @@ export default function LoginForm() {
 
     // ❌ NOT APPROVED
     if (!userData?.isVerified) {
+
+      await logger.warning('auth', 'account_not_approved', `Login attempt for unapproved account: ${email}`, { email, userId }, userId, source);
+
       toast.error("Your account is not approved yet.", {
         style: { background: "black", color: "white" },
       });
@@ -293,31 +318,63 @@ export default function LoginForm() {
         const previousCount = parseInt(userRow?.login_count || "0", 10);
 
         // 2️⃣ Update login_at & login_count
-        await supabase.from("users").update({
+        const { error: updateError } = await supabase.from("users").update({
           login_at: new Date().toISOString().split("T")[0], // today
           login_count: String(previousCount + 1), // varchar +1
         }).eq("userId", userId);
+
+        if (updateError) {
+          await logError('db', 'login_stats_update_failed', `Failed to update login stats: ${updateError.message}`, updateError, userId, source);
+        } else {
+          await logger.info('auth', 'login_stats_updated', `Login stats updated for user: ${email}`, {
+            email,
+            userId,
+            previousCount,
+            executionTime
+          }, userId, source);
+        }
+
       }
     }
+
+    await logSuccess('auth', 'login_successful', `User logged in successfully: ${email}`, {
+      email,
+      userId,
+      executionTime,
+      userData: {
+        firstName: userData?.firstName,
+        lastName: userData?.lastName,
+        isVerified: userData?.isVerified,
+        loginCount: userData?.login_count
+      }
+    }, userId, source);
 
     toast.success("Login successful!", {
       style: { background: "black", color: "white" },
     });
 
-    if (profile?.firstName && profile?.email) {
-      sendLoginEmail(profile.firstName, profile.email);
-    } else {
-      // Fallback to userData from supabase query
-      sendLoginEmail("User", email); // Use the email they logged in with
-    }
+    const userName = userData?.firstName || "User";
+    const userEmail = userData?.email || email;
 
+    await sendLoginEmail(userName, userEmail, userId);
     setEmail("");
     setPassword("");
+
     const redirectTo = searchParams.get("redirect_to");
-    router.push(redirectTo ? `/${redirectTo}` : "/");
+    const redirectPath = redirectTo ? `/${redirectTo}` : "/";
+
+    // Log redirect
+    await logger.info('auth', 'redirecting_after_login', `Redirecting user to: ${redirectPath}`, {
+      email,
+      userId,
+      redirectPath
+    }, userId, source);
+
+    router.push(redirectPath);
+
   };
 
-  const sendLoginEmail = async (name: string, userEmail: string) => {
+  const sendLoginEmail = async (name: string, userEmail: string, userId?: string) => {
     try {
       const template = emailTemplates.welcomeEmail(name, userEmail);
 
@@ -327,7 +384,20 @@ export default function LoginForm() {
         text: template.text,
         html: template.html,
       });
+
+      if (result.success) {
+        await logger.success('email', 'welcome_email_sent', `Welcome email sent to: ${userEmail}`, {
+          to: userEmail,
+          subject: template.subject
+        }, userId, source);
+      } else {
+        await logger.warning('email', 'welcome_email_failed', `Failed to send welcome email to: ${userEmail}`, {
+          to: userEmail,
+          error: result.error
+        }, userId, source);
+      }
     } catch (emailError) {
+      await logError('email', 'email_send_exception', `Exception while sending welcome email`, emailError, userId, source);
     }
   };
 

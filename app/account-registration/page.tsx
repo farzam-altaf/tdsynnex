@@ -1,6 +1,7 @@
 "use client";
 
 import { emailTemplates, sendEmail } from "@/lib/email";
+import { logAuth, logError, logger } from "@/lib/logger";
 import { supabase } from "@/lib/supabase/client";
 import { register } from "module";
 import { useRouter } from "next/navigation";
@@ -71,6 +72,9 @@ export default function Page() {
     e.preventDefault();
     setSubmitted(true);
 
+    const startTime = Date.now();
+    const source = `${process.env.NEXT_PUBLIC_APP_URL}/account-registration`;
+
     if (!validateForm()) return;
 
     setLoading(true);
@@ -83,6 +87,15 @@ export default function Page() {
         .eq("email", email);
 
       if (selectError && selectError.code !== "PGRST116") {
+        await logError(
+          'auth',
+          'user_check',
+          `Error checking existing user: ${selectError.message}`,
+          selectError,
+          ``, // FIXED
+          source
+        );
+
         toast.error("Error checking existing users: " + selectError.message, {
           style: { background: "black", color: "white" }
         });
@@ -91,12 +104,29 @@ export default function Page() {
       }
 
       if (existingUsers?.length != 0) {
+        await logger.warning(
+          'auth',
+          'duplicate_registration',
+          `Duplicate registration attempt: ${email}`,
+          { email },
+          ``, // FIXED
+          source
+        );
         toast.error("User already exists with this email", {
           style: { background: "black", color: "white" }
         });
         setLoading(false);
         return;
       }
+
+      await logAuth(
+        'registration_start',
+        `Registration attempt: ${email}`,
+        ``, // FIXED
+        { email, firstName: FirstName, lastName: LastName },
+        `completed`,
+        source,
+      );
 
       // 2️⃣ Sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -105,6 +135,14 @@ export default function Page() {
       });
 
       if (authError) {
+        await logError(
+          'auth',
+          'supabase_auth',
+          `Auth error: ${authError.message}`,
+          authError,
+          ``, // FIXED
+          source
+        );
         toast.error(authError.message, {
           style: { background: "black", color: "white" }
         });
@@ -115,6 +153,14 @@ export default function Page() {
       const userId = authData.user?.id;
 
       if (!userId) {
+        await logError(
+          'auth',
+          'user_id_missing',
+          'No user ID returned',
+          { email, authData },
+          ``, // FIXED
+          source
+        );
         toast.error("Signup failed: No user ID returned.", {
           style: { background: "black", color: "white" }
         });
@@ -123,7 +169,7 @@ export default function Page() {
       }
 
       const today = new Date().toISOString().split("T")[0];
-      const registrationDate = formatRegistrationDate(); // Dynamic date
+      const registrationDate = formatRegistrationDate();
 
       // 3️⃣ Insert user details into users table
       const { error: dbError } = await supabase.from("users").insert({
@@ -131,7 +177,7 @@ export default function Page() {
         firstName: FirstName,
         lastName: LastName,
         email,
-        role: "subscriber",
+        role: process.env.NEXT_PUBLIC_SUBSCRIBER,
         reseller,
         registered_at: today,
         login_at: today,
@@ -140,6 +186,14 @@ export default function Page() {
       });
 
       if (dbError) {
+        await logError(
+          'db',
+          'user_insert',
+          `Database insert error: ${dbError.message}`,
+          dbError,
+          userId,
+          source
+        );
         toast.error("Error saving user data: " + dbError.message, {
           style: { background: "black", color: "white" }
         });
@@ -147,11 +201,38 @@ export default function Page() {
         return;
       }
 
+      await logger.success(
+        'auth',
+        'user_created',
+        `User created: ${email}`,
+        { userId, email, firstName: FirstName, lastName: LastName, reseller },
+        userId,
+        source
+      );
+
       // 4️⃣ Sign out the user immediately after signup
       await supabase.auth.signOut();
 
+      await logAuth('auto_signout', 'Auto-signed out after registration', userId);
+
       // 5️⃣ Send emails (non-blocking - don't await)
       sendRegistrationEmails(FirstName, LastName, email, reseller, registrationDate);
+
+      const executionTime = Date.now() - startTime;
+      await logger.success(
+        'auth',
+        'registration_complete',
+        `Registration completed: ${email}`,
+        {
+          email,
+          firstName: FirstName,
+          lastName: LastName,
+          reseller,
+          execution_time_ms: executionTime
+        },
+        userId,
+        source
+      );
 
       // 6️⃣ Clear form
       setEmail("");
@@ -167,6 +248,19 @@ export default function Page() {
 
       router.push("/login");
     } catch (err: any) {
+      const executionTime = Date.now() - startTime;
+      await logError(
+        'system',
+        'unexpected_error',
+        `Unexpected error: ${err.message}`,
+        {
+          error: err.message,
+          stack: err.stack,
+          execution_time_ms: executionTime
+        },
+        ``, // FIXED
+        source
+      );
       toast.error("An unexpected error occurred", {
         style: { background: "black", color: "white" }
       });

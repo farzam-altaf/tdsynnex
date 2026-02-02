@@ -9,6 +9,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { emailTemplates, sendEmail } from "@/lib/email";
+import { logActivity, logError, logSuccess, logInfo, logWarning } from "@/lib/logger";
 
 export default function Page() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function Page() {
     sales_manager: "",
     sm_email: "",
     reseller: "",
-    dev_opportunity: 1,
+    dev_opportunity: "",
     dev_budget: 1800,
     rev_opportunity: 1800,
     crm_account: "",
@@ -62,6 +63,24 @@ export default function Page() {
 
   const cartItem = cartItems[0]?.product;
 
+  const calculateTotals = () => {
+    const subtotal = cartItems.reduce((sum, item) =>
+      sum + ((item.product?.price || 0) * item.quantity), 0);
+    const shippingCost = 19.99;
+    const taxRate = 0.08;
+    const tax = subtotal * taxRate;
+    const total = subtotal + shippingCost + tax;
+
+    return { subtotal, shippingCost, tax, total };
+  };
+
+  const totals = calculateTotals();
+
+  // Get total quantity
+  const getTotalQuantity = () => {
+    return cartItems.reduce((total, item) => total + item.quantity, 0);
+  };
+
   // Initialize form with profile data
   useEffect(() => {
     if (profile) {
@@ -76,7 +95,8 @@ export default function Page() {
 
   // Calculate revenue opportunity when device opportunity or budget changes
   useEffect(() => {
-    const revenue = formData.dev_opportunity * formData.dev_budget;
+    const devOpportunity = parseFloat(formData.dev_opportunity) || 0;
+    const revenue = devOpportunity * formData.dev_budget;
     setFormData(prev => ({
       ...prev,
       rev_opportunity: revenue
@@ -95,11 +115,37 @@ export default function Page() {
     setAuthInitialized(true);
 
     if (!isLoggedIn || (profile?.isVerified === false && !profile)) {
+      logActivity({
+        type: 'auth',
+        level: 'warning',
+        action: 'unauthorized_checkout_access_attempt',
+        message: 'User attempted to access checkout without proper authentication',
+        userId: profile?.id || null,
+        details: {
+          isLoggedIn,
+          isVerified: profile?.isVerified,
+          userRole: profile?.role
+        },
+        status: 'failed'
+      });
       router.replace('/login/?redirect_to=checkout');
     } else {
       setAuthChecked(true);
+      logActivity({
+        type: 'ui',
+        level: 'info',
+        action: 'checkout_page_accessed',
+        message: 'User accessed checkout page',
+        userId: profile?.id || null,
+        details: {
+          userRole: profile?.role,
+          email: profile?.email,
+          cartCount
+        },
+        status: 'completed'
+      });
     }
-  }, [loading, isLoggedIn, profile, user, router]);
+  }, [loading, isLoggedIn, profile, user, router, cartCount]);
 
   useEffect(() => {
     if (!authChecked || !authInitialized) {
@@ -108,9 +154,22 @@ export default function Page() {
   }, [authChecked, authInitialized]);
 
   useEffect(() => {
-    if (cartCount != 1) {
+    if (cartCount < 1) {
       if (!cartLoading) {
-        router.replace('/cart')
+        logActivity({
+          type: 'cart',
+          level: 'warning',
+          action: 'invalid_cart_count',
+          message: `User attempted checkout with ${cartCount} items (expected 1)`,
+          userId: profile?.id || null,
+          details: {
+            cartCount,
+            expectedCount: 1,
+            cartItems: cartItems.length
+          },
+          status: 'failed'
+        });
+        router.replace('/cart');
       }
     }
   }, [cartCount, cartLoading]);
@@ -271,15 +330,21 @@ export default function Page() {
     return true;
   };
 
-  // Prepare data for submission
+  // Prepare data for submission - Updated for arrays in product_id and quantity
   const prepareOrderData = () => {
     const now = new Date();
     const orderDate = new Date(formData.desired_date);
 
+    // Prepare arrays for product_ids and quantities
+    const productIdsArray = cartItems.map(item => item.product_id);
+    const quantitiesArray = cartItems.map(item => item.quantity);
+
     return {
-      product_id: cartItem?.id || "",
+      // Arrays for multiple products
+      product_id: JSON.stringify(productIdsArray), // Convert to JSON string
+      quantity: JSON.stringify(quantitiesArray), // Convert to JSON string
+
       order_by: profile?.id || "",
-      quantity: 1,
       sales_executive: formData.sales_executive,
       se_email: formData.se_email,
       sales_manager: formData.sales_manager,
@@ -314,231 +379,314 @@ export default function Page() {
       order_year: orderDate.getFullYear(),
       order_quarter: getQuarter(formData.desired_date),
       created_at: now.toISOString(),
-      updated_at: now.toISOString()
+      updated_at: now.toISOString(),
     };
   };
 
-  // Handle form submission
   const handleSubmit = async () => {
-    if (!validateForm()) return;
+    const startTime = Date.now();
+
+    // Log submission attempt
+    await logActivity({
+      type: 'order',
+      level: 'info',
+      action: 'multi_order_submission_attempt',
+      message: 'User attempted to submit order for multiple products',
+      userId: profile?.id || null,
+      details: {
+        userRole: profile?.role,
+        cartItemCount: cartItems.length,
+        totalQuantity: getTotalQuantity(),
+        products: cartItems.map(item => ({
+          productId: item.product_id,
+          productName: item.product?.product_name,
+          quantity: item.quantity
+        }))
+      }
+    });
+
+    if (!validateForm()) {
+      await logActivity({
+        type: 'validation',
+        level: 'warning',
+        action: 'order_validation_failed',
+        message: 'Order submission failed validation',
+        userId: profile?.id || null,
+        details: {
+          errorCount: Object.keys(errors).length,
+          errors: errors,
+          cartItemCount: cartItems.length
+        },
+        status: 'failed'
+      });
+      return;
+    }
 
     setIsSubmitting(true);
 
     // Show loading toast
-    const loadingToast = toast.loading("Processing your order...", {
+    const loadingToast = toast.loading(`Processing order for ${cartItems.length} product(s)...`, {
       style: { background: "#f0f9ff", color: "#0369a1", border: "1px solid #bae6fd" },
     });
 
     try {
+      // Prepare single order data with all products
       const orderData = prepareOrderData();
 
-      // Insert into database
-      const { data, error } = await supabase
+      // Check stock for all products before processing
+      const stockChecks = cartItems.map(item => {
+        const product = item.product;
+        if (!product) {
+          throw new Error(`Product details not found for item ${item.product_id}`);
+        }
+
+        const stockQty = Number(product.stock_quantity) - item.quantity;
+        if (stockQty < 0) {
+          throw new Error(`Insufficient stock for ${product.product_name}. Available: ${product.stock_quantity}, Requested: ${item.quantity}`);
+        }
+
+        return {
+          productId: product.id,
+          productName: product.product_name,
+          stockQty,
+          withCustomerQty: Number(product.withCustomer) + item.quantity,
+          oldStock: product.stock_quantity,
+          oldWithCustomer: product.withCustomer,
+          quantity: item.quantity
+        };
+      });
+
+      // Insert single order into database
+      const { data: insertedOrder, error: orderError } = await supabase
         .from('orders')
         .insert([orderData])
-        .select()
-        .single();
+        .select();
 
-      if (error) {
-        throw error;
+      if (orderError) {
+        throw orderError;
       }
 
-      const stockQty = Number(cartItem?.stock_quantity) - 1;
-      const withCustomerQty = Number(cartItem?.withCustomer) + 1;
+      // Update all product stocks
+      for (const check of stockChecks) {
+        const { error: updateError } = await supabase
+          .from('products')
+          .update({
+            stock_quantity: check.stockQty,
+            withCustomer: check.withCustomerQty,
+          })
+          .eq('id', check.productId);
 
-      // FIXED: Use 'error' instead of 'perror'
-      const { error: updateError } = await supabase
-        .from('products')
-        .update({
-          stock_quantity: stockQty,
-          withCustomer: withCustomerQty,
-        })
-        .eq('id', cartItem?.id);
-
-      if (updateError) throw updateError; // FIXED: Throw updateError
-
-      // Remove product from cart after successful order
-      if (cartItem?.id) {
-        await removeFromCart(cartItem.id);
+        if (updateError) throw updateError;
       }
+
+      // Clear the entire cart after successful order
+      await clearCart();
 
       // Dismiss loading toast and show success toast
       toast.dismiss(loadingToast);
-      toast.success("Order Placed Successfully!", {
+      toast.success(`Order Placed for ${cartItems.length} Product(s)!`, {
         style: { background: "black", color: "white" }
       });
-      sendCheckoutEmail(data);
-      sendNewOrderEmail(data);
+
+      // Send emails with multiple products
+      if (insertedOrder && insertedOrder.length > 0) {
+        sendCheckoutEmail(insertedOrder);
+        sendNewOrderEmail(insertedOrder);
+      }
 
       // Redirect to order confirmation page
       setTimeout(() => {
         router.push('/thanks');
       }, 50);
 
+      // Log successful order
+      await logActivity({
+        type: 'order',
+        level: 'success',
+        action: 'order_submission_success',
+        message: `Successfully placed order for ${cartItems.length} products`,
+        userId: profile?.id || null,
+        details: {
+          orderId: insertedOrder[0]?.id,
+          totalItems: getTotalQuantity(),
+          totalProducts: cartItems.length,
+          executionTimeMs: Date.now() - startTime
+        },
+        status: 'completed'
+      });
+
     } catch (error: any) {
-
-      // Dismiss loading toast and show error toast
+      // Error handling
       toast.dismiss(loadingToast);
-
-      let errorMessage = "Failed to place order. Please try again.";
-
-      if (error.message.includes('row-level security')) {
-        errorMessage = "Database security error. Please contact support.";
-      } else if (error.message.includes('foreign key')) {
-        errorMessage = "Product or user data error. Please refresh and try again.";
-      }
-
-      toast.error("Order Submission Failed", {
-        description: errorMessage,
+      toast.error("Order Failed", {
+        description: error.message || "Something went wrong. Please try again.",
         style: { background: "red", color: "white" }
       });
 
+      await logActivity({
+        type: 'order',
+        level: 'error',
+        action: 'order_submission_failed',
+        message: `Order submission failed: ${error.message}`,
+        userId: profile?.id || null,
+        details: {
+          error: error.message,
+          cartItemCount: cartItems.length,
+          executionTimeMs: Date.now() - startTime
+        },
+        status: 'failed'
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const sendCheckoutEmail = async (oData: any) => {
+  const sendCheckoutEmail = async (orders: any[]) => {
+    const startTime = Date.now();
     try {
       const myMail = profile?.email;
+      if (!myMail) throw new Error("User email not found");
 
-      if (!myMail) {
-        throw new Error("User email not found");
-      }
+      const orderNumber = orders[0]?.order_no || 'N/A';
+      const orderData = orders[0]; // Single order object
 
-      const orderData = prepareOrderData();
-      const orderNumber = oData.order_no;
-
-      if (!cartItem) {
-        throw new Error("No product in cart");
-      }
+      // Prepare product list from the order data
+      const products = orderData.products || cartItems.map(item => ({
+        name: item.product?.product_name || 'Unknown Product',
+        quantity: item.quantity,
+        sku: item.product?.sku || ''
+      }));
 
       const template = emailTemplates.checkoutEmail({
-        orderNumber: orderNumber, // ya koi order ID generate kar do
-        orderDate: orderData.order_date,
-        customerName: orderData.contact_name,
+        orderNumber: orderNumber,
+        orderDate: formData.desired_date,
+        customerName: formData.contact_name,
         customerEmail: myMail,
-
-        productName: cartItem.product_name,
-        quantity: orderData.quantity,
-
-        salesExecutive: orderData.sales_executive,
-        salesExecutiveEmail: orderData.se_email,
-        salesManager: orderData.sales_manager,
-        salesManagerEmail: orderData.sm_email,
-        reseller: orderData.reseller,
-
-        companyName: orderData.company_name,
-        contactName: orderData.contact_name,
-        contactEmail: orderData.email,
-        shippingAddress: orderData.address,
-        city: orderData.city,
-        state: orderData.state,
-        zip: orderData.zip,
-        deliveryDate: orderData.desired_date,
-
-        deviceUnits: orderData.dev_opportunity,
-        budgetPerDevice: orderData.dev_budget,
-        revenue: orderData.rev_opportunity,
-        crmAccount: orderData.crm_account,
-        vertical: orderData.vertical,
-        segment: orderData.segment,
-        useCase: orderData.use_case,
-        currentDevices: orderData.currently_running,
-        licenses: orderData.licenses,
-        usingCopilot: orderData.isCopilot,
-        securityFactor: orderData.isSecurity,
-        deviceProtection: orderData.current_protection,
-
-        note: orderData.notes || "",
+        products: products,
+        totalQuantity: getTotalQuantity(),
+        subtotal: totals.subtotal,
+        shipping: totals.shippingCost,
+        tax: totals.tax,
+        total: totals.total,
+        salesExecutive: formData.sales_executive,
+        salesExecutiveEmail: formData.se_email,
+        salesManager: formData.sales_manager,
+        salesManagerEmail: formData.sm_email,
+        reseller: formData.reseller,
+        companyName: formData.company_name,
+        contactName: formData.contact_name,
+        contactEmail: formData.email,
+        shippingAddress: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zip: formData.zip,
+        deliveryDate: formData.desired_date,
+        deviceUnits: formData.dev_opportunity,
+        budgetPerDevice: formData.dev_budget,
+        revenue: formData.rev_opportunity,
+        crmAccount: formData.crm_account,
+        vertical: formData.vertical,
+        segment: formData.segment,
+        useCase: formData.use_case,
+        currentDevices: formData.currently_running,
+        licenses: formData.licenses,
+        usingCopilot: formData.isCopilot,
+        securityFactor: formData.isSecurity,
+        deviceProtection: formData.current_protection,
+        note: formData.notes || "",
       });
 
       await sendEmail({
-        to: myMail, // ✅ always string
+        to: myMail,
         subject: template.subject,
         text: template.text,
         html: template.html,
       });
 
     } catch (error) {
+      console.error('Error sending checkout email:', error);
       toast.error("Failed to send checkout email. Please try again.");
     }
   };
 
-  const sendNewOrderEmail = async (oData: any) => {
+  const sendNewOrderEmail = async (orders: any[]) => {
+    const startTime = Date.now();
     try {
-      const myMail = profile?.email;
+      const orderNumber = orders[0]?.order_no || 'N/A';
+      const orderData = orders[0]; // Single order object
 
-      if (!myMail) {
-        throw new Error("User email not found");
-      }
-
-      const orderData = prepareOrderData();
-      const orderNumber = oData.order_no;
-
-      if (!cartItem) {
-        throw new Error("No product in cart");
-      }
+      // Prepare product list from the order data
+      const products = orderData.products || cartItems.map(item => ({
+        name: item.product?.product_name || 'Unknown Product',
+        quantity: item.quantity,
+        sku: item.product?.sku || ''
+      }));
 
       const template = emailTemplates.newOrderEmail({
         orderNumber: orderNumber,
-        orderDate: orderData.order_date,
-        customerName: orderData.contact_name,
-        customerEmail: myMail,
-
-        productName: cartItem.product_name,
-        quantity: orderData.quantity,
-
-        salesExecutive: orderData.sales_executive,
-        salesExecutiveEmail: orderData.se_email,
-        salesManager: orderData.sales_manager,
-        salesManagerEmail: orderData.sm_email,
-        reseller: orderData.reseller,
-
-        companyName: orderData.company_name,
-        contactName: orderData.contact_name,
-        contactEmail: orderData.email,
-        shippingAddress: orderData.address,
-        city: orderData.city,
-        state: orderData.state,
-        zip: orderData.zip,
-        deliveryDate: orderData.desired_date,
-
-        deviceUnits: orderData.dev_opportunity,
-        budgetPerDevice: orderData.dev_budget,
-        revenue: orderData.rev_opportunity,
-        crmAccount: orderData.crm_account,
-        vertical: orderData.vertical,
-        segment: orderData.segment,
-        useCase: orderData.use_case,
-        currentDevices: orderData.currently_running,
-        licenses: orderData.licenses,
-        usingCopilot: orderData.isCopilot,
-        securityFactor: orderData.isSecurity,
-        deviceProtection: orderData.current_protection,
-
-        note: orderData.notes || "",
+        orderDate: formData.desired_date,
+        customerName: formData.contact_name,
+        customerEmail: formData.email,
+        products: products,
+        salesExecutive: formData.sales_executive,
+        salesExecutiveEmail: formData.se_email,
+        salesManager: formData.sales_manager,
+        salesManagerEmail: formData.sm_email,
+        reseller: formData.reseller,
+        companyName: formData.company_name,
+        contactName: formData.contact_name,
+        contactEmail: formData.email,
+        shippingAddress: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zip: formData.zip,
+        deliveryDate: formData.desired_date,
+        deviceUnits: formData.dev_opportunity,
+        budgetPerDevice: formData.dev_budget,
+        revenue: formData.rev_opportunity,
+        crmAccount: formData.crm_account,
+        vertical: formData.vertical,
+        segment: formData.segment,
+        useCase: formData.use_case,
+        currentDevices: formData.currently_running,
+        licenses: formData.licenses,
+        usingCopilot: formData.isCopilot,
+        securityFactor: formData.isSecurity,
+        deviceProtection: formData.current_protection,
+        note: formData.notes || "",
       });
 
       const adminEmails = await getAdminEmails();
 
-
       await sendEmail({
-        // to: adminEmails,
-        to: "farzamaltaf888@gmail.com",
+        to: adminEmails.length > 0 ? adminEmails : "farzamaltaf888@gmail.com",
         subject: template.subject,
         text: template.text,
         html: template.html,
       });
 
     } catch (error) {
-      toast.error("Failed to send checkout email. Please try again.");
+      console.error('Error sending new order email:', error);
+      toast.error("Failed to send new order email. Please try again.");
     }
   };
 
 
   // Add this function to fetch admin emails
   const getAdminEmails = async () => {
+    const startTime = Date.now();
+
+    await logActivity({
+      type: 'user',
+      level: 'info',
+      action: 'admin_emails_fetch_attempt',
+      message: 'Attempting to fetch admin emails',
+      userId: profile?.id || null,
+      details: {
+        adminRole: process.env.NEXT_PUBLIC_ADMINISTRATOR
+      }
+    });
+
     try {
       const adminRole = process.env.NEXT_PUBLIC_ADMINISTRATOR;
 
@@ -548,6 +696,18 @@ export default function Page() {
         .eq("role", adminRole);
 
       if (error) {
+        await logActivity({
+          type: 'user',
+          level: 'error',
+          action: 'admin_emails_fetch_failed',
+          message: `Failed to fetch admin emails: ${error.message}`,
+          userId: profile?.id || null,
+          details: {
+            error: error,
+            executionTimeMs: Date.now() - startTime
+          },
+          status: 'failed'
+        });
         return [];
       }
 
@@ -556,9 +716,34 @@ export default function Page() {
         .map(admin => admin.email)
         .filter(email => email && email.trim() !== "");
 
+
+      await logActivity({
+        type: 'user',
+        level: 'success',
+        action: 'admin_emails_fetch_success',
+        message: `Successfully fetched ${adminEmails.length} admin emails`,
+        userId: profile?.id || null,
+        details: {
+          adminCount: adminEmails.length,
+          executionTimeMs: Date.now() - startTime
+        },
+        status: 'completed'
+      });
+
       return adminEmails;
 
     } catch (error) {
+      await logActivity({
+        type: 'user',
+        level: 'error',
+        action: 'admin_emails_fetch_error',
+        message: `Failed to fetch admin emails`,
+        userId: profile?.id || null,
+        details: {
+          executionTimeMs: Date.now() - startTime
+        },
+        status: 'failed'
+      });
       return [];
     }
   };
@@ -594,8 +779,6 @@ export default function Page() {
             </div>
           </div>
         </div>
-      ) : cartCount > 1 ? (
-        <></>
       ) : (
         <>
           <div className="min-h-screen p-4 my-7 md:p-8">
@@ -1260,17 +1443,19 @@ export default function Page() {
               {/* Product Order Section */}
               <div className="bg-white mb-5 border">
                 <div className="bg-[#0A4647]">
-                  <h2 className="text-xl text-white font-bold py-2 px-4">Your order</h2>
+                  <h2 className="text-xl text-white font-bold py-2 px-4">Your Order ({cartItems.length} items)</h2>
                 </div>
 
                 <div className="px-7 py-8">
-                  <div className="mb-8">
-                    <h3 className="text-lg font-medium text-gray-700 mb-3">Product</h3>
-                    <div className="border border-gray-200 rounded-md p-4 bg-gray-50">
-                      <p className="text-gray-600">
-                        {cartItem?.product_name} <b>x 1</b>
-                      </p>
-                    </div>
+                  <div className="space-y-4 mb-6">
+                    {cartItems.map((item) => (
+                      <div key={item.product_id} className="flex justify-between items-center border-b pb-4">
+                        <div>
+                          <h4 className="font-medium text-gray-800">{item.product?.product_name} <b className="mx-2">x {item.quantity}</b></h4>
+                          <p className="text-sm text-gray-500">SKU: {item.product?.sku}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

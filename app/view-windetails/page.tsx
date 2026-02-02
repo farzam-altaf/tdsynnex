@@ -43,6 +43,7 @@ import { toast } from "sonner"
 import { supabase } from "@/lib/supabase/client"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import Link from "next/link"
+import { logAuth, logError, logInfo, logSuccess, logWarning } from "@/lib/logger"
 
 // Define Win type based on your Supabase table
 export type Win = {
@@ -103,11 +104,25 @@ export default function Page() {
     // Check if current user is authorized
     const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
 
+    const source = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/view-windetails`;
+
     // Handle auth check
     useEffect(() => {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
+            logAuth(
+                'access_denied',
+                'Unauthorized access to wins details page',
+                profile?.id,
+                {
+                    isLoggedIn,
+                    isVerified: profile?.isVerified,
+                    role: profile?.role
+                },
+                'failed',
+                source
+            );
             router.replace('/login/?redirect_to=view-windetails');
             return;
         }
@@ -115,9 +130,23 @@ export default function Page() {
     }, [loading, isLoggedIn, profile, router, isAuthorized]);
 
     const fetchWins = async () => {
+        const startTime = Date.now();
         try {
             setIsLoading(true);
             setError(null);
+
+            logInfo(
+                'db',
+                'wins_fetch_started',
+                'Started fetching wins data',
+                {
+                    isAuthorized,
+                    userId: profile?.id,
+                    role: profile?.role
+                },
+                profile?.id,
+                source
+            );
 
             // First, fetch wins data
             if (isAuthorized) {
@@ -157,6 +186,20 @@ export default function Page() {
                                 // Don't include order_data property
                             } as Win;
                         })
+                    );
+
+                    const executionTime = Date.now() - startTime;
+                    logSuccess(
+                        'db',
+                        'wins_fetch_success',
+                        `Successfully fetched ${winsWithOrderDetails.length} wins`,
+                        {
+                            count: winsWithOrderDetails.length,
+                            executionTime,
+                            isAuthorized: true
+                        },
+                        profile?.id,
+                        source
                     );
 
                     setWins(winsWithOrderDetails);
@@ -203,14 +246,46 @@ export default function Page() {
                         })
                     );
 
+                    const executionTime = Date.now() - startTime;
+
+                    logSuccess(
+                        'db',
+                        'wins_fetch_success',
+                        `Successfully fetched ${winsWithOrderDetails.length} wins (user-specific)`,
+                        {
+                            count: winsWithOrderDetails.length,
+                            executionTime,
+                            isAuthorized: false,
+                            userId: profile?.id
+                        },
+                        profile?.id,
+                        source
+                    );
+
                     setWins(winsWithOrderDetails);
                 }
             }
         } catch (err: unknown) {
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch wins');
+                logError(
+                    'db',
+                    'wins_fetch_failed',
+                    `Failed to fetch wins: ${err.message}`,
+                    err,
+                    profile?.id,
+                    source
+                );
             } else {
                 setError('Failed to fetch wins');
+                logError(
+                    'db',
+                    'wins_fetch_failed',
+                    'Failed to fetch wins',
+                    { error: err },
+                    profile?.id,
+                    source
+                );
             }
         } finally {
             setIsLoading(false);
@@ -229,6 +304,19 @@ export default function Page() {
         setSelectedWin(win);
         setEditErrors({});
         setIsEditDrawerOpen(true);
+
+        logInfo(
+            'ui',
+            'edit_win_clicked',
+            `Edit win clicked for win ID: ${win.id}`,
+            {
+                winId: win.id,
+                customerName: win.customerName,
+                orderNo: win.order_no
+            },
+            profile?.id,
+            source
+        );
     };
 
     // Handle form input changes
@@ -350,12 +438,45 @@ export default function Page() {
         }
 
         setEditErrors(newErrors);
+
+
+        if (!isValid) {
+            logWarning(
+                'validation',
+                'edit_validation_failed',
+                `Edit form validation failed with ${Object.keys(newErrors).length} errors`,
+                {
+                    winId: selectedWin.id,
+                    errors: newErrors,
+                    errorCount: Object.keys(newErrors).length
+                },
+                profile?.id,
+                source
+            );
+        }
+
         return isValid;
     };
 
     // Update win in Supabase
     const handleUpdateWin = async () => {
         if (!selectedWin) return;
+
+
+        const startTime = Date.now();
+
+        logInfo(
+            'win',
+            'win_update_started',
+            `Started updating win ID: ${selectedWin.id}`,
+            {
+                winId: selectedWin.id,
+                customerName: selectedWin.customerName,
+                orderNo: selectedWin.order_no
+            },
+            profile?.id,
+            source
+        );
 
         if (!validateEditForm()) {
             toast.error("Please fill in all required fields correctly", { style: { color: "white", backgroundColor: "red" } });
@@ -386,6 +507,26 @@ export default function Page() {
                 win.id === selectedWin.id ? updatedWin : win
             ));
 
+
+            const executionTime = Date.now() - startTime;
+            logSuccess(
+                'win',
+                'win_update_success',
+                `Successfully updated win ID: ${selectedWin.id}`,
+                {
+                    winId: selectedWin.id,
+                    customerName: selectedWin.customerName,
+                    orderNo: selectedWin.order_no,
+                    dealRev: selectedWin.deal_rev,
+                    units: selectedWin.units,
+                    executionTime,
+                    updatedBy: profile?.email
+                },
+                profile?.id,
+                source
+            );
+
+
             toast.success("Win updated successfully!", { style: { color: "white", backgroundColor: "black" } });
             setIsEditDrawerOpen(false);
             setSelectedWin(null);
@@ -393,6 +534,20 @@ export default function Page() {
             fetchWins(); // Refresh data
 
         } catch (err: any) {
+            const executionTime = Date.now() - startTime;
+            logError(
+                'db',
+                'win_update_failed',
+                `Failed to update win ID: ${selectedWin.id}`,
+                {
+                    error: err.message,
+                    winId: selectedWin.id,
+                    executionTime
+                },
+                profile?.id,
+                source
+            );
+
             toast.error(err.message || "Failed to update win", { style: { color: "white", backgroundColor: "red" } });
         } finally {
             setIsSubmitting(false);
@@ -400,7 +555,22 @@ export default function Page() {
     };
 
     // Handle delete win
-    const handleDeleteWin = async (winId: string) => {
+    const handleDeleteWin = async (winId: string, customerName: string, orderNo?: number) => {
+        const startTime = Date.now();
+
+        logWarning(
+            'win',
+            'win_delete_requested',
+            `Delete requested for win ID: ${winId}`,
+            {
+                winId,
+                customerName,
+                orderNo,
+                deletedBy: profile?.email
+            },
+            profile?.id,
+            source
+        );
         try {
             const { error } = await supabase
                 .from('wins')
@@ -411,9 +581,40 @@ export default function Page() {
 
             // Update local state
             setWins(prev => prev.filter(win => win.id !== winId));
+
+            const executionTime = Date.now() - startTime;
+            logSuccess(
+                'win',
+                'win_delete_success',
+                `Successfully deleted win ID: ${winId}`,
+                {
+                    winId,
+                    customerName,
+                    orderNo,
+                    executionTime,
+                    deletedBy: profile?.email
+                },
+                profile?.id,
+                source
+            );
+
             toast.success("Win deleted successfully!", { style: { color: "white", backgroundColor: "black" } });
 
         } catch (err: any) {
+            const executionTime = Date.now() - startTime;
+            logError(
+                'db',
+                'win_delete_failed',
+                `Failed to delete win ID: ${winId}`,
+                {
+                    error: err.message,
+                    winId,
+                    executionTime
+                },
+                profile?.id,
+                source
+            );
+
             toast.error(err.message || "Failed to delete win", { style: { color: "white", backgroundColor: "red" } });
         }
     };
@@ -441,7 +642,18 @@ export default function Page() {
     // Handle export CSV
     const handleExportCSV = () => {
         if (wins.length === 0) {
-            alert("No data to export");
+            logWarning(
+                'export',
+                'csv_export_empty',
+                'Attempted to export CSV with no wins data',
+                {
+                    winsCount: wins.length
+                },
+                profile?.id,
+                source
+            );
+
+            toast.info("No data to export");
             return;
         }
 
@@ -467,8 +679,32 @@ export default function Page() {
 
             // Download file
             downloadCSV(csvString, `wins_${new Date().toISOString().split('T')[0]}.csv`);
+
+
+            logSuccess(
+                'export',
+                'csv_export_success',
+                `Successfully exported ${wins.length} wins to CSV`,
+                {
+                    winsCount: wins.length,
+                    exportDate: new Date().toISOString()
+                },
+                profile?.id,
+                source
+            );
+
         } catch (error) {
             setError('Failed to export CSV');
+            logError(
+                'export',
+                'csv_export_failed',
+                `Failed to export CSV`,
+                {
+                    winsCount: wins.length
+                },
+                profile?.id,
+                source
+            );
         }
     };
 
@@ -513,6 +749,22 @@ export default function Page() {
         URL.revokeObjectURL(url);
     };
 
+    const handleRefresh = async () => {
+        logInfo(
+            'ui',
+            'manual_refresh',
+            'Manually refreshing wins data',
+            {
+                currentCount: wins.length,
+                lastRefresh: new Date().toISOString()
+            },
+            profile?.id,
+            source
+        );
+
+        await fetchWins();
+    };
+
     // Define columns
     const columns: ColumnDef<Win>[] = [
         // Actions column - Always add for authorized users
@@ -528,7 +780,7 @@ export default function Page() {
                 };
 
                 const handleConfirmDelete = async () => {
-                    await handleDeleteWin(win.id);
+                    await handleDeleteWin(win.id, win.customerName, win.order_no);
                     setIsDeleteDialogOpen(false);
                 };
 
@@ -750,7 +1002,7 @@ export default function Page() {
                 <div className="flex gap-2">
                     <Button
                         variant="outline"
-                        onClick={fetchWins}
+                        onClick={handleRefresh}
                         disabled={isLoading}
                         className="cursor-pointer"
                     >

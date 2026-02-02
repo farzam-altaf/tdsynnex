@@ -13,8 +13,10 @@ import {
     Shield,
     ArrowLeft,
     Clock,
-    Delete
+    Delete,
+    Trash
 } from "lucide-react";
+import { logActivity } from "@/lib/logger";
 import { Carousel, Popconfirm, Skeleton } from "antd";
 import { supabase } from "@/lib/supabase/client";
 import { FaEdit } from "react-icons/fa";
@@ -179,6 +181,8 @@ export default function Page() {
     const [isWishlisted, setIsWishlisted] = useState(false);
     const [isAddingToWaitlist, setIsAddingToWaitlist] = useState(false);
     const [showWaitlistModal, setShowWaitlistModal] = useState(false);
+
+    const source = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/product/${slug}`;
 
     // Carousel ref for manual control
     const carouselRef = useRef<CarouselRef>(null);
@@ -345,12 +349,59 @@ export default function Page() {
 
     const handleAddToCart = async (productId: string) => {
         try {
+            await logActivity({
+                type: 'product',
+                level: 'info',
+                action: 'add_to_cart_attempt',
+                message: `User attempted to add product to cart: ${product?.product_name || 'Unknown product'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    productName: product?.product_name,
+                    sku: product?.sku,
+                    userRole: profile?.role,
+                    isPublished: product?.post_status === 'Publish',
+                    stockQuantity: product?.stock_quantity,
+                    slug: slug
+                }
+            });
             await addToCart(productId, 1)
+
+            await logActivity({
+                type: 'product',
+                level: 'success',
+                action: 'add_to_cart_success',
+                message: `Product added to cart successfully: ${product?.product_name || 'Unknown product'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    productName: product?.product_name,
+                    sku: product?.sku,
+                    slug: slug
+                },
+                status: 'completed'
+            });
+
             toast.success('Product added to cart!', {
                 style: { background: "black", color: "white" },
             })
         } catch (error: any) {
             let errorMessage = 'Failed to add product to cart. Please try again.'
+
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'add_to_cart_failed',
+                message: `Failed to add product to cart: ${error?.message || 'Unknown error'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    errorCode: error?.code,
+                    errorMessage: error?.message,
+                    errorDetails: error
+                },
+                status: 'failed'
+            });
 
             if (error?.code === '23505') {
                 errorMessage = 'This product is already in your cart.'
@@ -370,12 +421,55 @@ export default function Page() {
     // Handle cart item removal
     const handleRemoveFromCart = async (productId: string) => {
         try {
+            await logActivity({
+                type: 'product',
+                level: 'info',
+                action: 'remove_from_cart_attempt',
+                message: `User attempted to remove product from cart: ${product?.product_name || 'Unknown product'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    productName: product?.product_name,
+                    sku: product?.sku,
+                    slug: slug
+                }
+            });
             await removeFromCart(productId)
+
+            await logActivity({
+                type: 'product',
+                level: 'success',
+                action: 'remove_from_cart_success',
+                message: `Product removed from cart successfully: ${product?.product_name || 'Unknown product'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    productName: product?.product_name,
+                    sku: product?.sku,
+                    slug: slug
+                },
+                status: 'completed'
+            });
+
             toast.success('Product removed from cart!', {
                 style: { background: "black", color: "white" },
             })
         } catch (error: any) {
             let errorMessage = 'Failed to remove product from cart. Please try again.'
+
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'remove_from_cart_failed',
+                message: `Failed to remove product from cart: ${error?.message || 'Unknown error'}`,
+                userId: user?.id || null,
+                productId: productId,
+                details: {
+                    errorMessage: error?.message,
+                    errorDetails: error
+                },
+                status: 'failed'
+            });
 
             if (error?.message?.includes('not found')) {
                 errorMessage = 'Product not found in cart.'
@@ -448,11 +542,12 @@ export default function Page() {
                     <button
                         onClick={() => handleRemoveFromCart(product.id)}
                         disabled={isUpdating}
-                        className="flex items-center justify-center gap-1 px-5 py-2 text-sm
-               border border-red-600 bg-red-600 text-white rounded
-               hover:bg-red-700 hover:border-red-700 font-medium
+                        className="flex items-center gap-3 cursor-pointer justify-center px-5 py-2
+               border border-red-600 text-red-600 rounded-md
+                hover:border-red-700 hover:bg-red-100
                disabled:opacity-50"
                     >
+                        <Trash className="h-4 w-4" />
                         {isUpdating ? 'Removing...' : 'Remove from Cart'}
                     </button>
                 </div>
@@ -599,6 +694,23 @@ export default function Page() {
     // Fetch product data
     useEffect(() => {
         const fetchProductData = async () => {
+
+            const startTime = Date.now();
+
+            // Log fetch attempt
+            await logActivity({
+                type: 'product',
+                level: 'info',
+                action: 'product_fetch_attempt',
+                message: `Attempting to fetch product details for slug: ${slug}`,
+                userId: user?.id || null,
+                details: {
+                    slug: slug,
+                    userRole: profile?.role,
+                    isLoggedIn: isLoggedIn
+                }
+            });
+
             try {
                 setLoading(true);
                 setError(null);
@@ -611,12 +723,38 @@ export default function Page() {
                     .single();
 
                 if (productError) {
+                    await logActivity({
+                        type: 'product',
+                        level: 'error',
+                        action: 'product_fetch_failed',
+                        message: `Failed to fetch product for slug: ${slug}`,
+                        userId: user?.id || null,
+                        details: {
+                            slug: slug,
+                            error: productError,
+                            executionTimeMs: Date.now() - startTime
+                        },
+                        status: 'failed'
+                    });
                     router.push(`/product/${slug}`)
                     setError("Product not found");
                     return;
                 }
 
                 if (!productData) {
+                    await logActivity({
+                        type: 'product',
+                        level: 'warning',
+                        action: 'product_not_found',
+                        message: `Product not found for slug: ${slug}`,
+                        userId: user?.id || null,
+                        details: {
+                            slug: slug,
+                            executionTimeMs: Date.now() - startTime
+                        },
+                        status: 'failed'
+                    });
+
                     setError("Product not found");
                     return;
                 }
@@ -669,8 +807,27 @@ export default function Page() {
 
                 setProduct(productWithTitles);
 
+                await logActivity({
+                    type: 'product',
+                    level: 'success',
+                    action: 'product_fetch_success',
+                    message: `Successfully fetched product details: ${productData.product_name}`,
+                    userId: user?.id || null,
+                    productId: productData.id,
+                    details: {
+                        productName: productData.product_name,
+                        sku: productData.sku,
+                        slug: slug,
+                        isPublished: productData.post_status === 'Publish',
+                        stockQuantity: productData.stock_quantity,
+                        executionTimeMs: Date.now() - startTime
+                    },
+                    status: 'completed'
+                });
+
                 // Fetch related products based on filters
                 const relatedConditions = [];
+                const relatedProductsStartTime = Date.now();
 
                 if (productData.form_factor) {
                     relatedConditions.push(`form_factor.eq.${productData.form_factor}`);
@@ -688,10 +845,37 @@ export default function Page() {
                     .limit(4);
 
                 if (!relatedError && relatedData) {
+                    await logActivity({
+                        type: 'product',
+                        level: 'info',
+                        action: 'related_products_fetch_success',
+                        message: `Fetched ${relatedData.length} related products`,
+                        userId: user?.id || null,
+                        details: {
+                            mainProductId: productData.id,
+                            mainProductName: productData.product_name,
+                            relatedProductsCount: relatedData.length,
+                            executionTimeMs: Date.now() - relatedProductsStartTime
+                        },
+                        status: 'completed'
+                    });
                     setRelatedProducts(relatedData);
                 }
 
             } catch (err) {
+                await logActivity({
+                    type: 'product',
+                    level: 'error',
+                    action: 'product_fetch_error',
+                    message: `Unexpected error while fetching product`,
+                    userId: user?.id || null,
+                    details: {
+                        slug: slug,
+                        error: err,
+                        executionTimeMs: Date.now() - startTime
+                    },
+                    status: 'failed'
+                });
                 setError("Failed to load product");
             } finally {
                 setLoading(false);
@@ -710,6 +894,25 @@ export default function Page() {
     const handleDeleteDevice = async () => {
         if (!product?.id) return;
 
+        const startTime = Date.now();
+
+        // Log delete attempt
+        await logActivity({
+            type: 'product',
+            level: 'warning',
+            action: 'product_delete_attempt',
+            message: `User attempted to delete product: ${product.product_name}`,
+            userId: user?.id || null,
+            productId: product.id,
+            details: {
+                productName: product.product_name,
+                sku: product.sku,
+                slug: slug,
+                userRole: profile?.role,
+                deletedBy: profile?.email
+            }
+        });
+
         try {
             const { error } = await supabase
                 .from("products")
@@ -718,15 +921,62 @@ export default function Page() {
                 .eq("user_id", profile?.userId);
 
             if (error) {
+
+                await logActivity({
+                    type: 'product',
+                    level: 'error',
+                    action: 'product_delete_failed',
+                    message: `Failed to delete product: ${product.product_name}`,
+                    userId: user?.id || null,
+                    productId: product.id,
+                    details: {
+                        productName: product.product_name,
+                        sku: product.sku,
+                        error: error,
+                        executionTimeMs: Date.now() - startTime
+                    },
+                    status: 'failed'
+                });
+
                 toast.error("Failed to delete product");
                 return;
             }
-
+            await logActivity({
+                type: 'product',
+                level: 'success',
+                action: 'product_delete_success',
+                message: `Product deleted successfully: ${product.product_name}`,
+                userId: user?.id || null,
+                productId: product.id,
+                details: {
+                    productName: product.product_name,
+                    sku: product.sku,
+                    slug: slug,
+                    deletedBy: profile?.email,
+                    executionTimeMs: Date.now() - startTime
+                },
+                status: 'completed'
+            });
             toast.success("Product deleted successfully");
 
             // ✅ Redirect after delete
             router.push("/product-category/alldevices");
         } catch (err) {
+            await logActivity({
+                type: 'product',
+                level: 'error',
+                action: 'product_delete_error',
+                message: `Unexpected error while deleting product`,
+                userId: user?.id || null,
+                productId: product.id,
+                details: {
+                    productName: product.product_name,
+                    sku: product.sku,
+                    error: err,
+                    executionTimeMs: Date.now() - startTime
+                },
+                status: 'failed'
+            });
             toast.error("Something went wrong");
         }
     };
@@ -864,7 +1114,7 @@ export default function Page() {
                                             afterChange={(current) => setSelectedImage(current)}
                                         >
                                             {galleryImages.map((image, index) => (
-                                                <div key={index} className="relative h-96 md:h-[500px]">
+                                                <div key={index} className="relative h-96 md:h-125">
                                                     <img
                                                         src={image}
                                                         alt={`${product?.product_name} - Image ${index + 1}`}
@@ -921,7 +1171,7 @@ export default function Page() {
                                     )}
                                 </div>
                             ) : (
-                                <div className="relative rounded-lg overflow-hidden mb-4 h-96 md:h-[500px] bg-gray-100 flex items-center justify-center">
+                                <div className="relative rounded-lg overflow-hidden mb-4 h-96 md:h-125 bg-gray-100 flex items-center justify-center">
                                     <div className="text-gray-400">No images available</div>
                                 </div>
                             )}
@@ -977,7 +1227,7 @@ export default function Page() {
                                         <ul className="space-y-2">
                                             {descriptionPoints.map((point, index) => (
                                                 <li key={index} className="flex items-start">
-                                                    <BiRadioCircle className="h-5 w-5  mt-0.5 mr-1 flex-shrink-0" />
+                                                    <BiRadioCircle className="h-5 w-5  mt-0.5 mr-1 shrink-0" />
                                                     <span className="text-gray-700 text-sm">{point}</span>
                                                 </li>
                                             ))}
@@ -1099,7 +1349,7 @@ export default function Page() {
                                             )}
 
                                             {/* Image Container - Fixed Height */}
-                                            <div className="flex items-center justify-center transition-colors h-48 min-h-[12rem] sm:mt-0 -mt-12 relative">
+                                            <div className="flex items-center justify-center transition-colors h-48 min-h-48 sm:mt-0 -mt-12 relative">
                                                 {product.thumbnail ? (
                                                     <img
                                                         src={product.thumbnail}
@@ -1116,7 +1366,7 @@ export default function Page() {
                                             </div>
 
                                             {/* Product Info Container - Flexible but with constraints */}
-                                            <div className="flex flex-col flex-grow space-y-2 text-center sm:mt-4 -mt-7">
+                                            <div className="flex flex-col grow space-y-2 text-center sm:mt-4 -mt-7">
                                                 {/* Title with fixed lines */}
                                                 <h3 className="text-gray-800 sm:text-md text-sm line-clamp-1 min-h-14 flex items-center justify-center">
                                                     {product.product_name}
@@ -1128,7 +1378,7 @@ export default function Page() {
                                                 </div>
 
                                                 {/* Spacer to push button to bottom */}
-                                                <div className="flex-grow"></div>
+                                                <div className="grow"></div>
 
                                                 {/* Button Container - Fixed at bottom */}
                                                 {product.stock_quantity != 0 ? (
@@ -1157,4 +1407,4 @@ export default function Page() {
             </div>
         </div>
     );
-}   
+}

@@ -56,6 +56,8 @@ import {
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase/client"
 import { emailTemplates, sendEmail } from "@/lib/email"
+import { logger, logAuth, logError, logSuccess, logWarning, logInfo } from "@/lib/logger"
+import { toast } from "sonner"
 
 // Define User type based on your Supabase table
 export type User = {
@@ -84,6 +86,7 @@ export default function UsersList() {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
     const [isUnverifiedOnly, setIsUnverifiedOnly] = useState(false);
+    
     // Table states
     const [sorting, setSorting] = useState<SortingState>([])
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -125,6 +128,8 @@ export default function UsersList() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
 
+    const source = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/users-list`;
+
     // Handle auth check
     useEffect(() => {
         if (loading) return;
@@ -142,20 +147,61 @@ export default function UsersList() {
                 }
             }
 
+            // Log unauthorized access
+            logAuth(
+                'access_denied', 
+                'Unauthorized access to users list', 
+                profile?.id, 
+                {
+                    isLoggedIn,
+                    isVerified: profile?.isVerified,
+                    redirectUrl
+                },
+                'failed',
+                source
+            );
+
             router.replace(redirectUrl);
             return;
         }
 
         // Check if user has permission to access this page
         if (!isAuthorized) {
+            logWarning(
+                'auth', 
+                'unauthorized_access', 
+                `User attempted to access users list without permission`, 
+                {
+                    email: profile.email,
+                    role: profile.role,
+                    allowedRoles
+                },
+                profile.id,
+                source
+            );
+            
             router.replace('/product-category/alldevices');
             return;
         }
 
-    }, [loading, isLoggedIn, profile, router, isAuthorized]);
+        // Log successful access
+        logAuth(
+            'page_access', 
+            `User accessed users list page`, 
+            profile.id, 
+            {
+                role: profile.role,
+                isUnverifiedOnly: searchParams.get('_') === 'true'
+            },
+            'completed',
+            source
+        );
+
+    }, [loading, isLoggedIn, profile, router, isAuthorized, source, searchParams]);
 
     // Update fetchUsers to use searchParams
     const fetchUsers = async () => {
+        const startTime = Date.now();
         try {
             setIsLoading(true);
             setError(null);
@@ -182,12 +228,42 @@ export default function UsersList() {
 
             if (data) {
                 setUsers(data as User[]);
+                const executionTime = Date.now() - startTime;
+                logSuccess(
+                    'db', 
+                    'users_fetch_success', 
+                    `Successfully fetched ${data.length} users`, 
+                    {
+                        count: data.length,
+                        isUnverifiedOnly: hasUnverifiedParam,
+                        executionTime
+                    },
+                    profile?.id,
+                    source
+                );
             }
         } catch (err: unknown) {
+            const executionTime = Date.now() - startTime;
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch users');
+                logError(
+                    'db', 
+                    'users_fetch_failed', 
+                    `Failed to fetch users: ${err.message}`, 
+                    err,
+                    profile?.id,
+                    source
+                );
             } else {
                 setError('Failed to fetch users');
+                logError(
+                    'db', 
+                    'users_fetch_failed', 
+                    'Failed to fetch users', 
+                    { error: err },
+                    profile?.id,
+                    source
+                );
             }
         } finally {
             setIsLoading(false);
@@ -199,17 +275,30 @@ export default function UsersList() {
         if (!loading && isLoggedIn && profile?.isVerified && isAuthorized) {
             fetchUsers();
         }
-    }, [loading, isLoggedIn, profile, isAuthorized, searchParams]); // Add searchParams
+    }, [loading, isLoggedIn, profile, isAuthorized, searchParams]);
 
     // Handle edit user
     const handleEditUser = (user: User) => {
         setEditUser(user);
         setIsEditDialogOpen(true);
+        logInfo(
+            'user', 
+            'edit_user_clicked', 
+            `Edit user clicked for: ${user.email}`, 
+            {
+                userId: user.id,
+                email: user.email,
+                currentName: `${user.firstName} ${user.lastName}`
+            },
+            profile?.id,
+            source
+        );
     };
 
     const handleSaveEdit = async () => {
         if (!editUser) return;
 
+        const startTime = Date.now();
         try {
             const { error } = await supabase
                 .from('users')
@@ -222,11 +311,43 @@ export default function UsersList() {
 
             if (error) throw error;
 
+            const executionTime = Date.now() - startTime;
+            logSuccess(
+                'user', 
+                'user_updated', 
+                `User updated: ${editUser.email}`, 
+                {
+                    userId: editUser.id,
+                    email: editUser.email,
+                    oldName: `${editUser.firstName} ${editUser.lastName}`,
+                    newName: `${editUser.firstName} ${editUser.lastName}`,
+                    executionTime,
+                    updatedBy: profile?.email
+                },
+                profile?.id,
+                source
+            );
+
             fetchUsers(); // Refresh data
             setIsEditDialogOpen(false);
             setEditUser(null);
-        } catch (error) {
+            toast.success("User updated successfully!");
+        } catch (error: any) {
+            const executionTime = Date.now() - startTime;
             setError('Failed to update user');
+            logError(
+                'db', 
+                'user_update_failed', 
+                `Failed to update user ${editUser.email}`, 
+                {
+                    error: error.message,
+                    userId: editUser.id,
+                    executionTime
+                },
+                profile?.id,
+                source
+            );
+            toast.error("Failed to update user");
         }
     };
 
@@ -235,11 +356,24 @@ export default function UsersList() {
         setChangeRoleUser(user);
         setSelectedRole(user.role);
         setIsRoleDialogOpen(true);
+        logInfo(
+            'user', 
+            'change_role_clicked', 
+            `Change role clicked for: ${user.email}`, 
+            {
+                userId: user.id,
+                email: user.email,
+                currentRole: user.role
+            },
+            profile?.id,
+            source
+        );
     };
 
     const handleSaveRole = async () => {
         if (!changeRoleUser || !selectedRole) return;
 
+        const startTime = Date.now();
         try {
             const { error } = await supabase
                 .from('users')
@@ -248,17 +382,52 @@ export default function UsersList() {
 
             if (error) throw error;
 
+            const executionTime = Date.now() - startTime;
+            logSuccess(
+                'user', 
+                'role_changed', 
+                `Role changed for ${changeRoleUser.email}`, 
+                {
+                    userId: changeRoleUser.id,
+                    email: changeRoleUser.email,
+                    oldRole: changeRoleUser.role,
+                    newRole: selectedRole,
+                    executionTime,
+                    changedBy: profile?.email
+                },
+                profile?.id,
+                source
+            );
+
             fetchUsers(); // Refresh data
             setIsRoleDialogOpen(false);
             setChangeRoleUser(null);
             setSelectedRole("");
-        } catch (error) {
+            toast.success("Role updated successfully!");
+        } catch (error: any) {
+            const executionTime = Date.now() - startTime;
             setError('Failed to update role');
+            logError(
+                'db', 
+                'role_change_failed', 
+                `Failed to change role for ${changeRoleUser.email}`, 
+                {
+                    error: error.message,
+                    userId: changeRoleUser.id,
+                    oldRole: changeRoleUser.role,
+                    newRole: selectedRole,
+                    executionTime
+                },
+                profile?.id,
+                source
+            );
+            toast.error("Failed to update role");
         }
     };
 
     // Handle verify user
     const handleVerifyUser = async (userId: string, email: string) => {
+        const startTime = Date.now();
         try {
             const { error } = await supabase
                 .from('users')
@@ -266,14 +435,47 @@ export default function UsersList() {
                 .eq('id', userId);
 
             if (error) throw error;
+
+            const executionTime = Date.now() - startTime;
+            logSuccess(
+                'user', 
+                'user_approved', 
+                `User approved: ${email}`, 
+                {
+                    userId,
+                    email,
+                    executionTime,
+                    approvedBy: profile?.email
+                },
+                profile?.id,
+                source
+            );
+
             sendApprovedEmail(email);
             fetchUsers(); // Refresh data
-        } catch (error) {
+            toast.success("User approved successfully!");
+        } catch (error: any) {
+            const executionTime = Date.now() - startTime;
             setError('Failed to verify user');
+            logError(
+                'db', 
+                'user_approval_failed', 
+                `Failed to approve user ${email}`, 
+                {
+                    error: error.message,
+                    userId,
+                    email,
+                    executionTime
+                },
+                profile?.id,
+                source
+            );
+            toast.error("Failed to approve user");
         }
     };
 
     const handleUnverifyUser = async (userId: string, email: string) => {
+        const startTime = Date.now();
         try {
             const { error } = await supabase
                 .from('users')
@@ -281,13 +483,44 @@ export default function UsersList() {
                 .eq('id', userId);
 
             if (error) throw error;
+
+            const executionTime = Date.now() - startTime;
+            logWarning(
+                'user', 
+                'user_rejected', 
+                `User rejected: ${email}`, 
+                {
+                    userId,
+                    email,
+                    executionTime,
+                    rejectedBy: profile?.email
+                },
+                profile?.id,
+                source
+            );
+
             sendRejectedEmail(email)
             fetchUsers(); // Refresh data
-        } catch (error) {
+            toast.success("User rejected successfully!");
+        } catch (error: any) {
+            const executionTime = Date.now() - startTime;
             setError('Failed to unverify user');
+            logError(
+                'db', 
+                'user_rejection_failed', 
+                `Failed to reject user ${email}`, 
+                {
+                    error: error.message,
+                    userId,
+                    email,
+                    executionTime
+                },
+                profile?.id,
+                source
+            );
+            toast.error("Failed to reject user");
         }
     };
-
 
     const sendApprovedEmail = async (userEmail: string) => {
         try {
@@ -299,10 +532,43 @@ export default function UsersList() {
                 text: template.text,
                 html: template.html,
             });
-        } catch (emailError) {
+
+            if (result.success) {
+                logSuccess(
+                    'email', 
+                    'approval_email_sent', 
+                    `Approval email sent to: ${userEmail}`, 
+                    {
+                        to: userEmail,
+                        subject: template.subject
+                    },
+                    profile?.id,
+                    source
+                );
+            } else {
+                logWarning(
+                    'email', 
+                    'approval_email_failed', 
+                    `Failed to send approval email to: ${userEmail}`, 
+                    {
+                        to: userEmail,
+                        error: result.error
+                    },
+                    profile?.id,
+                    source
+                );
+            }
+        } catch (emailError: any) {
+            logError(
+                'email', 
+                'approval_email_exception', 
+                `Exception while sending approval email: ${emailError.message}`, 
+                emailError,
+                profile?.id,
+                source
+            );
         }
     };
-
 
     const sendRejectedEmail = async (userEmail: string) => {
         try {
@@ -314,7 +580,41 @@ export default function UsersList() {
                 text: template.text,
                 html: template.html,
             });
-        } catch (emailError) {
+
+            if (result.success) {
+                logSuccess(
+                    'email', 
+                    'rejection_email_sent', 
+                    `Rejection email sent to: ${userEmail}`, 
+                    {
+                        to: userEmail,
+                        subject: template.subject
+                    },
+                    profile?.id,
+                    source
+                );
+            } else {
+                logWarning(
+                    'email', 
+                    'rejection_email_failed', 
+                    `Failed to send rejection email to: ${userEmail}`, 
+                    {
+                        to: userEmail,
+                        error: result.error
+                    },
+                    profile?.id,
+                    source
+                );
+            }
+        } catch (emailError: any) {
+            logError(
+                'email', 
+                'rejection_email_exception', 
+                `Exception while sending rejection email: ${emailError.message}`, 
+                emailError,
+                profile?.id,
+                source
+            );
         }
     };
 
@@ -491,7 +791,19 @@ export default function UsersList() {
                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                     <DropdownMenuItem
                                         className="cursor-pointer"
-                                        onClick={() => navigator.clipboard.writeText(user.email)}
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(user.email);
+                                            logInfo(
+                                                'user', 
+                                                'email_copied', 
+                                                `Email copied to clipboard: ${user.email}`, 
+                                                {
+                                                    email: user.email
+                                                },
+                                                profile?.id,
+                                                source
+                                            );
+                                        }}
                                     >
                                         Copy email
                                     </DropdownMenuItem>
@@ -560,28 +872,22 @@ export default function UsersList() {
             columnVisibility,
             rowSelection,
         },
-    })
+    });
 
-    // Show loading states
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-screen">
-                <div className="text-lg">Loading authentication...</div>
-            </div>
-        );
-    }
-
-    if (!isAuthorized) {
-        return (
-            <div className="flex items-center justify-center h-screen">
-                <div className="text-lg">Redirecting...</div>
-            </div>
-        );
-    }
-
+    // Handle CSV export
     const handleExportCSV = () => {
         if (users.length === 0) {
-            alert("No data to export");
+            toast.error("No data to export");
+            logWarning(
+                'export', 
+                'csv_export_empty', 
+                'Attempted to export CSV with no data', 
+                {
+                    usersCount: users.length
+                },
+                profile?.id,
+                source
+            );
             return;
         }
 
@@ -604,8 +910,34 @@ export default function UsersList() {
 
             // Download file
             downloadCSV(csvString, `users_${new Date().toISOString().split('T')[0]}.csv`);
-        } catch (error) {
+
+            logSuccess(
+                'export', 
+                'csv_export_success', 
+                `CSV exported with ${users.length} records`, 
+                {
+                    recordCount: users.length,
+                    isUnverifiedOnly,
+                },
+                profile?.id,
+                source
+            );
+            
+            toast.success("CSV exported successfully!");
+        } catch (error: any) {
             setError('Failed to export CSV');
+            logError(
+                'export', 
+                'csv_export_failed', 
+                `Failed to export CSV: ${error.message}`, 
+                {
+                    error: error.message,
+                    usersCount: users.length,
+                },
+                profile?.id,
+                source
+            );
+            toast.error("Failed to export CSV");
         }
     };
 
@@ -650,6 +982,56 @@ export default function UsersList() {
         URL.revokeObjectURL(url);
     };
 
+    // Handle refresh
+    const handleRefresh = async () => {
+        logInfo(
+            'user', 
+            'manual_refresh', 
+            'Manually refreshing users list', 
+            {
+                currentCount: users.length,
+                isUnverifiedOnly
+            },
+            profile?.id,
+            source
+        );
+        await fetchUsers();
+    };
+
+    // Handle view toggle
+    const handleViewToggle = (viewType: 'all' | 'pending') => {
+        const newPath = viewType === 'pending' ? '/users-list?_=true' : '/users-list';
+        logInfo(
+            'navigation', 
+            'view_toggle', 
+            `Toggled view to: ${viewType}`, 
+            {
+                from: isUnverifiedOnly ? 'pending' : 'all',
+                to: viewType
+            },
+            profile?.id,
+            source
+        );
+        router.push(newPath);
+    };
+
+    // Show loading states
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-screen">
+                <div className="text-lg">Loading authentication...</div>
+            </div>
+        );
+    }
+
+    if (!isAuthorized) {
+        return (
+            <div className="flex items-center justify-center h-screen">
+                <div className="text-lg">Redirecting...</div>
+            </div>
+        );
+    }
+
     return (
         <div className="container mx-auto py-10 px-5 h-lvh">
             <div className="flex justify-between items-center mb-6">
@@ -668,7 +1050,7 @@ export default function UsersList() {
                         <Button
                             variant="outline"
                             disabled={isLoading}
-                            onClick={() => router.push('/users-list')}
+                            onClick={() => handleViewToggle('all')}
                             className="cursor-pointer"
                         >
                             {isLoading ? "Loading..." : "View All Users"}
@@ -678,7 +1060,7 @@ export default function UsersList() {
                         <Button
                             variant="outline"
                             disabled={isLoading}
-                            onClick={() => router.push('/users-list?_=true')}
+                            onClick={() => handleViewToggle('pending')}
                             className="cursor-pointer"
                         >
                             {isLoading ? "Loading..." : "View Pending Approvals"}
@@ -686,7 +1068,7 @@ export default function UsersList() {
                     )}
                     <Button
                         variant="outline"
-                        onClick={fetchUsers}
+                        onClick={handleRefresh}
                         disabled={isLoading}
                         className="cursor-pointer"
                     >
@@ -731,9 +1113,21 @@ export default function UsersList() {
                                             key={column.id}
                                             className="capitalize"
                                             checked={column.getIsVisible()}
-                                            onCheckedChange={(value: boolean) =>
-                                                column.toggleVisibility(!!value)
-                                            }
+                                            onCheckedChange={(value: boolean) => {
+                                                column.toggleVisibility(!!value);
+                                                logInfo(
+                                                    'ui', 
+                                                    'column_toggle', 
+                                                    `Column visibility toggled`, 
+                                                    {
+                                                        columnId: column.id,
+                                                        columnName: columnDisplayNames[column.id] || column.id,
+                                                        isVisible: value
+                                                    },
+                                                    profile?.id,
+                                                    source
+                                                );
+                                            }}
                                         >
                                             {columnDisplayNames[column.id] || column.id}
                                         </DropdownMenuCheckboxItem>
@@ -830,7 +1224,7 @@ export default function UsersList() {
 
             {/* Edit User Dialog */}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-106.25">
                     <DialogHeader>
                         <DialogTitle>Edit User</DialogTitle>
                         <DialogDescription>
@@ -876,7 +1270,20 @@ export default function UsersList() {
                         </div>
                     )}
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="cursor-pointer">
+                        <Button variant="outline" onClick={() => {
+                            setIsEditDialogOpen(false);
+                            logInfo(
+                                'ui', 
+                                'edit_dialog_cancelled', 
+                                'Edit user dialog cancelled', 
+                                {
+                                    userId: editUser?.id,
+                                    email: editUser?.email
+                                },
+                                profile?.id,
+                                source
+                            );
+                        }} className="cursor-pointer">
                             Cancel
                         </Button>
                         <Button onClick={handleSaveEdit} className="bg-[#0A4647] hover:bg-[#093636] cursor-pointer">
@@ -917,7 +1324,20 @@ export default function UsersList() {
                         </div>
                     )}
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)} className="cursor-pointer">
+                        <Button variant="outline" onClick={() => {
+                            setIsRoleDialogOpen(false);
+                            logInfo(
+                                'ui', 
+                                'role_dialog_cancelled', 
+                                'Change role dialog cancelled', 
+                                {
+                                    userId: changeRoleUser?.id,
+                                    email: changeRoleUser?.email
+                                },
+                                profile?.id,
+                                source
+                            );
+                        }} className="cursor-pointer">
                             Cancel
                         </Button>
                         <Button onClick={handleSaveRole} className="bg-[#0A4647] hover:bg-[#093636] cursor-pointer">

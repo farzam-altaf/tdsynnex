@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/client";
 import { emailTemplates, sendCronEmail } from "@/lib/email";
+import { logEmail } from "@/lib/logger";
 
 const CRON_SECRET = process.env.CRON_SECRET!;
 
@@ -57,14 +58,55 @@ export async function GET(request: NextRequest) {
           productUrl,
         });
 
-        await sendCronEmail({
+        const emailResult = await sendCronEmail({
           to: entry.email,
           subject: template.subject,
           html: template.html,
           text: template.text,
         });
 
-        console.log(`📧 Email sent to ${entry.email} for ${product.product_name}`);
+        if (emailResult.success) {
+          // Log email sent to database
+          await logEmail(
+            'back_in_stock_notification_sent',
+            `Back-in-stock notification sent for ${product.product_name}`,
+            `null`, // userId is null for cron jobs
+            {
+              waitlistId: entry.id,
+              productId: product.id,
+              productName: product.product_name,
+              productSKU: product.sku,
+              customerEmail: entry.email,
+              stockQuantity: product.stock_quantity,
+              emailSubject: template.subject,
+              productUrl: productUrl
+            },
+            'sent',
+            '/api/cron/run' // Source path
+          );
+
+          console.log(`📧 Email sent to ${entry.email} for ${product.product_name}`);
+        } else {
+          // Log email send failure
+          await logEmail(
+            'back_in_stock_notification_failed',
+            `Failed to send back-in-stock notification for ${product.product_name}`,
+            `null`,
+            {
+              waitlistId: entry.id,
+              productId: product.id,
+              productName: product.product_name,
+              customerEmail: entry.email,
+              error: emailResult.error
+            },
+            'failed',
+            '/api/cron/run'
+          );
+
+          errors++;
+          console.error(`❌ Email send failed for ${entry.email}:`, emailResult.error);
+          continue;
+        }
 
         // 6️⃣ Remove from waitlist
         await supabase

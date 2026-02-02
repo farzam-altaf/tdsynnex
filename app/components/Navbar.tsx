@@ -81,7 +81,6 @@ export default function Navbar() {
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
-
   const router = useRouter()
   const { user, profile, loading } = useAuth()
   const {
@@ -129,6 +128,81 @@ export default function Navbar() {
     } catch (error) {
     }
   }, [profile?.role]);
+
+  // Navbar میں یہ state variable اضافہ کریں (دیگر state variables کے ساتھ):
+  const [quantityInputValues, setQuantityInputValues] = useState<Record<string, string>>({});
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+
+  // Quantity input change handler
+  const handleQuantityInputChange = (productId: string, value: string) => {
+    // Only allow numbers
+    if (value === '' || /^\d+$/.test(value)) {
+      setQuantityInputValues(prev => ({
+        ...prev,
+        [productId]: value
+      }));
+
+      // Set this product as being edited
+      if (value !== cartItems.find(item => item.product_id === productId)?.quantity.toString()) {
+        setEditingProductId(productId);
+      } else {
+        setEditingProductId(null);
+      }
+    }
+  };
+
+  // Save quantity handler
+  const handleSaveQuantity = async (productId: string) => {
+    const inputValue = quantityInputValues[productId];
+    if (!inputValue || inputValue.trim() === '') return;
+
+    const numericValue = parseInt(inputValue);
+    if (isNaN(numericValue) || numericValue < 1) return;
+
+    try {
+      await handleUpdateQuantity(productId, numericValue);
+      setEditingProductId(null);
+    } catch (error) {
+      // Revert to original value on error
+      const currentItem = cartItems.find(item => item.product_id === productId);
+      if (currentItem) {
+        setQuantityInputValues(prev => ({
+          ...prev,
+          [productId]: currentItem.quantity.toString()
+        }));
+      }
+    }
+  };
+
+  // Cancel editing handler
+  const handleCancelEdit = (productId: string) => {
+    const currentItem = cartItems.find(item => item.product_id === productId);
+    if (currentItem) {
+      setQuantityInputValues(prev => ({
+        ...prev,
+        [productId]: currentItem.quantity.toString()
+      }));
+    }
+    setEditingProductId(null);
+  };
+
+  // Cart drawer کھلتے ہی initial values set کریں
+  useEffect(() => {
+    if (isCartDrawerOpen && cartItems.length > 0) {
+      const initialValues: Record<string, string> = {};
+      cartItems.forEach(item => {
+        initialValues[item.product_id] = item.quantity.toString();
+      });
+      setQuantityInputValues(initialValues);
+    }
+  }, [isCartDrawerOpen, cartItems]);
+
+  // Cart drawer بند ہونے پر reset کریں
+  useEffect(() => {
+    if (!isCartDrawerOpen) {
+      setEditingProductId(null);
+    }
+  }, [isCartDrawerOpen]);
 
   // Add useEffect to fetch counts
   useEffect(() => {
@@ -194,9 +268,25 @@ export default function Navbar() {
   // Handle quantity update
   const handleUpdateQuantity = async (productId: string, newQuantity: number) => {
     try {
-      // Ensure newQuantity is a valid number
-      const quantity = Math.max(1, newQuantity);
-      await updateQuantity(productId, quantity);
+      // Get current item to check stock
+      const cartItem = cartItems.find(item => item.product_id === productId);
+      if (!cartItem) return;
+
+      const stockQuantity = cartItem.product?.stock_quantity || 0;
+
+      // Validate quantity
+      if (newQuantity < 1) {
+        newQuantity = 1;
+      }
+
+      if (stockQuantity > 0 && newQuantity > stockQuantity) {
+        newQuantity = stockQuantity;
+      }
+
+      await updateQuantity(productId, newQuantity);
+
+      // Show success message only for significant changes
+
     } catch (error) {
     }
   };
@@ -385,6 +475,20 @@ export default function Navbar() {
     return cartItem.product?.stock_quantity || 0;
   };
 
+  // Keyboard shortcuts handler
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape' && editingProductId) {
+      handleCancelEdit(editingProductId);
+    }
+  }, [editingProductId]);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
+
   return (
     <>
       <Disclosure as="nav" className="sticky top-0 z-50 bg-white border-b border-gray-300">
@@ -545,7 +649,7 @@ export default function Navbar() {
                       </button>
 
                       {isSearchOpen && (
-                        <div className="absolute right-0 top-full mt-2 w-[500px] bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                        <div className="absolute right-0 top-full mt-2 w-125 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                           <form onSubmit={handleSearchSubmit} className="p-4">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center space-x-2 flex-1">
@@ -911,7 +1015,7 @@ export default function Navbar() {
               <button
                 onClick={handleClearCart}
                 disabled={cartUpdating}
-                className="text-sm text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-sm text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {cartUpdating ? 'Clearing...' : 'Clear All'}
               </button>
@@ -936,11 +1040,17 @@ export default function Navbar() {
             <p className="text-gray-500 text-center mb-6">
               Looks like you haven't added any products to your cart yet.
             </p>
+            <button
+              onClick={handleContinueShopping}
+              className="px-6 py-2 bg-[#35c8dc] text-white rounded-md hover:bg-[#2db4c8] transition-colors cursor-pointer"
+            >
+              Continue Shopping
+            </button>
           </div>
         ) : (
           <div className="flex flex-col h-full">
             {/* Cart Items List */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto pr-2">
               {cartItems.map((item) => {
                 const stockQuantity = getItemStockQuantity(item);
                 const productName = item.product?.product_name || 'Unknown Product';
@@ -953,7 +1063,10 @@ export default function Navbar() {
                   <div key={item.id} className="border-b border-gray-200 py-4">
                     <div className="flex items-start space-x-3">
                       {/* Product Image */}
-                      <div className="w-15 h-15 bg-gray-100 rounded-md flex items-center justify-center flex-shrink-0">
+                      <div
+                        className="w-15 h-15 bg-gray-100 rounded-md flex items-center justify-center shrink-0 cursor-pointer hover:bg-gray-200 transition-colors"
+                        onClick={() => productSlug && router.push(`/product/${productSlug}`)}
+                      >
                         {thumbnail ? (
                           <img
                             src={thumbnail}
@@ -967,57 +1080,149 @@ export default function Navbar() {
 
                       {/* Product Details */}
                       <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-medium text-gray-900 truncate hover:text-[#35c8dc] cursor-pointer"
-                          onClick={() => productSlug && router.push(`/product/${productSlug}`)}>
+                        <h4
+                          className="text-sm font-medium text-gray-900 truncate hover:text-[#35c8dc] cursor-pointer transition-colors"
+                          onClick={() => productSlug && router.push(`/product/${productSlug}`)}
+                        >
                           {productName}
                         </h4>
                         <p className="text-xs text-gray-500">SKU: {sku}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          {/* Quantity Controls */}
-                          {/* <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => handleUpdateQuantity(item.product_id, item.quantity - 1)}
-                              disabled={cartUpdating}
-                              className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              -
-                            </button>
-                            <span className="text-sm font-medium">{item.quantity}</span>
-                            <button
-                              onClick={() => handleUpdateQuantity(item.product_id, item.quantity + 1)}
-                              disabled={cartUpdating || item.quantity >= stockQuantity}
-                              className={`w-6 h-6 flex items-center justify-center border border-gray-300 rounded ${item.quantity >= stockQuantity || cartUpdating
-                                ? 'opacity-50 cursor-not-allowed'
-                                : 'hover:bg-gray-100'
-                                }`}
-                            >
-                              +
-                            </button>
-                          </div> */}
+
+                        {/* Quantity Controls */}
+                        <div className="flex items-center space-x-2 mt-3">
+                          {/* Minus Button - Always show */}
+                          <button
+                            onClick={() => handleUpdateQuantity(item.product_id, item.quantity - 1)}
+                            disabled={cartUpdating || item.quantity <= 1}
+                            className={`w-7 h-7 flex items-center justify-center border border-gray-300 rounded-md transition-colors
+      ${cartUpdating || item.quantity <= 1
+                                ? 'opacity-50 cursor-not-allowed text-gray-400'
+                                : 'hover:bg-gray-100 hover:border-gray-400 text-gray-700'
+                              }`}
+                          >
+                            −
+                          </button>
+
+                          {/* Quantity Input Field with Save/Cancel buttons */}
+                          <div className="relative">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="number"
+                                min="1"
+                                max={stockQuantity}
+                                value={quantityInputValues[item.product_id] !== undefined
+                                  ? quantityInputValues[item.product_id]
+                                  : item.quantity.toString()}
+                                onChange={(e) => handleQuantityInputChange(item.product_id, e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleSaveQuantity(item.product_id);
+                                  }
+                                }}
+                                disabled={cartUpdating}
+                                className="w-16 text-center border border-gray-300 rounded-md py-1.5 px-2 text-sm 
+          focus:outline-none focus:ring-1 focus:ring-[#35c8dc] focus:border-[#35c8dc]
+          disabled:opacity-50 disabled:cursor-not-allowed
+          [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
+          transition-all duration-200"
+                              />
+
+                              {/* Save Button - Only show when editing this product */}
+                              {editingProductId === item.product_id && (
+                                <div className="flex items-center space-x-1">
+                                  <button
+                                    onClick={() => handleSaveQuantity(item.product_id)}
+                                    disabled={cartUpdating}
+                                    className="w-7 h-7 flex items-center justify-center bg-[#35c8dc] text-white rounded-md hover:bg-[#2db4c8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Save quantity"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => handleCancelEdit(item.product_id)}
+                                    disabled={cartUpdating}
+                                    className="w-7 h-7 flex items-center justify-center bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Cancel"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Stock limit warning */}
+                            {stockQuantity > 0 &&
+                              parseInt(quantityInputValues[item.product_id] || item.quantity.toString()) > stockQuantity && (
+                                <div className="absolute -bottom-5 left-0 right-0 text-xs text-red-500 font-medium text-center">
+                                  Max: {stockQuantity}
+                                </div>
+                              )}
+                          </div>
+
+                          {/* Plus Button - Always show */}
+                          <button
+                            onClick={() => handleUpdateQuantity(item.product_id, item.quantity + 1)}
+                            disabled={cartUpdating || item.quantity >= stockQuantity}
+                            className={`w-7 h-7 flex items-center justify-center border border-gray-300 rounded-md transition-colors
+      ${cartUpdating || item.quantity >= stockQuantity
+                                ? 'opacity-50 cursor-not-allowed text-gray-400'
+                                : 'hover:bg-gray-100 hover:border-gray-400 text-gray-700'
+                              }`}
+                          >
+                            +
+                          </button>
                         </div>
                       </div>
 
-                      {/* Remove Button */}
-                      <button
-                        onClick={() => handleRemoveFromCart(item.product_id)}
-                        disabled={cartUpdating}
-                        className="text-gray-400 hover:text-red-500 p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {/* Price and Remove Button */}
+                      <div className="flex flex-col items-end space-y-2">
+                        <button
+                          onClick={() => handleRemoveFromCart(item.product_id)}
+                          disabled={cartUpdating}
+                          className="text-gray-400 hover:text-red-500 p-1 transition-colors 
+                      disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        {price > 0 && (
+                          <p className="text-sm font-medium text-gray-900">
+                            ${(price * item.quantity).toFixed(2)}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Stock Status */}
-                    {item.quantity >= stockQuantity && stockQuantity > 0 && (
-                      <p className="text-xs text-red-500 mt-2">
-                        Only {stockQuantity} items in stock
-                      </p>
-                    )}
-                    {stockQuantity === 0 && (
-                      <p className="text-xs text-red-500 mt-2">
-                        Out of stock
-                      </p>
-                    )}
+                    {/* Stock Status Messages */}
+                    <div className="mt-2 space-y-1">
+                      {stockQuantity === 0 && (
+                        <div className="flex items-center space-x-1 text-xs">
+                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                          <span className="text-red-600 font-medium">Out of stock</span>
+                        </div>
+                      )}
+
+                      {stockQuantity > 0 && item.quantity >= stockQuantity && (
+                        <div className="flex items-center space-x-1 text-xs">
+                          <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                          <span className="text-amber-600 font-medium">
+                            Only {stockQuantity} {stockQuantity === 1 ? 'item' : 'items'} in stock
+                          </span>
+                        </div>
+                      )}
+
+                      {stockQuantity > 0 && item.quantity < stockQuantity && stockQuantity < 10 && (
+                        <div className="flex items-center space-x-1 text-xs">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="text-green-600">
+                            {stockQuantity} {stockQuantity === 1 ? 'item' : 'items'} left in stock
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -1025,18 +1230,20 @@ export default function Navbar() {
 
             {/* Cart Summary */}
             <div className="border-t border-gray-200 pt-4 mt-4">
+
               <div className="space-y-3">
                 <button
                   onClick={handleCart}
-                  className="w-full py-2 border-2 cursor-pointer border-[#35c8dc] text-[#35c8dc] font-bold hover:bg-gray-50 transition-colors"
+                  className="w-full py-2.5 border-2 cursor-pointer border-[#35c8dc] text-[#35c8dc] font-medium hover:bg-gray-50 transition-colors rounded-md"
                 >
-                  View Cart
+                  View Cart Details
                 </button>
                 <button
                   onClick={handleCheckout}
-                  className="w-full py-3 cursor-pointer bg-[#35c8dc] text-white font-medium hover:bg-[#2db4c8] transition-colors"
+                  disabled={cartUpdating}
+                  className="w-full py-3 cursor-pointer bg-[#35c8dc] text-white font-medium hover:bg-[#2db4c8] transition-colors rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Proceed to Checkout
+                  {cartUpdating ? 'Processing...' : 'Proceed to Checkout'}
                 </button>
               </div>
             </div>

@@ -45,7 +45,7 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${inter.className} ${outfit.variable} antialiased`}
       >
-        <Toaster position="top-center" />
+        <Toaster position="top-right" />
         <AuthProvider>
           <CartProvider>
             <Navbar />

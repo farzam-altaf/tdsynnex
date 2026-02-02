@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircleIcon, Trash } from 'lucide-react';
 import { AiOutlineShoppingCart } from 'react-icons/ai';
+import { logActivity, logError, logSuccess, logInfo, logWarning } from "@/lib/logger";
 
 // Cart summary data (you might want to fetch this from your API too)
 const cartSummary = {
@@ -36,6 +37,7 @@ export default function Page() {
     const [shippingCost, setShippingCost] = useState(19.99);
     const [taxRate] = useState(0.08); // 8% tax
     const [removingItemId, setRemovingItemId] = useState<string | null>(null); // Track which item is being removed
+    const [debugInfo, setDebugInfo] = useState<string>(''); // For debugging
 
     // Calculate totals
     const subtotal = getCartTotal();
@@ -57,9 +59,35 @@ export default function Page() {
 
         // Now check authentication status
         if (!isLoggedIn || profile?.isVerified === false && !profile) {
+            logActivity({
+                type: 'auth',
+                level: 'warning',
+                action: 'unauthorized_cart_access_attempt',
+                message: 'User attempted to access cart without proper authentication',
+                userId: profile?.id || null,
+                details: {
+                    isLoggedIn,
+                    isVerified: profile?.isVerified,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             router.replace('/login/?redirect_to=cart');
         } else {
             setAuthChecked(true);
+            logActivity({
+                type: 'ui',
+                level: 'info',
+                action: 'cart_page_accessed',
+                message: 'User accessed cart page',
+                userId: profile?.id || null,
+                details: {
+                    userRole: profile?.role,
+                    email: profile?.email,
+                    cartCountOnAccess: cartCount
+                },
+                status: 'completed'
+            });
         }
     }, [loading, isLoggedIn, profile, user, router]);
 
@@ -70,12 +98,124 @@ export default function Page() {
         }
     }, [authChecked, authInitialized]);
 
+    const [quantityInputValues, setQuantityInputValues] = useState<Record<string, string>>({});
+    const [editingProductId, setEditingProductId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (cartItems.length > 0) {
+            const initialValues: Record<string, string> = {};
+            cartItems.forEach(item => {
+                initialValues[item.product_id] = item.quantity.toString();
+            });
+            setQuantityInputValues(initialValues);
+        }
+    }, [cartItems]);
+
+    // Quantity input change handler
+    const handleQuantityInputChange = (productId: string, value: string) => {
+        // Only allow numbers
+        if (value === '' || /^\d+$/.test(value)) {
+            setQuantityInputValues(prev => ({
+                ...prev,
+                [productId]: value
+            }));
+
+            // Set this product as being edited
+            if (value !== cartItems.find(item => item.product_id === productId)?.quantity.toString()) {
+                setEditingProductId(productId);
+            } else {
+                setEditingProductId(null);
+            }
+        }
+    };
+
+    // Save quantity handler - SIMPLIFIED VERSION
+    const handleSaveQuantity = async (productId: string, newQuantity: number) => {
+        console.log('handleSaveQuantity called:', { productId, newQuantity });
+
+        if (newQuantity < 1) return;
+
+        // Get current item to check stock
+        const currentItem = cartItems.find(item => item.product_id === productId);
+        const stockQuantity = currentItem?.product?.stock_quantity || 0;
+
+        // Validate against stock if stock information is available
+        if (stockQuantity > 0 && newQuantity > stockQuantity) {
+            newQuantity = stockQuantity; // Cap at stock quantity
+        }
+
+        try {
+            console.log('Calling updateQuantity:', { productId, newQuantity });
+            await updateQuantity(productId, newQuantity);
+
+            // Update the input value
+            setQuantityInputValues(prev => ({
+                ...prev,
+                [productId]: newQuantity.toString()
+            }));
+
+            setEditingProductId(null);
+            console.log('Quantity updated successfully');
+        } catch (error) {
+            console.error('Error updating quantity:', error);
+            // Revert to original value on error
+            if (currentItem) {
+                setQuantityInputValues(prev => ({
+                    ...prev,
+                    [productId]: currentItem.quantity.toString()
+                }));
+            }
+        }
+    };
+
+    const handleIncreaseQuantity = async (productId: string) => {
+        console.log('handleIncreaseQuantity called:', productId);
+        const currentItem = cartItems.find(item => item.product_id === productId);
+        if (!currentItem) {
+            console.log('Item not found:', productId);
+            return;
+        }
+
+        const newQuantity = currentItem.quantity + 1;
+        console.log('Increasing quantity:', { current: currentItem.quantity, new: newQuantity });
+
+        // Call the simplified save function
+        await handleSaveQuantity(productId, newQuantity);
+    };
+
+    const handleDecreaseQuantity = async (productId: string) => {
+        console.log('handleDecreaseQuantity called:', productId);
+        const currentItem = cartItems.find(item => item.product_id === productId);
+        if (!currentItem || currentItem.quantity <= 1) {
+            console.log('Cannot decrease:', { currentQuantity: currentItem?.quantity });
+            return;
+        }
+
+        const newQuantity = currentItem.quantity - 1;
+        console.log('Decreasing quantity:', { current: currentItem.quantity, new: newQuantity });
+
+        // Call the simplified save function
+        await handleSaveQuantity(productId, newQuantity);
+    };
+
+    // Handle Enter key in input field
+    const handleInputSave = async (productId: string) => {
+        const inputValue = quantityInputValues[productId];
+        if (!inputValue || inputValue.trim() === '') return;
+
+        const numericValue = parseInt(inputValue);
+        if (isNaN(numericValue) || numericValue < 1) return;
+
+        await handleSaveQuantity(productId, numericValue);
+    };
+
     // Handle item removal
     const handleRemoveItem = async (productId: string) => {
         setRemovingItemId(productId); // Set the specific item being removed
         try {
             await removeFromCart(productId);
         } catch (error) {
+            console.error('Error removing item:', error);
         } finally {
             setRemovingItemId(null); // Clear the removing state
         }
@@ -87,12 +227,33 @@ export default function Page() {
             try {
                 await clearCart();
             } catch (error) {
+                console.error('Error clearing cart:', error);
             }
         }
     };
 
     // Handle checkout
     const handleCheckout = () => {
+        logActivity({
+            type: 'navigation',
+            level: 'info',
+            action: 'checkout_initiated',
+            message: 'User initiated checkout from cart',
+            userId: profile?.id || null,
+            details: {
+                cartItemCount: cartItems.length,
+                cartCount,
+                totalItems: getCartTotalItems(),
+                totalAmount: getCartTotal(),
+                items: cartItems.map(item => ({
+                    productId: item.product_id,
+                    productName: item.product?.product_name,
+                    sku: item.product?.sku
+                }))
+            },
+            status: 'completed'
+        });
+
         router.replace('/checkout')
     };
 
@@ -114,6 +275,18 @@ export default function Page() {
 
     // Empty cart state
     if (cartItems.length === 0) {
+        logActivity({
+            type: 'cart',
+            level: 'info',
+            action: 'empty_cart_viewed',
+            message: 'User viewed empty cart',
+            userId: profile?.id || null,
+            details: {
+                userRole: profile?.role,
+                email: profile?.email
+            },
+            status: 'completed'
+        });
         return (
             <div className="h-[83vh] px-4 flex items-center justify-center">
                 <div className="max-w-6xl w-full">
@@ -138,25 +311,7 @@ export default function Page() {
     return (
         <div className="min-h-screen py-8 px-4">
             <div className="max-w-6xl mx-auto">
-                {cartCount > 1 ? (
-                    <div className='my-4 border border-red-500 rounded-lg'>
-                        <Alert variant="destructive">
-                            <AlertCircleIcon />
-                            <AlertTitle>Your checkout could not be processed.</AlertTitle>
-                            <AlertDescription>
-                                <p>A maximum of one product is allowed per order.</p>
-                                <ul className="list-inside list-disc text-sm">
-                                    <li>Only one unit can be purchased per order.</li>
-                                </ul>
-                            </AlertDescription>
-                        </Alert>
-                    </div>
-                ) : (
-                    <>
-                        <h1 className="text-3xl font-bold text-gray-900 mb-8">Your Cart</h1>
-                    </>
-                )}
-
+                <h1 className="text-3xl font-bold text-gray-900 mb-8">Your Cart</h1>
                 <div className="flex flex-col lg:flex-row gap-8">
                     {/* Cart Items Section */}
                     <div className="lg:w-2/3">
@@ -199,26 +354,128 @@ export default function Page() {
                                                 </Link>
                                             )}
 
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-4">
-                                                <div className="flex items-center space-x-4">
+                                            {/* Quantity Controls */}
+                                            <div className="flex items-center space-x-4 mb-4">
+                                                <div className="flex items-center space-x-2">
+                                                    {/* Minus Button */}
                                                     <button
-                                                        onClick={() => handleRemoveItem(item.product_id)}
-                                                        className="text-red-600 hover:text-red-800 font-medium"
-                                                        disabled={isRemovingThisItem || isUpdating}
+                                                        onClick={() => handleDecreaseQuantity(item.product_id)}
+                                                        disabled={isUpdating || item.quantity <= 1}
+                                                        className={`w-7 h-7 cursor-pointer flex items-center justify-center border border-gray-300 rounded-md transition-colors
+          ${isUpdating || item.quantity <= 1
+                                                                ? 'opacity-50 cursor-not-allowed text-gray-400'
+                                                                : 'hover:bg-gray-100 hover:border-gray-400 text-gray-700'
+                                                            }`}
                                                     >
-                                                        {isRemovingThisItem ? (
-                                                            <div className='flex items-center gap-2 border py-1 px-4 rounded-sm border-red-500 cursor-pointer opacity-70'>
-                                                                <MdDeleteSweep />
-                                                                <span className='text-sm font-medium'>Removing...</span>
-                                                            </div>
-                                                        ) : (
-                                                            <div className='flex items-center gap-2 border py-1 px-4 rounded-sm border-red-500 cursor-pointer hover:bg-red-50'>
-                                                                <Trash size={12} />
-                                                                <span className='text-sm font-medium'>Remove</span>
-                                                            </div>
-                                                        )}
+                                                        −
+                                                    </button>
+
+                                                    {/* Quantity Input Field */}
+                                                    <div className="relative">
+                                                        <div className="flex items-center space-x-2">
+                                                            {/* Input field */}
+                                                            <input
+                                                                type="number"
+                                                                min="1"
+                                                                max={item.product?.stock_quantity || undefined}
+                                                                value={quantityInputValues[item.product_id] !== undefined
+                                                                    ? quantityInputValues[item.product_id]
+                                                                    : item.quantity.toString()}
+                                                                onChange={(e) => handleQuantityInputChange(item.product_id, e.target.value)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') {
+                                                                        handleInputSave(item.product_id);
+                                                                    }
+                                                                }}
+                                                                onBlur={() => {
+                                                                    const inputValue = parseInt(quantityInputValues[item.product_id] || item.quantity.toString());
+                                                                    if (!isNaN(inputValue) && inputValue >= 1) {
+                                                                        handleInputSave(item.product_id);
+                                                                    }
+                                                                }}
+                                                                disabled={isUpdating}
+                                                                className="w-16 text-center border border-gray-300 rounded-md py-1.5 px-2 text-sm 
+                                                                focus:outline-none focus:ring-1 focus:ring-[#35c8dc] focus:border-[#35c8dc]
+                                                                disabled:opacity-50 disabled:cursor-not-allowed
+                                                                [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
+                                                                transition-all duration-200"
+                                                            />
+
+                                                            {/* Save Button - Only show when editing this product */}
+                                                            {editingProductId === item.product_id && (
+                                                                <button
+                                                                    onClick={() => handleInputSave(item.product_id)}
+                                                                    disabled={isUpdating}
+                                                                    className="w-7 h-7 flex items-center justify-center bg-[#35c8dc] text-white rounded-md hover:bg-[#2db4c8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    title="Save quantity"
+                                                                >
+                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                </button>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Stock limit warning */}
+                                                        {item.product?.stock_quantity &&
+                                                            parseInt(quantityInputValues[item.product_id] || item.quantity.toString()) > item.product.stock_quantity && (
+                                                                <div className="absolute -bottom-5 left-0 right-0 text-xs text-red-500 font-medium text-center">
+                                                                    Max: {item.product.stock_quantity}
+                                                                </div>
+                                                            )}
+                                                    </div>
+
+                                                    {/* Plus Button */}
+                                                    <button
+                                                        onClick={() => handleIncreaseQuantity(item.product_id)}
+                                                        disabled={
+                                                            isUpdating ||
+                                                            (typeof item.product?.stock_quantity === 'number' && item.quantity >= item.product.stock_quantity)
+                                                        }
+                                                        className={`w-7 h-7 cursor-pointer flex items-center justify-center border border-gray-300 rounded-md transition-colors
+          ${isUpdating || (item.product?.stock_quantity && item.quantity >= item.product.stock_quantity)
+                                                                ? 'opacity-50 cursor-not-allowed text-gray-400'
+                                                                : 'hover:bg-gray-100 hover:border-gray-400 text-gray-700'
+                                                            }`}
+                                                    >
+                                                        +
                                                     </button>
                                                 </div>
+
+                                                {/* Stock Status */}
+                                                {item.product?.stock_quantity && (
+                                                    <div className="text-xs">
+                                                        {item.product.stock_quantity === 0 ? (
+                                                            <span className="text-red-500 font-medium">Out of stock</span>
+                                                        ) : item.quantity >= item.product.stock_quantity ? (
+                                                            <span className="text-amber-600 font-medium">
+                                                                Only {item.product.stock_quantity} left
+                                                            </span>
+                                                        ) : item.product.stock_quantity < 10 ? (
+                                                            <span className="text-green-600">
+                                                                {item.product.stock_quantity} in stock
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+                                                )}
+
+                                                <button
+                                                    onClick={() => handleRemoveItem(item.product_id)}
+                                                    className="text-red-600 hover:text-red-800 font-medium"
+                                                    disabled={isRemovingThisItem || isUpdating}
+                                                >
+                                                    {isRemovingThisItem ? (
+                                                        <div className='flex items-center gap-2 border py-1 px-4 rounded-sm border-red-500 cursor-pointer opacity-70'>
+                                                            <MdDeleteSweep />
+                                                            <span className='text-sm font-medium'>Removing...</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className='flex items-center gap-2 border py-1 px-4 rounded-sm border-red-500 cursor-pointer hover:bg-red-50'>
+                                                            <Trash size={12} />
+                                                            <span className='text-sm font-medium'>Remove</span>
+                                                        </div>
+                                                    )}
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -254,25 +511,13 @@ export default function Page() {
                             <div className="border-t border-gray-200 pt-6 space-y-4">
                             </div>
 
-                            {/* Checkout Button */}
-                            {
-                                cartCount > 1 ? (
-                                    <button
-                                        className="w-full bg-[#35c8dc] text-white py-3 px-4 cursor-pointer font-semibold hover:bg-[#2db4c8] transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        disabled={true}
-                                    >
-                                        Proceed to Checkout
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={handleCheckout}
-                                        className="w-full bg-[#35c8dc] text-white py-3 px-4 cursor-pointer font-semibold hover:bg-[#2db4c8] transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        disabled={isUpdating || cartItems.length === 0}
-                                    >
-                                        {isUpdating ? 'Processing...' : 'Proceed to Checkout'}
-                                    </button>
-                                )
-                            }
+                            <button
+                                onClick={handleCheckout}
+                                className="w-full bg-[#35c8dc] text-white py-3 px-4 cursor-pointer font-semibold hover:bg-[#2db4c8] transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={isUpdating || cartItems.length === 0}
+                            >
+                                {isUpdating ? 'Processing...' : 'Proceed to Checkout'}
+                            </button>
                         </div>
                     </div>
                 </div>

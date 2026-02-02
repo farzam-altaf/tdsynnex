@@ -87,12 +87,12 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
     if (!user?.id) {
       return true;
     }
-    
+
     // For logged-in users, check if profile exists and isVerified is true
     if (profile && profile.isVerified === true) {
       return true;
     }
-    
+
     return false;
   };
 
@@ -154,7 +154,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
     if (!checkUserVerification()) {
       setCartItems([])
       setIsLoading(false)
-      
+
       return;
     }
 
@@ -393,6 +393,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
   }
 
   // Update item quantity
+  // CartContext.ts میں updateQuantity function update کریں
   const updateQuantity = async (productId: string, quantity: number) => {
     if (quantity < 1) {
       await removeFromCart(productId)
@@ -420,9 +421,14 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
           )
           localStorage.setItem('guest_cart', JSON.stringify(updatedCart))
 
-          // Fetch product details
-          const enhancedCart = await enhanceCartWithProductDetails(updatedCart)
-          setCartItems(enhancedCart)
+          // 🚨 FIX: Optimistically update local state without fetchCartItems
+          setCartItems(prevItems => {
+            return prevItems.map(item =>
+              item.product_id === productId
+                ? { ...item, quantity }
+                : item
+            )
+          })
         }
       } else {
         const { error } = await supabase
@@ -435,10 +441,18 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
           throw error
         }
 
-        // Refresh cart items
-        await fetchCartItems()
+        // 🚨 FIX: Optimistically update local state without fetchCartItems
+        setCartItems(prevItems => {
+          return prevItems.map(item =>
+            item.product_id === productId
+              ? { ...item, quantity }
+              : item
+          )
+        })
       }
     } catch (error) {
+      // Revert on error
+      await fetchCartItems() // Only fetch if error occurs
       throw error
     } finally {
       setIsUpdating(false)
@@ -499,7 +513,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
     if (authLoading) {
       return
     }
-    
+
     if (!user?.id) {
       // Guest user - fetch from localStorage
       fetchCartItems()

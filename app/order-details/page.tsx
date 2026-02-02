@@ -15,6 +15,7 @@ import {
 } from "@tanstack/react-table"
 import { ArrowUpDown, ChevronDown, MoreHorizontal, Edit, Eye, Save, X, Trash } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { logActivity } from "@/lib/logger";
 import { useEffect, useState } from "react"
 import { useAuth } from "../context/AuthContext"
 import { TbFileTypeCsv } from "react-icons/tb"
@@ -103,7 +104,7 @@ export default function Page() {
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editErrors, setEditErrors] = useState<Record<string, string>>({});
-
+    const source = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/order-details`;
     // Table states
     const [sorting, setSorting] = useState<SortingState>([])
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -168,6 +169,22 @@ export default function Page() {
 
     // Fetch orders data from Supabase
     const fetchOrders = async () => {
+        const startTime = Date.now();
+
+        // Log fetch attempt
+        await logActivity({
+            type: 'order',
+            level: 'info',
+            action: 'orders_fetch_attempt',
+            message: 'Attempting to fetch orders',
+            userId: profile?.id || null,
+            details: {
+                userRole: profile?.role,
+                isActionAuthorized,
+                isViewAuthorized
+            }
+        });
+
         try {
             setIsLoading(true);
             setError(null);
@@ -180,10 +197,38 @@ export default function Page() {
                     .eq("order_by", profile?.id);
 
                 if (supabaseError) {
+                    await logActivity({
+                        type: 'order',
+                        level: 'error',
+                        action: 'orders_fetch_failed',
+                        message: `Failed to fetch orders: ${supabaseError.message}`,
+                        userId: profile?.id || null,
+                        details: {
+                            error: supabaseError,
+                            executionTimeMs: Date.now() - startTime,
+                            userRole: profile?.role,
+                            filter: 'user-specific'
+                        },
+                        status: 'failed'
+                    });
                     throw supabaseError;
                 }
 
                 if (data) {
+                    await logActivity({
+                        type: 'order',
+                        level: 'success',
+                        action: 'orders_fetch_success',
+                        message: `Successfully fetched ${data.length} orders`,
+                        userId: profile?.id || null,
+                        details: {
+                            ordersCount: data.length,
+                            executionTimeMs: Date.now() - startTime,
+                            userRole: profile?.role,
+                            filter: 'user-specific'
+                        },
+                        status: 'completed'
+                    });
                     setOrders(data as Order[]);
                 }
             } else {
@@ -193,15 +238,56 @@ export default function Page() {
                     .order('order_no', { ascending: false });
 
                 if (supabaseError) {
+                    await logActivity({
+                        type: 'order',
+                        level: 'error',
+                        action: 'orders_fetch_failed',
+                        message: `Failed to fetch orders: ${supabaseError.message}`,
+                        userId: profile?.id || null,
+                        details: {
+                            error: supabaseError,
+                            executionTimeMs: Date.now() - startTime,
+                            userRole: profile?.role,
+                            filter: 'all-orders'
+                        },
+                        status: 'failed'
+                    });
                     throw supabaseError;
                 }
 
                 if (data) {
+                    await logActivity({
+                        type: 'order',
+                        level: 'success',
+                        action: 'orders_fetch_success',
+                        message: `Successfully fetched ${data.length} orders`,
+                        userId: profile?.id || null,
+                        details: {
+                            ordersCount: data.length,
+                            executionTimeMs: Date.now() - startTime,
+                            userRole: profile?.role,
+                            filter: 'all-orders'
+                        },
+                        status: 'completed'
+                    });
                     setOrders(data as Order[]);
                 }
             }
 
         } catch (err: unknown) {
+            await logActivity({
+                type: 'order',
+                level: 'error',
+                action: 'orders_fetch_error',
+                message: 'Failed to fetch orders',
+                userId: profile?.id || null,
+                details: {
+                    error: err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch orders');
             } else {
@@ -244,6 +330,21 @@ export default function Page() {
 
     // Handle edit order click
     const handleEditOrder = (order: Order) => {
+        logActivity({
+            type: 'ui',
+            level: 'info',
+            action: 'order_edit_clicked',
+            message: `User clicked to edit order ${order.order_no}`,
+            userId: profile?.id || null,
+            orderId: order.id,
+            details: {
+                orderNumber: order.order_no,
+                companyName: order.company_name,
+                orderStatus: order.order_status,
+                userRole: profile?.role
+            }
+        });
+
         setSelectedOrder(order);
         setEditErrors({});
         setIsEditDrawerOpen(true);
@@ -382,7 +483,39 @@ export default function Page() {
     const handleUpdateOrder = async () => {
         if (!selectedOrder) return;
 
+        const startTime = Date.now();
+
+        // Log update attempt
+        await logActivity({
+            type: 'order',
+            level: 'info',
+            action: 'order_update_attempt',
+            message: `Attempting to update order ${selectedOrder.order_no}`,
+            userId: profile?.id || null,
+            orderId: selectedOrder.id,
+            details: {
+                orderNumber: selectedOrder.order_no,
+                companyName: selectedOrder.company_name,
+                userRole: profile?.role
+            }
+        });
+
         if (!validateEditForm()) {
+            await logActivity({
+                type: 'validation',
+                level: 'error',
+                action: 'order_update_validation_failed',
+                message: `Order update validation failed for order ${selectedOrder.order_no}`,
+                userId: profile?.id || null,
+                orderId: selectedOrder.id,
+                details: {
+                    orderNumber: selectedOrder.order_no,
+                    errorCount: Object.keys(editErrors).length,
+                    errors: editErrors,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             toast.error("Please fill in all required fields correctly", { style: { color: "white", backgroundColor: "red" } });
             return;
         }
@@ -401,12 +534,54 @@ export default function Page() {
                 .update(updatedOrder)
                 .eq('id', selectedOrder.id);
 
-            if (error) throw error;
+            if (error) {
+                // Log update error
+                await logActivity({
+                    type: 'order',
+                    level: 'error',
+                    action: 'order_update_failed',
+                    message: `Failed to update order ${selectedOrder.order_no}: ${error.message}`,
+                    userId: profile?.id || null,
+                    orderId: selectedOrder.id,
+                    details: {
+                        orderNumber: selectedOrder.order_no,
+                        error: error,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
+
+                throw error;
+            }
 
             // Update local state
             setOrders(prev => prev.map(order =>
                 order.id === selectedOrder.id ? updatedOrder : order
             ));
+
+            await logActivity({
+                type: 'order',
+                level: 'success',
+                action: 'order_update_success',
+                message: `Successfully updated order ${selectedOrder.order_no}`,
+                userId: profile?.id || null,
+                orderId: selectedOrder.id,
+                details: {
+                    orderNumber: selectedOrder.order_no,
+                    companyName: selectedOrder.company_name,
+                    orderStatus: selectedOrder.order_status,
+                    revOpportunity: selectedOrder.rev_opportunity,
+                    devOpportunity: selectedOrder.dev_opportunity,
+                    devBudget: selectedOrder.dev_budget,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role,
+                    updatedFields: Object.keys(selectedOrder).filter(key =>
+                        selectedOrder[key as keyof Order] !== orders.find(o => o.id === selectedOrder.id)?.[key as keyof Order]
+                    )
+                },
+                status: 'completed'
+            });
 
             toast.success("Order updated successfully!", { style: { color: "white", backgroundColor: "black" } });
             setIsEditDrawerOpen(false);
@@ -414,6 +589,21 @@ export default function Page() {
             setEditErrors({});
 
         } catch (err: any) {
+            await logActivity({
+                type: 'order',
+                level: 'error',
+                action: 'order_update_error',
+                message: `Failed to update order: ${err.message || 'Unknown error'}`,
+                userId: profile?.id || null,
+                orderId: selectedOrder.id,
+                details: {
+                    orderNumber: selectedOrder.order_no,
+                    error: err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             toast.error(err.message || "Failed to update order", { style: { color: "white", backgroundColor: "red" } });
         } finally {
             setIsSubmitting(false);
@@ -724,21 +914,95 @@ export default function Page() {
                 };
 
                 const handleConfirmDelete = async () => {
+                    const startTime = Date.now();
+
+                    // Log delete attempt
+                    await logActivity({
+                        type: 'order',
+                        level: 'warning',
+                        action: 'order_delete_attempt',
+                        message: `Attempting to delete order ${order.order_no}`,
+                        userId: profile?.id || null,
+                        orderId: order.id,
+                        details: {
+                            orderNumber: order.order_no,
+                            companyName: order.company_name,
+                            orderStatus: order.order_status,
+                            userRole: profile?.role,
+                            deletedBy: profile?.email
+                        }
+                    });
+
                     try {
                         const { error } = await supabase
                             .from('orders')
                             .delete()
                             .eq('id', order.id);
 
-                        if (error) throw error;
+                        if (error) {
+                            // Log delete error
+                            await logActivity({
+                                type: 'order',
+                                level: 'error',
+                                action: 'order_delete_failed',
+                                message: `Failed to delete order ${order.order_no}: ${error.message}`,
+                                userId: profile?.id || null,
+                                orderId: order.id,
+                                details: {
+                                    orderNumber: order.order_no,
+                                    error: error,
+                                    executionTimeMs: Date.now() - startTime,
+                                    userRole: profile?.role
+                                },
+                                status: 'failed'
+                            });
+
+                            throw error;
+                        }
+
+                        await logActivity({
+                            type: 'order',
+                            level: 'success',
+                            action: 'order_delete_success',
+                            message: `Successfully deleted order ${order.order_no}`,
+                            userId: profile?.id || null,
+                            orderId: order.id,
+                            details: {
+                                orderNumber: order.order_no,
+                                companyName: order.company_name,
+                                orderStatus: order.order_status,
+                                revOpportunity: order.rev_opportunity,
+                                devOpportunity: order.dev_opportunity,
+                                executionTimeMs: Date.now() - startTime,
+                                userRole: profile?.role,
+                                deletedBy: profile?.email
+                            },
+                            status: 'completed'
+                        });
 
                         // Refresh the orders list
                         fetchOrders();
                         setIsDeleteDialogOpen(false);
                     } catch (error) {
+                        await logActivity({
+                            type: 'order',
+                            level: 'error',
+                            action: 'order_delete_error',
+                            message: `Failed to delete order ${order.order_no}`,
+                            userId: profile?.id || null,
+                            orderId: order.id,
+                            details: {
+                                orderNumber: order.order_no,
+                                error: error,
+                                executionTimeMs: Date.now() - startTime,
+                                userRole: profile?.role
+                            },
+                            status: 'failed'
+                        });
                         setError('Failed to delete order');
                     }
                 };
+
                 return (
                     <div className="flex space-x-2 ps-2">
                         <DropdownMenu>
@@ -800,10 +1064,10 @@ export default function Page() {
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
                                     <AlertDialogAction
                                         onClick={handleConfirmDelete}
-                                        className="bg-red-500 hover:bg-red-600"
+                                        className="bg-red-500 hover:bg-red-600 cursor-pointer"
                                     >
                                         Delete Order
                                     </AlertDialogAction>
@@ -900,9 +1164,36 @@ export default function Page() {
     // Handle CSV export
     const handleExportCSV = () => {
         if (orders.length === 0) {
-            alert("No data to export");
+            logActivity({
+                type: 'export',
+                level: 'warning',
+                action: 'csv_export_empty',
+                message: 'Attempted to export CSV with no orders data',
+                userId: profile?.id || null,
+                details: {
+                    ordersCount: orders.length,
+                    userRole: profile?.role
+                },
+                status: 'skipped'
+            });
+            toast.info("No data to export");
             return;
         }
+
+        const startTime = Date.now();
+
+        // Log export attempt
+        logActivity({
+            type: 'export',
+            level: 'info',
+            action: 'csv_export_attempt',
+            message: 'Attempting to export orders to CSV',
+            userId: profile?.id || null,
+            details: {
+                ordersCount: orders.length,
+                userRole: profile?.role
+            }
+        });
 
         try {
             const data = orders.map(order => ({
@@ -933,7 +1224,35 @@ export default function Page() {
 
             const csvString = convertToCSV(data);
             downloadCSV(csvString, `orders_${new Date().toISOString().split('T')[0]}.csv`);
+            logActivity({
+                type: 'export',
+                level: 'success',
+                action: 'csv_export_success',
+                message: `Successfully exported ${orders.length} orders to CSV`,
+                userId: profile?.id || null,
+                details: {
+                    ordersCount: orders.length,
+                    fileName: `orders_${new Date().toISOString().split('T')[0]}.csv`,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
         } catch (error) {
+            logActivity({
+                type: 'export',
+                level: 'error',
+                action: 'csv_export_failed',
+                message: `Failed to export orders to CSV`,
+                userId: profile?.id || null,
+                details: {
+                    errorDetails: error,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
+
             setError('Failed to export CSV');
         }
     };

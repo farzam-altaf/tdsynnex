@@ -46,6 +46,7 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
 }
+
 /* 
 @media (prefers-color-scheme: dark) {
   :root {
@@ -89,6 +90,7 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 }
+
 /* 
 ---break--- */
 .dark {
@@ -124,27 +126,52 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 }
+
 /* 
 ---break--- */
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
 }
 
+/* Add to your global CSS or component */
+.overflow-x-hidden {
+  overflow-x: hidden !important;
+}
+
+.overflow-y-auto {
+  overflow-y: auto !important;
+}
+
+.td-table {
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+.td-td,
+.td-th {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .send-reminders-button button {
-    background-color: #0A4647 !important;
-    cursor: pointer; /* bg-blue-900 */
+  background-color: #0A4647 !important;
+  cursor: pointer;
+  /* bg-blue-900 */
 }
 
 .send-reminders-button button:hover {
-    background-color: #093636 !important; /* bg-blue-700 */
+  background-color: #093636 !important;
+  /* bg-blue-700 */
 }
 
 .send-reminders-button button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  opacity: 0.5;
+  cursor: not-allowed;
 }

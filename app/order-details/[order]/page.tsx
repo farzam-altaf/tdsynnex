@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog"
 import Link from "next/link"
 import { emailTemplates, sendEmail } from "@/lib/email"
+import { logActivity, logError, logSuccess, logInfo, logWarning } from "@/lib/logger";
 import { toast } from "sonner"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
@@ -51,7 +52,6 @@ export type Product = {
     };
 }
 
-// Define Order type based on your Supabase table
 export type Order = {
     id: string
     order_no: string
@@ -66,7 +66,8 @@ export type Order = {
     shipped_date: string | null
     returned_date: string | null
     vertical: string | null
-    quantity: string | null
+    quantity: string | null // This is total quantity as string for backward compatibility
+    quantity_array?: number[] | null // Add this for array support
     segment: string | null
     order_month: string | null
     order_quarter: string | null
@@ -101,23 +102,26 @@ export type Order = {
     zip: string | null
     desired_date: string | null
     notes: string | null
-    product_id: string | null
+    product_id: string[] | null // Change this to string array
     products?: Product
+    products_array?: Product[] // Add this for multiple products
     approved_user?: { // Add this for the join
         id: string
         email: string
-        first_name?: string
-        last_name?: string
+        firstName?: string  // Change to camelCase
+        lastName?: string   // Change to camelCase
     }
     rejected_user?: { // Add this for the join
         id: string
         email: string
-        first_name?: string
-        last_name?: string
+        firstName?: string  // Change to camelCase
+        lastName?: string   // Change to camelCase
     }
     order_by_user?: { // Add this for the join
         id: string
         email: string
+        firstName?: string  // Change to camelCase
+        lastName?: string   // Change to camelCase
     }
     wins?: { // Add this for the join
         id: string;
@@ -125,6 +129,7 @@ export type Order = {
         created_at: string;
     }[];
 }
+
 
 export default function Page() {
     const router = useRouter();
@@ -152,6 +157,65 @@ export default function Page() {
         password: ""
     });
 
+    const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+    const [returnedProducts, setReturnedProducts] = useState<{
+        productId: string;
+        productName: string;
+        shippedQuantity: number;
+        returnedQuantity: number;
+        isDamaged: boolean;
+    }[]>([]);
+
+    // Helper function to handle status change to Returned
+    const handleStatusChangeToReturned = (field: string, value: string, rowId: string = "order") => {
+        console.log('handleStatusChangeToReturned called:', { field, value, rowId });
+
+        if (field !== "order_status" || value !== process.env.NEXT_PUBLIC_STATUS_RETURNED) {
+            console.log('Not a return status change');
+            return;
+        }
+
+        if (!order || !isActionAuthorized) {
+            console.log('No order or not authorized:', { hasOrder: !!order, isActionAuthorized });
+            return;
+        }
+
+        // Check if order has shipped products
+        if (!order.shipped_date || !order.products_array || order.products_array.length === 0) {
+            console.log('Order not shipped or no products:', {
+                hasShippedDate: !!order.shipped_date,
+                hasProductsArray: !!order.products_array,
+                productsCount: order.products_array?.length || 0
+            });
+            toast.error("Order is not shipped or has no products");
+            return;
+        }
+
+        // Prepare returned products data
+        const productsData = order.products_array.map((product, index) => ({
+            productId: product.id,
+            productName: product.product_name,
+            shippedQuantity: order.quantity_array?.[index] || 0,
+            returnedQuantity: order.quantity_array?.[index] || 0, // Initially all returned
+            isDamaged: false // Initially all items are NOT damaged (will be returned to stock)
+        }));
+
+        console.log('Setting returned products:', productsData);
+        setReturnedProducts(productsData);
+
+        // Store the pending status change
+        const pendingChange = {
+            field: field,
+            value: value,
+            rowId: rowId
+        };
+        console.log('Setting pending status change:', pendingChange);
+        setPendingStatusChange(pendingChange);
+
+        // Open the modal
+        console.log('Opening return modal');
+        setIsReturnModalOpen(true);
+    };
 
     // Order status options from environment variables
     const statusOptions = [
@@ -206,50 +270,214 @@ export default function Page() {
                 setAllProducts(data as Product[]);
             }
         } catch (err) {
+            console.error('Error fetching products:', err);
         }
     };
 
-    // Fetch orders data from Supabase with user joins
     const fetchOrders = async () => {
+        const startTime = Date.now();
+
+        await logActivity({
+            type: 'order',
+            level: 'info',
+            action: 'order_details_fetch_attempt',
+            message: `Attempting to fetch order details for ${orderHash}`,
+            userId: profile?.id || null,
+            details: {
+                orderHash,
+                userRole: profile?.role,
+                isActionAuthorized
+            }
+        });
+
         try {
             setIsLoading(true);
             setError(null);
 
-            // Update the query to join with users table for approved_by and rejected_by
+            console.log('🔍 Fetching order details...');
+
+            // First, fetch the order without the product join
             let query = supabase
                 .from('orders')
                 .select(`
-                        *,
-                        products!inner(
-                            *,
-                            processor_filter:processor(title),
-                            form_factor_filter:form_factor(title)
-                        ),
-                        approved_user:users!orders_approved_by_fkey(id, email),
-                        rejected_user:users!orders_rejected_by_fkey(id, email),
-                        order_by_user:users!orders_order_by_fkey(id, email),
-                        wins:wins(*) 
-                    `)
+            *,
+            approved_user:users!orders_approved_by_fkey(id, email, firstName, lastName),
+            rejected_user:users!orders_rejected_by_fkey(id, email, firstName, lastName),
+            order_by_user:users!orders_order_by_fkey(id, email, firstName, lastName),
+            wins:wins(*) 
+        `)
                 .eq('order_no', orderHash);
 
             const { data, error: supabaseError } = await query;
 
             if (supabaseError) {
+                console.error('Supabase error:', supabaseError);
                 throw supabaseError;
             }
 
             if (data) {
+                console.log("📦 Fetched raw data:", data);
+                console.log("📊 Number of orders:", data.length);
 
-                console.log("data :", data)
-
-                if (sRole == profile?.role && data[0].order_by !== profile?.id) {
+                // Check if user is authorized to view this order
+                if (sRole === profile?.role && data[0].order_by !== profile?.id) {
+                    console.warn('⚠️ Unauthorized access attempt');
                     router.back();
+                    return;
                 }
 
-                setOrders(data as Order[]);
-                // Initialize tracking data with order data
-                if (data.length > 0) {
-                    const order = data[0];
+                // Parse the product_id array and quantity array
+                const processedOrders = await Promise.all(data.map(async (order: any) => {
+                    try {
+                        // Parse product_id and quantity arrays
+                        let productIds: string[] = [];
+                        let quantities: number[] = [];
+
+                        console.log("📋 Original product_id:", order.product_id);
+                        console.log("📋 Original quantity:", order.quantity);
+                        console.log("📋 Order status:", order.order_status);
+
+                        // Handle product_id parsing
+                        if (order.product_id) {
+                            if (typeof order.product_id === 'string') {
+                                try {
+                                    productIds = JSON.parse(order.product_id);
+                                    console.log("✅ Parsed productIds:", productIds);
+                                } catch (parseError) {
+                                    console.error('❌ Error parsing product_id JSON:', parseError);
+                                    if (order.product_id.trim().startsWith('[') === false) {
+                                        productIds = [order.product_id.trim()];
+                                    }
+                                }
+                            } else if (Array.isArray(order.product_id)) {
+                                productIds = order.product_id;
+                            }
+                        }
+
+                        // Handle quantity parsing
+                        if (order.quantity) {
+                            if (typeof order.quantity === 'string') {
+                                try {
+                                    quantities = JSON.parse(order.quantity);
+                                    console.log("✅ Parsed quantities:", quantities);
+                                } catch (parseError) {
+                                    console.error('❌ Error parsing quantity JSON:', parseError);
+                                    const parsed = parseInt(order.quantity);
+                                    if (!isNaN(parsed)) {
+                                        quantities = [parsed];
+                                    }
+                                }
+                            } else if (Array.isArray(order.quantity)) {
+                                quantities = order.quantity;
+                            } else if (typeof order.quantity === 'number') {
+                                quantities = [order.quantity];
+                            }
+                        }
+
+                        console.log("🎯 Final productIds:", productIds);
+                        console.log("🎯 Final quantities:", quantities);
+
+                        // Fetch all products for this order
+                        let productsDetails: Product[] = [];
+                        if (productIds.length > 0) {
+                            const { data: productsData, error: productsError } = await supabase
+                                .from('products')
+                                .select(`
+                            *,
+                            processor_filter:processor(title),
+                            form_factor_filter:form_factor(title)
+                        `)
+                                .in('id', productIds);
+
+                            if (!productsError && productsData) {
+                                productsDetails = productsData as Product[];
+                                console.log(`✅ Fetched ${productsDetails.length} products`);
+                            } else {
+                                console.error('❌ Error fetching products:', productsError);
+                            }
+                        }
+
+                        // Calculate total quantity
+                        const totalQuantity = quantities.reduce((sum, qty) => sum + qty, 0);
+
+                        // Create the order object
+                        const processedOrder: Order = {
+                            ...order,
+                            product_id: productIds,
+                            quantity: totalQuantity.toString(),
+                            quantity_array: quantities,
+                            products: productIds.length > 0 ? productsDetails[0] : undefined,
+                            products_array: productsDetails,
+                            approved_user: order.approved_user ? {
+                                id: order.approved_user.id,
+                                email: order.approved_user.email,
+                                firstName: order.approved_user.firstName,
+                                lastName: order.approved_user.lastName
+                            } : undefined,
+                            rejected_user: order.rejected_user ? {
+                                id: order.rejected_user.id,
+                                email: order.rejected_user.email,
+                                firstName: order.rejected_user.firstName,
+                                lastName: order.rejected_user.lastName
+                            } : undefined,
+                            order_by_user: order.order_by_user ? {
+                                id: order.order_by_user.id,
+                                email: order.order_by_user.email,
+                                firstName: order.order_by_user.firstName,
+                                lastName: order.order_by_user.lastName
+                            } : undefined
+                        };
+
+                        console.log("✅ Processed order:", {
+                            id: processedOrder.id,
+                            order_no: processedOrder.order_no,
+                            order_status: processedOrder.order_status,
+                            returned_date: processedOrder.returned_date,
+                            product_count: processedOrder.product_id?.length || 0
+                        });
+
+                        return processedOrder;
+                    } catch (parseError) {
+                        console.error('❌ Error parsing order data:', parseError);
+                        return {
+                            ...order,
+                            product_id: [],
+                            quantity: null,
+                            products: undefined,
+                            products_array: [],
+                            approved_user: order.approved_user ? {
+                                id: order.approved_user.id,
+                                email: order.approved_user.email,
+                                firstName: order.approved_user.firstName,
+                                lastName: order.approved_user.lastName
+                            } : undefined,
+                            rejected_user: order.rejected_user ? {
+                                id: order.rejected_user.id,
+                                email: order.rejected_user.email,
+                                firstName: order.rejected_user.firstName,
+                                lastName: order.rejected_user.lastName
+                            } : undefined,
+                            order_by_user: order.order_by_user ? {
+                                id: order.order_by_user.id,
+                                email: order.order_by_user.email,
+                                firstName: order.order_by_user.firstName,
+                                lastName: order.order_by_user.lastName
+                            } : undefined
+                        } as Order;
+                    }
+                }));
+
+                console.log("🎉 Setting processed orders to state:", processedOrders.length);
+                setOrders(processedOrders);
+
+                // Initialize tracking data
+                if (processedOrders.length > 0) {
+                    const order = processedOrders[0];
+                    console.log("📦 First order details:", {
+                        order_no: order.order_no,
+                        order_status: order.order_status,
+                        returned_date: order.returned_date
+                    });
                     setTrackingData({
                         tracking: order.tracking || "",
                         return_tracking: order.return_tracking || "",
@@ -260,9 +488,29 @@ export default function Page() {
                         password: order.password || ""
                     });
                 }
+
+                await logActivity({
+                    type: 'order',
+                    level: 'success',
+                    action: 'order_details_fetch_success',
+                    message: `Successfully fetched order details for ${orderHash}`,
+                    userId: profile?.id || null,
+                    orderId: data[0]?.id,
+                    details: {
+                        orderHash,
+                        orderNumber: data[0]?.order_no,
+                        orderStatus: data[0]?.order_status,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role,
+                        productCount: processedOrders[0]?.product_id?.length || 0
+                    },
+                    status: 'completed'
+                });
+
             }
 
         } catch (err: unknown) {
+            console.error('❌ Error in fetchOrders:', err);
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch orders');
             } else {
@@ -270,8 +518,585 @@ export default function Page() {
             }
         } finally {
             setIsLoading(false);
+            console.log('🏁 fetchOrders completed');
         }
     };
+
+
+    const renderAllProducts = () => {
+        if (!order.products_array || !order.product_id || !order.quantity_array) {
+            return (
+                <TableRow>
+                    <TableCell colSpan={2} className="text-center">
+                        <span className="text-gray-500">No products found</span>
+                    </TableCell>
+                </TableRow>
+            );
+        }
+
+        return order.product_id.map((productId, index) => {
+            // Find the product details for this productId
+            const product = order.products_array?.find(p => p.id === productId);
+            const quantity = order.quantity_array?.[index] || 0;
+
+            return (
+                <TableRow key={`${productId}-${index}`}>
+                    <TableCell className="w-[85%]">
+                        {product ? (
+                            <div className="flex items-center gap-2">
+                                <span>{product.product_name}</span>
+                                {product.sku && (
+                                    <span className="text-sm text-gray-500">(SKU: {product.sku})</span>
+                                )}
+                            </div>
+                        ) : (
+                            <span className="text-gray-500">Product not found (ID: {productId})</span>
+                        )}
+                    </TableCell>
+                    <TableCell className="w-[15%] border-l text-center">
+                        {quantity}
+                    </TableCell>
+                </TableRow>
+            );
+        });
+    };
+
+    // Helper function to render product selector for editing
+    const renderProductSelector = (field: string, currentProduct: any, rowId: string = "order") => {
+        const isEditing = editingField === field && editingRowId === rowId;
+
+        if (isEditing) {
+            return (
+                <div className="flex items-center gap-2">
+                    <Select
+                        value={editedValue}
+                        onValueChange={setEditedValue}
+                    >
+                        <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="Select product" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {allProducts.map(product => (
+                                <SelectItem key={product.id} value={product.id}>
+                                    {product.product_name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Button
+                        size="sm"
+                        onClick={() => handleProductSelect(editedValue)}
+                        className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                    >
+                        Save
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCancelEdit}
+                        className="cursor-pointer"
+                    >
+                        Cancel
+                    </Button>
+                </div>
+            );
+        }
+
+        // Display product count
+        const productCount = order.product_id?.length || 0;
+        let displayText = "-";
+        if (productCount > 0) {
+            displayText = `${productCount} product(s)`;
+        }
+
+        return (
+            <div className="flex items-center justify-between group">
+                <span>{displayText}</span>
+                {isActionAuthorized && (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 cursor-pointer"
+                        onClick={() => {
+                            setEditingField(field);
+                            // Set the first product ID as the value to edit
+                            const firstProductId = order.product_id && order.product_id.length > 0
+                                ? order.product_id[0]
+                                : "";
+                            setEditedValue(firstProductId);
+                            setEditingRowId(rowId);
+                        }}
+                    >
+                        <Pencil className="h-3 w-3" />
+                    </Button>
+                )}
+            </div>
+        );
+    };
+
+    // Handle returned quantity change
+    const handleReturnedQuantityChange = (index: number, value: number) => {
+        setReturnedProducts(prev => prev.map((product, i) => {
+            if (i === index) {
+                // Ensure returned quantity doesn't exceed shipped quantity
+                const maxAllowed = product.shippedQuantity;
+                const newQuantity = Math.min(Math.max(0, value), maxAllowed);
+                return { ...product, returnedQuantity: newQuantity };
+            }
+            return product;
+        }));
+    };
+
+
+    // Add this interface near your other interfaces
+    interface ReturnApiResponse {
+        success: boolean;
+        message: string;
+        orderId: string;
+        error?: string;
+        details?: string;
+    }
+
+    const handleReturnSubmit = async () => {
+        console.log('handleReturnSubmit called');
+
+        if (!order || !isActionAuthorized) {
+            console.log('Condition failed');
+            toast.error("Not authorized or no order");
+            return;
+        }
+
+        // Check if we have selected products
+        const hasSelectedProducts = returnedProducts.some(p => p.returnedQuantity > 0);
+        if (!hasSelectedProducts) {
+            toast.error("Please select products to return");
+            return;
+        }
+
+        const startTime = Date.now();
+
+        // Log return submission attempt
+        await logActivity({
+            type: 'order',
+            level: 'info',
+            action: 'order_return_submission_attempt',
+            message: `Attempting to process return for order ${order.order_no}`,
+            userId: profile?.id || null,
+            orderId: order.id,
+            details: {
+                orderNumber: order.order_no,
+                returnedProducts: returnedProducts.length,
+                selectedProducts: returnedProducts.filter(p => p.returnedQuantity > 0).length,
+                userRole: profile?.role
+            }
+        });
+
+        try {
+            // ✅ Loading toast
+            toast.loading("Processing return...");
+
+            // ✅ DIRECT SUPA-BASE CALL (API ki jagah)
+            const currentDate = new Date().toISOString().split('T')[0];
+
+            // Step 1: Pehle product quantities update karein
+            for (const returnedProduct of returnedProducts) {
+                if (returnedProduct.returnedQuantity > 0) {
+                    // Find the product in order.products_array
+                    const product = order.products_array?.find(p => p.id === returnedProduct.productId);
+
+                    if (product) {
+                        // Calculate new quantities
+                        const currentStock = parseInt(product.stock_quantity) || 0;
+                        const currentWithCustomer = parseInt(product.withCustomer) || 0;
+
+                        const newStock = currentStock + returnedProduct.returnedQuantity;
+                        const newWithCustomer = Math.max(0, currentWithCustomer - returnedProduct.shippedQuantity);
+
+                        console.log(`Updating product ${product.product_name}:`, {
+                            productId: returnedProduct.productId,
+                            currentStock,
+                            currentWithCustomer,
+                            shippedQuantity: returnedProduct.shippedQuantity,
+                            returnedQuantity: returnedProduct.returnedQuantity,
+                            newStock,
+                            newWithCustomer
+                        });
+
+                        // Update product in database
+                        const { error: productError } = await supabase
+                            .from('products')
+                            .update({
+                                stock_quantity: newStock.toString(),
+                                withCustomer: newWithCustomer.toString()
+                            })
+                            .eq('id', returnedProduct.productId);
+
+                        if (productError) {
+                            throw new Error(`Failed to update product ${product.product_name}: ${productError.message}`);
+                        }
+
+                        console.log(`✅ Product ${product.product_name} updated successfully`);
+                    } else {
+                        console.warn(`Product ${returnedProduct.productId} not found in order`);
+                    }
+                }
+            }
+
+            // Step 2: Order status update karein
+            const returnStatus = process.env.NEXT_PUBLIC_STATUS_RETURNED || "Returned";
+
+            const { error: orderError } = await supabase
+                .from('orders')
+                .update({
+                    order_status: returnStatus,
+                    returned_date: currentDate
+                })
+                .eq('id', order.id);
+
+            if (orderError) {
+                throw new Error(`Failed to update order: ${orderError.message}`);
+            }
+
+            console.log('✅ Order status updated to Returned');
+
+            // Step 3: Email bhejein (agar chahiye) - FIXED: Now passing returnedProducts as second argument
+            if (order.order_by_user?.email) {
+                try {
+                    await sendReturnedOrderEmail({
+                        ...order,
+                        order_status: returnStatus,
+                        returned_date: currentDate
+                    }, returnedProducts);
+                    console.log('✅ Return email sent');
+                } catch (emailError) {
+                    console.error('Email sending failed:', emailError);
+                    // Email fail hua to bhi process continue rahe
+                }
+            }
+
+            // ✅ Loading toast dismiss karein
+            toast.dismiss();
+
+            // ✅ Success toast show karein
+            toast.success("Return processed successfully!");
+
+            // ✅ Modal close karein
+            setIsReturnModalOpen(false);
+
+            // ✅ Reset state
+            setReturnedProducts([]);
+            setPendingStatusChange(null);
+            setEditingField(null);
+            setEditingRowId(null);
+            setEditedValue("");
+
+            // ✅ Log success
+            await logActivity({
+                type: 'order',
+                level: 'success',
+                action: 'order_return_success',
+                message: `Successfully processed return for order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    returnedProducts: returnedProducts.length,
+                    totalReturned: returnedProducts.reduce((sum, p) => sum + p.returnedQuantity, 0),
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
+
+            // ✅ IMMEDIATELY refresh data (timeout ke bina)
+            console.log('✅ Refreshing data immediately...');
+            await fetchOrders();
+            await fetchAllProducts();
+
+        } catch (err: any) {
+            console.error('Error in handleReturnSubmit:', err);
+            console.error('Error stack:', err.stack);
+
+            // ✅ Loading toast dismiss karein
+            toast.dismiss();
+
+            // ✅ Error toast show karein
+            toast.error(err.message || "Failed to process return");
+
+            // Log error
+            await logActivity({
+                type: 'order',
+                level: 'error',
+                action: 'order_return_error',
+                message: `Failed to process return for order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    error: err.message || err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
+        }
+    };
+
+    const renderReturnModal = () => {
+        return (
+            <Dialog
+                open={isReturnModalOpen}
+                onOpenChange={(open) => {
+                    console.log('Modal open state changed:', open);
+
+                    // Only reset if modal is being closed
+                    if (!open) {
+                        console.log('Closing modal by user action');
+
+                        // Ask for confirmation if there are selected products
+                        const hasSelectedProducts = returnedProducts.some(p => p.returnedQuantity > 0);
+                        if (hasSelectedProducts) {
+                            const confirmed = window.confirm(
+                                "You have selected products to return. Are you sure you want to cancel?"
+                            );
+                            if (!confirmed) {
+                                return; // Don't close the modal
+                            }
+                        }
+
+                        // Reset only when user explicitly closes modal
+                        setIsReturnModalOpen(false);
+                        setReturnedProducts([]);
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-300 max-h-[90vh] overflow-y-auto overflow-x-hidden">
+                    <DialogHeader>
+                        <DialogTitle>Process Return for Order #{order?.order_no}</DialogTitle>
+                        <p className="text-sm text-gray-600 mt-1">
+                            Select products and specify quantity to return to inventory
+                        </p>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4 overflow-x-hidden">
+
+
+                        <div className="overflow-x-auto">
+                            <Table className="td-table w-full min-w-162.5">
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-12.5 text-center td-th"></TableHead>
+                                        <TableHead className="w-25 td-th">Shipped</TableHead>
+                                        <TableHead className="w-37.5 td-th">Return to Stock</TableHead>
+                                        <TableHead className=" td-th">Product</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {returnedProducts.map((product, index) => (
+                                        <TableRow key={product.productId} className="hover:bg-gray-50">
+                                            <TableCell className="text-center td-td">
+                                                <div className="flex justify-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={product.returnedQuantity > 0}
+                                                        onChange={(e) => {
+                                                            const isChecked = e.target.checked;
+                                                            setReturnedProducts(prev => prev.map((p, i) => {
+                                                                if (i === index) {
+                                                                    return {
+                                                                        ...p,
+                                                                        returnedQuantity: isChecked ? p.shippedQuantity : 0,
+                                                                        isDamaged: !isChecked
+                                                                    };
+                                                                }
+                                                                return p;
+                                                            }));
+                                                        }}
+                                                        className="h-5 w-5 cursor-pointer"
+                                                    />
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="font-medium text-center td-td">
+                                                {product.shippedQuantity}
+                                            </TableCell>
+                                            <TableCell className="td-td">
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        type="number"
+                                                        min={0}
+                                                        max={product.shippedQuantity}
+                                                        value={product.returnedQuantity}
+                                                        onChange={(e) => {
+                                                            const value = parseInt(e.target.value) || 0;
+                                                            const maxAllowed = product.shippedQuantity;
+                                                            const newQuantity = Math.min(Math.max(0, value), maxAllowed);
+
+                                                            setReturnedProducts(prev => prev.map((p, i) => {
+                                                                if (i === index) {
+                                                                    return {
+                                                                        ...p,
+                                                                        returnedQuantity: newQuantity,
+                                                                        isDamaged: newQuantity === 0
+                                                                    };
+                                                                }
+                                                                return p;
+                                                            }));
+                                                        }}
+                                                        className="w-24 text-center"
+                                                        disabled={product.returnedQuantity === 0}
+                                                    />
+                                                    <span className="text-sm text-gray-500">
+                                                        / {product.shippedQuantity}
+                                                    </span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="font-medium td-td">
+                                                {product.productName}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+
+                        {/* Summary Section */}
+                        <div className="bg-gray-50 p-4 rounded">
+                            <h4 className="font-semibold mb-3 text-lg">Return Summary</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                                <div className="bg-white p-3 rounded border">
+                                    <span className="text-gray-600">Total Products:</span>
+                                    <span className="font-medium ml-2 text-lg">{returnedProducts.length}</span>
+                                </div>
+                                <div className="bg-white p-3 rounded border">
+                                    <span className="text-gray-600">Total Shipped:</span>
+                                    <span className="font-medium ml-2 text-lg">
+                                        {returnedProducts.reduce((sum, p) => sum + p.shippedQuantity, 0)}
+                                    </span>
+                                </div>
+                                <div className="bg-white p-3 rounded border">
+                                    <span className="text-gray-600">Selected Products:</span>
+                                    <span className="font-medium ml-2 text-lg">
+                                        {returnedProducts.filter(p => p.returnedQuantity > 0).length}
+                                    </span>
+                                </div>
+                                <div className="bg-white p-3 rounded border">
+                                    <span className="text-gray-600">Returning to Stock:</span>
+                                    <span className="font-medium ml-2 text-lg text-green-600">
+                                        {returnedProducts.reduce((sum, p) => sum + p.returnedQuantity, 0)}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Quick Actions */}
+                            <div className="mt-4 flex flex-wrap gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        // Select all and set to maximum
+                                        setReturnedProducts(prev => prev.map(p => ({
+                                            ...p,
+                                            returnedQuantity: p.shippedQuantity,
+                                            isDamaged: false
+                                        })));
+                                    }}
+                                    className="text-xs"
+                                >
+                                    Select All & Return Full Quantity
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        // Unselect all
+                                        setReturnedProducts(prev => prev.map(p => ({
+                                            ...p,
+                                            returnedQuantity: 0,
+                                            isDamaged: true
+                                        })));
+                                    }}
+                                    className="text-xs"
+                                >
+                                    Unselect All
+                                </Button>
+                            </div>
+
+                            {returnedProducts.some(p => p.returnedQuantity === 0) && (
+                                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+                                    <div className="flex items-start">
+                                        <span className="text-red-600 mr-2">⚠️</span>
+                                        <div>
+                                            <strong className="text-red-700">Note:</strong>
+                                            <p className="text-red-600 text-sm mt-1">
+                                                {returnedProducts.filter(p => p.returnedQuantity === 0).length} item(s) are not selected and will not be added back to stock inventory.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                    </div>
+
+                    <div className="flex justify-end space-x-3 pt-4 border-t">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                console.log('Cancel button clicked - explicit cancel');
+                                setIsReturnModalOpen(false);
+                                setReturnedProducts([]);
+                                // Don't reset pendingStatusChange here - let the submit button handle it
+                                toast.info("Return process cancelled");
+                            }}
+                            className="cursor-pointer"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                console.log('=== CONFIRM RETURN CLICKED ===');
+                                console.log('Current state:', {
+                                    order: order?.id,
+                                    isActionAuthorized,
+                                    returnedProductsCount: returnedProducts.length,
+                                    returnedProducts
+                                });
+
+                                // Check all conditions
+                                if (!order) {
+                                    console.error('❌ No order');
+                                    toast.error("No order data");
+                                    return;
+                                }
+
+                                if (!isActionAuthorized) {
+                                    console.error('❌ Not authorized');
+                                    toast.error("You are not authorized");
+                                    return;
+                                }
+
+                                // Check if we have selected products
+                                const hasSelectedProducts = returnedProducts.some(p => p.returnedQuantity > 0);
+                                if (!hasSelectedProducts) {
+                                    console.error('❌ No products selected for return');
+                                    toast.error("Please select products to return");
+                                    return;
+                                }
+
+                                console.log('✅ All conditions passed, calling handleReturnSubmit');
+                                handleReturnSubmit();
+                            }}
+                            className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                            disabled={!order || !isActionAuthorized}
+                        >
+                            Confirm Return
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        );
+    };
+
 
     // Fetch data when authorized
     useEffect(() => {
@@ -284,6 +1109,25 @@ export default function Page() {
     const handleApprove = async () => {
         if (!order || !isActionAuthorized) return;
 
+        const startTime = Date.now();
+
+        // Log approve attempt
+        await logActivity({
+            type: 'order',
+            level: 'info',
+            action: 'order_approve_attempt',
+            message: `Attempting to approve order ${order.order_no}`,
+            userId: profile?.id || null,
+            orderId: order.id,
+            details: {
+                orderNumber: order.order_no,
+                companyName: order.company_name,
+                currentStatus: order.order_status,
+                userRole: profile?.role,
+                approvedBy: profile?.email
+            }
+        });
+
         try {
             // Update order status
             const { error } = await supabase
@@ -295,14 +1139,81 @@ export default function Page() {
                 })
                 .eq('id', order.id);
 
-            if (error) throw error;
+            if (error) {
+                // Log approve error
+                await logActivity({
+                    type: 'order',
+                    level: 'error',
+                    action: 'order_approve_failed',
+                    message: `Failed to approve order ${order.order_no}: ${error.message}`,
+                    userId: profile?.id || null,
+                    orderId: order.id,
+                    details: {
+                        orderNumber: order.order_no,
+                        error: error,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
+                throw error;
+            }
+
+            await logActivity({
+                type: 'order',
+                level: 'success',
+                action: 'order_approve_success',
+                message: `Successfully approved order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    companyName: order.company_name,
+                    previousStatus: order.order_status,
+                    newStatus: `${process.env.NEXT_PUBLIC_STATUS_PROCESSING}`,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role,
+                    approvedBy: profile?.email
+                },
+                status: 'completed'
+            });
 
             // Refresh data
             await fetchOrders();
             // ✅ Send approved order email (after successful approval)
             sendApprovedOrderEmail(order);
 
+            await logActivity({
+                type: 'email',
+                level: 'info',
+                action: 'approved_order_email_sent',
+                message: `Approved order email sent for order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    recipient: order.order_by_user?.email,
+                    emailType: 'approved_order'
+                },
+                status: 'sent'
+            });
+
         } catch (err) {
+            await logActivity({
+                type: 'order',
+                level: 'error',
+                action: 'order_approve_error',
+                message: `Failed to approve order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    error: err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
         }
     };
 
@@ -365,6 +1276,26 @@ export default function Page() {
     const handleReject = async () => {
         if (!order || !isActionAuthorized) return;
 
+
+        const startTime = Date.now();
+
+        // Log reject attempt
+        await logActivity({
+            type: 'order',
+            level: 'info',
+            action: 'order_reject_attempt',
+            message: `Attempting to reject order ${order.order_no}`,
+            userId: profile?.id || null,
+            orderId: order.id,
+            details: {
+                orderNumber: order.order_no,
+                companyName: order.company_name,
+                currentStatus: order.order_status,
+                userRole: profile?.role,
+                rejectedBy: profile?.email
+            }
+        });
+
         try {
             const currentDate = new Date().toISOString().split('T')[0];
 
@@ -400,6 +1331,45 @@ export default function Page() {
                             withCustomer: finalWithCustomerQty
                         })
                         .eq('id', order.products.id);
+
+                    if (productUpdateError) {
+                        await logActivity({
+                            type: 'product',
+                            level: 'error',
+                            action: 'product_quantity_update_failed_on_reject',
+                            message: `Failed to update product quantities when rejecting order ${order.order_no}`,
+                            userId: profile?.id || null,
+                            orderId: order.id,
+                            productId: order.products.id,
+                            details: {
+                                orderNumber: order.order_no,
+                                productId: order.products.id,
+                                quantity: orderQuantity,
+                                error: productUpdateError
+                            },
+                            status: 'failed'
+                        });
+                    } else {
+                        await logActivity({
+                            type: 'product',
+                            level: 'info',
+                            action: 'product_quantity_updated_on_reject',
+                            message: `Updated product quantities when rejecting order ${order.order_no}`,
+                            userId: profile?.id || null,
+                            orderId: order.id,
+                            productId: order.products.id,
+                            details: {
+                                orderNumber: order.order_no,
+                                productId: order.products.id,
+                                quantity: orderQuantity,
+                                oldStock: currentStockQty,
+                                newStock: finalStockQty,
+                                oldWithCustomer: currentWithCustomerQty,
+                                newWithCustomer: finalWithCustomerQty
+                            },
+                            status: 'completed'
+                        });
+                    }
                 }
             }
 
@@ -419,12 +1389,79 @@ export default function Page() {
                 .update(updateData)
                 .eq('id', order.id);
 
-            if (error) throw error;
+            if (error) {
+                await logActivity({
+                    type: 'order',
+                    level: 'error',
+                    action: 'order_reject_failed',
+                    message: `Failed to reject order ${order.order_no}: ${error.message}`,
+                    userId: profile?.id || null,
+                    orderId: order.id,
+                    details: {
+                        orderNumber: order.order_no,
+                        error: error,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
+                throw error;
+            }
+
+            await logActivity({
+                type: 'order',
+                level: 'success',
+                action: 'order_reject_success',
+                message: `Successfully rejected order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    companyName: order.company_name,
+                    previousStatus: order.order_status,
+                    newStatus: `${process.env.NEXT_PUBLIC_STATUS_REJECTED}`,
+                    quantityReturned: order.quantity,
+                    productId: order.products?.id,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role,
+                    rejectedBy: profile?.email
+                },
+                status: 'completed'
+            });
 
             // Refresh data
             fetchOrders();
             sendRejectedOrderEmail(order);
+            await logActivity({
+                type: 'email',
+                level: 'info',
+                action: 'rejected_order_email_sent',
+                message: `Rejected order email sent for order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    recipient: order.order_by_user?.email,
+                    emailType: 'rejected_order'
+                },
+                status: 'sent'
+            });
         } catch (err) {
+            await logActivity({
+                type: 'order',
+                level: 'error',
+                action: 'order_reject_error',
+                message: `Failed to reject order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    error: err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
         }
     };
 
@@ -438,6 +1475,25 @@ export default function Page() {
     const handleSaveEdit = async (field: string) => {
         if (!order || !isActionAuthorized || editingField !== field) return;
 
+        const startTime = Date.now();
+
+        // Log edit attempt
+        await logActivity({
+            type: 'order',
+            level: 'info',
+            action: 'order_field_edit_attempt',
+            message: `Attempting to edit ${field} for order ${order.order_no}`,
+            userId: profile?.id || null,
+            orderId: order.id,
+            details: {
+                orderNumber: order.order_no,
+                field,
+                oldValue: order[field as keyof Order],
+                newValue: editedValue,
+                userRole: profile?.role
+            }
+        });
+
         try {
             const updateData: any = { [field]: editedValue };
 
@@ -448,12 +1504,46 @@ export default function Page() {
 
                 if (devOpportunity && devBudget) {
                     updateData.rev_opportunity = devOpportunity * devBudget;
+                    await logActivity({
+                        type: 'order',
+                        level: 'info',
+                        action: 'order_revenue_calculated',
+                        message: `Calculated revenue for order ${order.order_no}`,
+                        userId: profile?.id || null,
+                        orderId: order.id,
+                        details: {
+                            orderNumber: order.order_no,
+                            field,
+                            devOpportunity,
+                            devBudget,
+                            revenue: devOpportunity * devBudget
+                        },
+                        status: 'completed'
+                    });
                 }
             }
 
             if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED) {
                 // Check if tracking details are missing
                 if (!order.tracking || !order.tracking_link || !order.return_tracking || !order.return_tracking_link) {
+                    await logActivity({
+                        type: 'validation',
+                        level: 'warning',
+                        action: 'order_shipped_missing_tracking',
+                        message: `Cannot mark order ${order.order_no} as shipped - missing tracking details`,
+                        userId: profile?.id || null,
+                        orderId: order.id,
+                        details: {
+                            orderNumber: order.order_no,
+                            missingFields: {
+                                tracking: !order.tracking,
+                                tracking_link: !order.tracking_link,
+                                return_tracking: !order.return_tracking,
+                                return_tracking_link: !order.return_tracking_link
+                            }
+                        },
+                        status: 'pending'
+                    });
                     // Show toast notification
                     toast.error("Please fill Tracking & Return Tracking details before marking as Shipped", {
                         duration: 5000,
@@ -473,6 +1563,12 @@ export default function Page() {
                 }
             }
 
+            // If status is being changed to Returned, handle via modal
+            if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
+                handleStatusChangeToReturned(field, editedValue);
+                return;
+            }
+
             // If status is being changed to Returned or Rejected, update product quantities
             if (field === "order_status" && order.products && order.quantity) {
                 const currentStatus = order.order_status;
@@ -485,11 +1581,10 @@ export default function Page() {
                 ].filter(Boolean);
                 const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
-                // Check if changing from allowed status to Returned or Rejected
+                // Check if changing from allowed status to Rejected
                 if (
                     allowedPreviousStatuses.includes(currentStatus) &&
-                    (newStatus === process.env.NEXT_PUBLIC_STATUS_RETURNED ||
-                        newStatus === process.env.NEXT_PUBLIC_STATUS_REJECTED)
+                    newStatus === process.env.NEXT_PUBLIC_STATUS_REJECTED
                 ) {
                     const orderQuantity = parseInt(order.quantity) || 0;
 
@@ -514,6 +1609,45 @@ export default function Page() {
                                 withCustomer: finalWithCustomerQty
                             })
                             .eq('id', order.products.id);
+
+                        if (productUpdateError) {
+                            await logActivity({
+                                type: 'product',
+                                level: 'error',
+                                action: 'product_quantity_update_failed',
+                                message: `Failed to update product quantities when changing order status to ${newStatus}`,
+                                userId: profile?.id || null,
+                                orderId: order.id,
+                                productId: order.products.id,
+                                details: {
+                                    orderNumber: order.order_no,
+                                    newStatus,
+                                    quantity: orderQuantity,
+                                    error: productUpdateError
+                                },
+                                status: 'failed'
+                            });
+                        } else {
+                            await logActivity({
+                                type: 'product',
+                                level: 'info',
+                                action: 'product_quantity_updated',
+                                message: `Updated product quantities when changing order status to ${newStatus}`,
+                                userId: profile?.id || null,
+                                orderId: order.id,
+                                productId: order.products.id,
+                                details: {
+                                    orderNumber: order.order_no,
+                                    newStatus,
+                                    quantity: orderQuantity,
+                                    oldStock: currentStockQty,
+                                    newStock: finalStockQty,
+                                    oldWithCustomer: currentWithCustomerQty,
+                                    newWithCustomer: finalWithCustomerQty
+                                },
+                                status: 'completed'
+                            });
+                        }
                     }
 
                     // If status is changing to Returned, update returned_date
@@ -525,12 +1659,10 @@ export default function Page() {
                     }
                 }
 
-                // Also handle reverse scenario: if status is changing from Returned/Rejected back to something else
+                // Also handle reverse scenario: if status is changing from Rejected back to something else
                 if (
-                    (currentStatus === process.env.NEXT_PUBLIC_STATUS_RETURNED ||
-                        currentStatus === process.env.NEXT_PUBLIC_STATUS_REJECTED) &&
-                    !(newStatus === process.env.NEXT_PUBLIC_STATUS_RETURNED ||
-                        newStatus === process.env.NEXT_PUBLIC_STATUS_REJECTED)
+                    currentStatus === process.env.NEXT_PUBLIC_STATUS_REJECTED &&
+                    newStatus !== process.env.NEXT_PUBLIC_STATUS_REJECTED
                 ) {
                     const orderQuantity = parseInt(order.quantity) || 0;
 
@@ -556,6 +1688,25 @@ export default function Page() {
                             })
                             .eq('id', order.products.id);
 
+                        if (productUpdateError) {
+                            await logActivity({
+                                type: 'product',
+                                level: 'error',
+                                action: 'product_quantity_reverse_update_failed',
+                                message: `Failed to reverse product quantities when changing order status from ${currentStatus} to ${newStatus}`,
+                                userId: profile?.id || null,
+                                orderId: order.id,
+                                productId: order.products.id,
+                                details: {
+                                    orderNumber: order.order_no,
+                                    oldStatus: currentStatus,
+                                    newStatus,
+                                    quantity: orderQuantity,
+                                    error: productUpdateError
+                                },
+                                status: 'failed'
+                            });
+                        }
                     }
 
                     // If changing from Returned to another status, clear returned_date
@@ -597,29 +1748,101 @@ export default function Page() {
                 .update(updateData)
                 .eq('id', order.id);
 
-            if (error) throw error;
 
+            if (error) {
+                await logActivity({
+                    type: 'order',
+                    level: 'error',
+                    action: 'order_field_edit_failed',
+                    message: `Failed to edit ${field} for order ${order.order_no}: ${error.message}`,
+                    userId: profile?.id || null,
+                    orderId: order.id,
+                    details: {
+                        orderNumber: order.order_no,
+                        field,
+                        error: error,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
+                throw error;
+            }
+
+            // Log edit success
+            await logActivity({
+                type: 'order',
+                level: 'success',
+                action: 'order_field_edit_success',
+                message: `Successfully edited ${field} for order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    field,
+                    oldValue: order[field as keyof Order],
+                    newValue: editedValue,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
 
             // ✅ Check if status is being changed to "Processing" and send approved email
             if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
                 // Get the updated order data
                 const updatedOrder = { ...order, ...updateData };
                 sendApprovedOrderEmail(updatedOrder);
+                await logActivity({
+                    type: 'email',
+                    level: 'info',
+                    action: 'approved_order_email_sent_on_status_change',
+                    message: `Approved order email sent for order ${order.order_no}`,
+                    userId: profile?.id || null,
+                    orderId: order.id,
+                    details: {
+                        orderNumber: order.order_no,
+                        recipient: order.order_by_user?.email
+                    },
+                    status: 'sent'
+                });
             }
             if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_REJECTED) {
                 // Get the updated order data
                 const updatedOrder = { ...order, ...updateData };
                 sendRejectedOrderEmail(updatedOrder);
+                await logActivity({
+                    type: 'email',
+                    level: 'info',
+                    action: 'rejected_order_email_sent_on_status_change',
+                    message: `Rejected order email sent for order ${order.order_no}`,
+                    userId: profile?.id || null,
+                    orderId: order.id,
+                    details: {
+                        orderNumber: order.order_no,
+                        recipient: order.order_by_user?.email
+                    },
+                    status: 'sent'
+                });
             }
-            if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
-                // Get the updated order data
-                const updatedOrder = { ...order, ...updateData };
-                sendReturedOrderEmail(updatedOrder);
-            }
+
             if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED) {
                 // Get the updated order data
                 const updatedOrder = { ...order, ...updateData };
                 sendShippedOrderEmail(updatedOrder);
+                await logActivity({
+                    type: 'email',
+                    level: 'info',
+                    action: 'shipped_order_email_sent_on_status_change',
+                    message: `Shipped order email sent for order ${order.order_no}`,
+                    userId: profile?.id || null,
+                    orderId: order.id,
+                    details: {
+                        orderNumber: order.order_no,
+                        recipient: order.order_by_user?.email
+                    },
+                    status: 'sent'
+                });
             }
 
             // Update local state without full reload
@@ -661,6 +1884,22 @@ export default function Page() {
             setEditingRowId(null);
             setEditedValue("");
         } catch (err) {
+            await logActivity({
+                type: 'order',
+                level: 'error',
+                action: 'order_field_edit_error',
+                message: `Failed to edit ${field} for order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    field,
+                    error: err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
         }
     };
 
@@ -687,6 +1926,23 @@ export default function Page() {
     const handleTrackingUpdate = async () => {
         if (!order || !isActionAuthorized) return;
 
+        const startTime = Date.now();
+
+        // Log tracking update attempt
+        await logActivity({
+            type: 'order',
+            level: 'info',
+            action: 'order_tracking_update_attempt',
+            message: `Attempting to update tracking for order ${order.order_no}`,
+            userId: profile?.id || null,
+            orderId: order.id,
+            details: {
+                orderNumber: order.order_no,
+                hasPendingStatus: !!pendingStatusChange,
+                userRole: profile?.role
+            }
+        });
+
         try {
             // First update tracking data
             const { error } = await supabase
@@ -702,7 +1958,42 @@ export default function Page() {
                 })
                 .eq('id', order.id);
 
-            if (error) throw error;
+            if (error) {
+                await logActivity({
+                    type: 'order',
+                    level: 'error',
+                    action: 'order_tracking_update_failed',
+                    message: `Failed to update tracking for order ${order.order_no}: ${error.message}`,
+                    userId: profile?.id || null,
+                    orderId: order.id,
+                    details: {
+                        orderNumber: order.order_no,
+                        error: error,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
+                throw error;
+            }
+
+            await logActivity({
+                type: 'order',
+                level: 'success',
+                action: 'order_tracking_update_success',
+                message: `Successfully updated tracking for order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    trackingUpdated: trackingData.tracking !== order.tracking,
+                    returnTrackingUpdated: trackingData.return_tracking !== order.return_tracking,
+                    hasPendingStatus: !!pendingStatusChange,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
 
             // ✅ Check if there's a pending status change to Shipped
             if (pendingStatusChange && pendingStatusChange.field === "order_status") {
@@ -735,7 +2026,24 @@ export default function Page() {
                     })
                     .eq('id', order.id);
 
-                if (statusError) throw statusError;
+                if (statusError) {
+                    await logActivity({
+                        type: 'order',
+                        level: 'error',
+                        action: 'order_status_update_failed',
+                        message: `Failed to update status to Shipped for order ${order.order_no}: ${statusError.message}`,
+                        userId: profile?.id || null,
+                        orderId: order.id,
+                        details: {
+                            orderNumber: order.order_no,
+                            error: statusError,
+                            executionTimeMs: Date.now() - startTime,
+                            userRole: profile?.role
+                        },
+                        status: 'failed'
+                    });
+                    throw statusError;
+                }
 
                 // Update local state
                 setOrders(prev => prev.map(o =>
@@ -747,6 +2055,23 @@ export default function Page() {
 
                 // Send shipped email with the COMPLETE updated data
                 sendShippedOrderEmail(updatedOrderData);
+
+                // Log shipped email sent
+                await logActivity({
+                    type: 'email',
+                    level: 'info',
+                    action: 'shipped_order_email_sent',
+                    message: `Shipped order email sent for order ${order.order_no}`,
+                    userId: profile?.id || null,
+                    orderId: order.id,
+                    details: {
+                        orderNumber: order.order_no,
+                        recipient: order.order_by_user?.email,
+                        emailType: 'shipped_order'
+                    },
+                    status: 'sent'
+                });
+
 
                 // Reset everything
                 setEditingField(null);
@@ -762,6 +2087,21 @@ export default function Page() {
             }
 
         } catch (err) {
+            await logActivity({
+                type: 'order',
+                level: 'error',
+                action: 'order_tracking_update_error',
+                message: `Failed to update tracking for order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    error: err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             toast.error("Failed to update tracking details");
         }
     };
@@ -774,9 +2114,18 @@ export default function Page() {
                 return;
             }
 
-            if (!orderData.products) {
+            if (!orderData.products_array || orderData.products_array.length === 0) {
                 return;
             }
+
+            // Prepare products array for email template
+            const productsForEmail = orderData.products_array.map((product, index) => ({
+                name: product.product_name || `Product ${index + 1}`,
+                quantity: orderData.quantity_array?.[index] || 0
+            }));
+
+            // Calculate total quantity
+            const totalQuantity = productsForEmail.reduce((sum, product) => sum + product.quantity, 0);
 
             const template = emailTemplates.approvedOrderEmail({
                 orderNumber: orderData.order_no,
@@ -784,8 +2133,8 @@ export default function Page() {
                 customerName: orderData.contact_name || "Customer",
                 customerEmail: orderData.order_by_user?.email,
 
-                productName: orderData.products.product_name || "Product",
-                quantity: parseInt(orderData.quantity || "1"),
+                products: productsForEmail, // CHANGED: Pass products array instead of single product
+                totalQuantity: totalQuantity, // ADDED: Pass total quantity
 
                 salesExecutive: orderData.sales_executive || "",
                 salesExecutiveEmail: orderData.se_email || "",
@@ -825,10 +2174,11 @@ export default function Page() {
                 html: template.html,
             });
         } catch (error) {
+            console.error('Error sending approved order email:', error);
         }
     };
 
-    // Function to send Rejected order email
+    // Function to send rejected order email
     const sendRejectedOrderEmail = async (orderData: Order) => {
         try {
             // Check if order has all required data
@@ -836,9 +2186,18 @@ export default function Page() {
                 return;
             }
 
-            if (!orderData.products) {
+            if (!orderData.products_array || orderData.products_array.length === 0) {
                 return;
             }
+
+            // Prepare products array for email template
+            const productsForEmail = orderData.products_array.map((product, index) => ({
+                name: product.product_name || `Product ${index + 1}`,
+                quantity: orderData.quantity_array?.[index] || 0
+            }));
+
+            // Calculate total quantity
+            const totalQuantity = productsForEmail.reduce((sum, product) => sum + product.quantity, 0);
 
             const template = emailTemplates.rejectedOrderEmail({
                 orderNumber: orderData.order_no,
@@ -846,8 +2205,8 @@ export default function Page() {
                 customerName: orderData.contact_name || "Customer",
                 customerEmail: orderData.order_by_user?.email,
 
-                productName: orderData.products.product_name || "Product",
-                quantity: parseInt(orderData.quantity || "1"),
+                products: productsForEmail, // CHANGED: Pass products array instead of single product
+                totalQuantity: totalQuantity, // ADDED: Pass total quantity
 
                 salesExecutive: orderData.sales_executive || "",
                 salesExecutiveEmail: orderData.se_email || "",
@@ -887,20 +2246,41 @@ export default function Page() {
                 html: template.html,
             });
         } catch (error) {
+            console.error('Error sending rejected order email:', error);
         }
     };
 
-    // Function to send Rejected order email
-    const sendReturedOrderEmail = async (orderData: Order) => {
+    // Function to send returned order email - UPDATED VERSION
+    const sendReturnedOrderEmail = async (orderData: Order, returnedProductsData: typeof returnedProducts) => {
         try {
             // Check if order has all required data
             if (!orderData.order_by_user?.email) {
                 return;
             }
 
-            if (!orderData.products) {
+            if (!orderData.products_array || orderData.products_array.length === 0) {
                 return;
             }
+
+            // Prepare products array for email template with returned quantities
+            const productsForEmail = orderData.products_array.map((product, index) => {
+                const shippedQuantity = orderData.quantity_array?.[index] || 0;
+                const returnedProduct = returnedProductsData.find(rp => rp.productId === product.id);
+                const returnedQuantity = returnedProduct?.returnedQuantity || 0;
+                const leftWithCustomer = shippedQuantity - returnedQuantity;
+
+                return {
+                    name: product.product_name || `Product ${index + 1}`,
+                    shippedQuantity: shippedQuantity,
+                    returnedQuantity: returnedQuantity,
+                    leftWithCustomer: leftWithCustomer // New field for left quantity
+                };
+            });
+
+            // Calculate totals
+            const totalShipped = productsForEmail.reduce((sum, product) => sum + product.shippedQuantity, 0);
+            const totalReturned = productsForEmail.reduce((sum, product) => sum + product.returnedQuantity, 0);
+            const totalLeft = totalShipped - totalReturned;
 
             const template = emailTemplates.returnedOrderEmail({
                 orderNumber: orderData.order_no,
@@ -908,8 +2288,10 @@ export default function Page() {
                 customerName: orderData.contact_name || "Customer",
                 customerEmail: orderData.order_by_user?.email,
 
-                productName: orderData.products.product_name || "Product",
-                quantity: parseInt(orderData.quantity || "1"),
+                products: productsForEmail, // Pass products array with all details
+                totalQuantity: totalShipped, // Total shipped quantity
+                totalReturned: totalReturned, // Total returned quantity
+                totalLeft: totalLeft, // Total left with customer
 
                 salesExecutive: orderData.sales_executive || "",
                 salesExecutiveEmail: orderData.se_email || "",
@@ -949,10 +2331,11 @@ export default function Page() {
                 html: template.html,
             });
         } catch (error) {
+            console.error('Error sending returned order email:', error);
         }
     };
 
-    // Function to send Shipped order email
+    // Function to send shipped order email
     const sendShippedOrderEmail = async (orderData: Order) => {
         try {
             // Check if order has all required data
@@ -960,9 +2343,18 @@ export default function Page() {
                 return;
             }
 
-            if (!orderData.products) {
+            if (!orderData.products_array || orderData.products_array.length === 0) {
                 return;
             }
+
+            // Prepare products array for email template
+            const productsForEmail = orderData.products_array.map((product, index) => ({
+                name: product.product_name || `Product ${index + 1}`,
+                quantity: orderData.quantity_array?.[index] || 0
+            }));
+
+            // Calculate total quantity
+            const totalQuantity = productsForEmail.reduce((sum, product) => sum + product.quantity, 0);
 
             const template = emailTemplates.shippedOrderEmail({
                 orderNumber: orderData.order_no,
@@ -977,8 +2369,8 @@ export default function Page() {
                 caseType: orderData.case_type || "",
                 fileLink: orderData.return_label || "",
 
-                productName: orderData.products.product_name || "Product",
-                quantity: parseInt(orderData.quantity || "1"),
+                products: productsForEmail, // CHANGED: Pass products array instead of single product
+                totalQuantity: totalQuantity, // ADDED: Pass total quantity
 
                 salesExecutive: orderData.sales_executive || "",
                 salesExecutiveEmail: orderData.se_email || "",
@@ -1018,6 +2410,7 @@ export default function Page() {
                 html: template.html,
             });
         } catch (error) {
+            console.error('Error sending shipped order email:', error);
         }
     };
 
@@ -1028,11 +2421,46 @@ export default function Page() {
         const file = event.target.files?.[0];
         if (!file) return;
 
+        const startTime = Date.now();
+
+        // Log file upload attempt
+        await logActivity({
+            type: 'order',
+            level: 'info',
+            action: 'order_return_label_upload_attempt',
+            message: `Attempting to upload return label for order ${order.order_no}`,
+            userId: profile?.id || null,
+            orderId: order.id,
+            details: {
+                orderNumber: order.order_no,
+                fileName: file.name,
+                fileSize: file.size,
+                fileType: file.type,
+                userRole: profile?.role
+            }
+        });
+
         // Check if file is PDF
         if (
             file.type !== 'application/pdf' &&
             !file.name.toLowerCase().endsWith('.pdf')
         ) {
+            await logActivity({
+                type: 'validation',
+                level: 'error',
+                action: 'order_return_label_validation_failed',
+                message: `Invalid file type for return label upload`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    fileName: file.name,
+                    fileType: file.type,
+                    allowedType: 'application/pdf',
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             setUploadError('Please upload a valid PDF file');
             return;
         }
@@ -1055,6 +2483,22 @@ export default function Page() {
                 });
 
             if (uploadError) {
+                await logActivity({
+                    type: 'storage',
+                    level: 'error',
+                    action: 'order_return_label_upload_failed',
+                    message: `Failed to upload return label: ${uploadError.message}`,
+                    userId: profile?.id || null,
+                    orderId: order.id,
+                    details: {
+                        orderNumber: order.order_no,
+                        fileName: file.name,
+                        error: uploadError,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
                 throw uploadError;
             }
 
@@ -1070,7 +2514,44 @@ export default function Page() {
                 .update({ return_label: publicUrl })
                 .eq('id', order.id);
 
-            if (updateError) throw updateError;
+            if (updateError) {
+                await logActivity({
+                    type: 'db',
+                    level: 'error',
+                    action: 'order_return_label_update_failed',
+                    message: `Failed to update order with return label URL: ${updateError.message}`,
+                    userId: profile?.id || null,
+                    orderId: order.id,
+                    details: {
+                        orderNumber: order.order_no,
+                        fileName: file.name,
+                        error: updateError,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
+                throw updateError;
+            }
+
+            await logActivity({
+                type: 'order',
+                level: 'success',
+                action: 'order_return_label_upload_success',
+                message: `Successfully uploaded return label for order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    fileName: file.name,
+                    fileSize: file.size,
+                    fileUrl: publicUrl,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
+
 
             // Update local state
             setOrders(prev => prev.map(o =>
@@ -1081,23 +2562,109 @@ export default function Page() {
             event.target.value = '';
 
         } catch (err: any) {
+            await logActivity({
+                type: 'order',
+                level: 'error',
+                action: 'order_return_label_upload_error',
+                message: `Failed to upload return label for order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    fileName: file.name,
+                    error: err.message || err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             setUploadError(err.message || 'Failed to upload file. Please check storage bucket configuration.');
         } finally {
             setIsUploading(false);
         }
     };
 
-    // Handle product selection
+    // Handle product selection - now updates the first product in the array
     const handleProductSelect = async (productId: string) => {
         if (!order || !isActionAuthorized) return;
 
+        const startTime = Date.now();
+
+        // Log product selection attempt
+        await logActivity({
+            type: 'order',
+            level: 'info',
+            action: 'order_product_change_attempt',
+            message: `Attempting to change product for order ${order.order_no}`,
+            userId: profile?.id || null,
+            orderId: order.id,
+            productId,
+            details: {
+                orderNumber: order.order_no,
+                oldProductId: order.product_id,
+                newProductId: productId,
+                userRole: profile?.role
+            }
+        });
+
         try {
+            // Get current product IDs array
+            const currentProductIds = order.product_id || [];
+            const updatedProductIds = [...currentProductIds];
+
+            // If there are existing products, replace the first one
+            if (updatedProductIds.length > 0) {
+                updatedProductIds[0] = productId;
+            } else {
+                // If no products exist, add the new one
+                updatedProductIds.push(productId);
+            }
+
+            // Update the order with the new product array
             const { error } = await supabase
                 .from('orders')
-                .update({ product_id: productId })
+                .update({
+                    product_id: JSON.stringify(updatedProductIds) // Store as JSON string
+                })
                 .eq('id', order.id);
 
-            if (error) throw error;
+            if (error) {
+                await logActivity({
+                    type: 'order',
+                    level: 'error',
+                    action: 'order_product_change_failed',
+                    message: `Failed to change product for order ${order.order_no}: ${error.message}`,
+                    userId: profile?.id || null,
+                    orderId: order.id,
+                    details: {
+                        orderNumber: order.order_no,
+                        oldProductId: order.product_id,
+                        newProductId: productId,
+                        error: error,
+                        executionTimeMs: Date.now() - startTime,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
+                throw error;
+            }
+
+            await logActivity({
+                type: 'order',
+                level: 'success',
+                action: 'order_product_change_success',
+                message: `Successfully changed product for order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    oldProductIds: order.product_id,
+                    newProductIds: updatedProductIds,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
 
             // Refresh data to get updated product info
             await fetchOrders();
@@ -1108,6 +2675,21 @@ export default function Page() {
             setEditedValue("");
 
         } catch (err) {
+            await logActivity({
+                type: 'order',
+                level: 'error',
+                action: 'order_product_change_error',
+                message: `Failed to change product for order ${order.order_no}`,
+                userId: profile?.id || null,
+                orderId: order.id,
+                details: {
+                    orderNumber: order.order_no,
+                    error: err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
         }
     };
 
@@ -1203,14 +2785,30 @@ export default function Page() {
         // Check if there's a pending status change for this field
         const isPendingShipped = pendingStatusChange &&
             pendingStatusChange.field === field &&
+            pendingStatusChange.value === process.env.NEXT_PUBLIC_STATUS_SHIPPED &&
             pendingStatusChange.rowId === rowId;
 
-        if (isEditing || isPendingShipped) {
+        const isPendingReturned = pendingStatusChange &&
+            pendingStatusChange.field === field &&
+            pendingStatusChange.value === process.env.NEXT_PUBLIC_STATUS_RETURNED &&
+            pendingStatusChange.rowId === rowId;
+
+        if (isEditing || isPendingShipped || isPendingReturned) {
             return (
                 <div className="flex items-center gap-2">
                     <Select
-                        value={isPendingShipped ? pendingStatusChange.value : editedValue}
-                        onValueChange={setEditedValue}
+                        value={isPendingShipped || isPendingReturned ? pendingStatusChange!.value : editedValue}
+                        onValueChange={(val) => {
+                            console.log('Status dropdown value changed:', val);
+                            // Special handling for Returned status
+                            if (val === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
+                                console.log('Returned status selected, calling handleStatusChangeToReturned');
+                                handleStatusChangeToReturned(field, val, rowId);
+                            } else {
+                                console.log('Other status selected, setting edited value');
+                                setEditedValue(val);
+                            }
+                        }}
                     >
                         <SelectTrigger className="flex-1">
                             <SelectValue placeholder="Select status" />
@@ -1225,15 +2823,32 @@ export default function Page() {
                     </Select>
                     <Button
                         size="sm"
-                        onClick={() => handleSaveEdit(field)}
+                        onClick={() => {
+                            console.log('Save button clicked in status dropdown');
+                            // If it's Returned, we already handled it above
+                            if (editedValue !== process.env.NEXT_PUBLIC_STATUS_RETURNED) {
+                                console.log('Saving non-return status');
+                                handleSaveEdit(field);
+                            } else {
+                                console.log('Return status - should already be handled by modal');
+                            }
+                        }}
                         className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
                     >
-                        {isPendingShipped ? "Awaiting Tracking..." : "Save"}
+                        {isPendingShipped ? "Awaiting Tracking..." :
+                            isPendingReturned ? "Processing Return..." : "Save"}
                     </Button>
                     <Button
                         size="sm"
                         variant="outline"
-                        onClick={handleCancelEdit}
+                        onClick={() => {
+                            console.log('Cancel button clicked in status dropdown');
+                            if (pendingStatusChange) {
+                                console.log('Clearing pending status change:', pendingStatusChange);
+                                setPendingStatusChange(null);
+                            }
+                            handleCancelEdit();
+                        }}
                         className="cursor-pointer"
                     >
                         Cancel
@@ -1241,6 +2856,11 @@ export default function Page() {
                     {isPendingShipped && (
                         <div className="text-xs text-amber-600 ml-2">
                             Please complete tracking details
+                        </div>
+                    )}
+                    {isPendingReturned && (
+                        <div className="text-xs text-amber-600 ml-2">
+                            Please verify returned products in modal
                         </div>
                     )}
                 </div>
@@ -1257,68 +2877,9 @@ export default function Page() {
                         size="sm"
                         variant="ghost"
                         className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 cursor-pointer"
-                        onClick={() => handleEditClick(field, value, rowId)}
-                    >
-                        <Pencil className="h-3 w-3" />
-                    </Button>
-                )}
-            </div>
-        );
-    };
-
-    // Helper function to render product selector
-    const renderProductSelector = (field: string, currentProduct: any, rowId: string = "order") => {
-        const isEditing = editingField === field && editingRowId === rowId;
-
-        if (isEditing) {
-            return (
-                <div className="flex items-center gap-2">
-                    <Select
-                        value={editedValue}
-                        onValueChange={setEditedValue}
-                    >
-                        <SelectTrigger className="flex-1">
-                            <SelectValue placeholder="Select product" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {allProducts.map(product => (
-                                <SelectItem key={product.id} value={product.id}>
-                                    {product.product_name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Button
-                        size="sm"
-                        onClick={() => handleProductSelect(editedValue)}
-                        className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
-                    >
-                        Save
-                    </Button>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleCancelEdit}
-                        className="cursor-pointer"
-                    >
-                        Cancel
-                    </Button>
-                </div>
-            );
-        }
-
-        return (
-            <div className="flex items-center justify-between group">
-                <span>{order.products?.product_name || currentProduct || "-"}</span>
-                {isActionAuthorized && (
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 cursor-pointer"
                         onClick={() => {
-                            setEditingField(field);
-                            setEditedValue(order.product_id || "");
-                            setEditingRowId(rowId);
+                            console.log('Edit button clicked for status');
+                            handleEditClick(field, value, rowId);
                         }}
                     >
                         <Pencil className="h-3 w-3" />
@@ -1472,7 +3033,7 @@ export default function Page() {
                                                         <Pencil className="h-3 w-3 text-black" />
                                                     </Button>
                                                 </DialogTrigger>
-                                                <DialogContent className="sm:max-w-[600px]">
+                                                <DialogContent className="sm:max-w-150 max-h-[90vh] overflow-y-auto overflow-x-hidden">
                                                     <DialogHeader>
                                                         <DialogTitle>Edit Tracking Details</DialogTitle>
                                                     </DialogHeader>
@@ -1703,7 +3264,7 @@ export default function Page() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }} className="w-[85%]">
-                                        Product
+                                        Products
                                     </TableHead>
                                     <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }} className="w-[15%]">
                                         Quantity
@@ -1711,14 +3272,18 @@ export default function Page() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                <TableRow>
-                                    <TableCell className="w-[85%]">
-                                        {renderProductSelector("product_id", order.products?.product_name, "product")}
-                                    </TableCell>
-                                    <TableCell className="w-[15%] border-l">
-                                        {order.quantity}
-                                    </TableCell>
-                                </TableRow>
+                                {renderAllProducts()}
+                                {/* Total row */}
+                                {(order.product_id && order.product_id.length > 0) && (
+                                    <TableRow className="bg-gray-50 font-semibold">
+                                        <TableCell className="w-[85%] text-right">
+                                            Total:
+                                        </TableCell>
+                                        <TableCell className="w-[15%] border-l text-center">
+                                            {order.quantity || 0}
+                                        </TableCell>
+                                    </TableRow>
+                                )}
                             </TableBody>
                         </Table>
                     </div>
@@ -2067,6 +3632,7 @@ export default function Page() {
                     )}
                 </div>
             </div>
+            {renderReturnModal()}
         </div>
     )
 }

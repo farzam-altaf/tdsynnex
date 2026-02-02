@@ -44,8 +44,10 @@ import { supabase } from "@/lib/supabase/client"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import Link from "next/link"
 import { emailTemplates, sendEmail } from "@/lib/email"
+import { logActivity } from "@/lib/logger";
 
 // Define Order type based on your Supabase table
+// Line 61 ke baad Order type update karein:
 export type Order = {
     id: string
     order_no: string
@@ -92,6 +94,7 @@ export type Order = {
     case_type: string | null
     password: string | null
     return_label: string | null
+    products?: any[] // ✅ Add this line
 }
 
 export default function Page() {
@@ -106,6 +109,8 @@ export default function Page() {
     const [editErrors, setEditErrors] = useState<Record<string, string>>({});
     const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
     const [isSendingReminders, setIsSendingReminders] = useState(false);
+
+    const source = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/overdue-orders`;
 
     // Table states
     const [sorting, setSorting] = useState<SortingState>([])
@@ -232,6 +237,22 @@ export default function Page() {
 
     // Fetch orders data from Supabase - ONLY SHIPPED ORDERS with passed return dates
     const fetchOrders = async () => {
+        const startTime = Date.now();
+
+        // Log fetch attempt
+        await logActivity({
+            type: 'order',
+            level: 'info',
+            action: 'overdue_orders_fetch_attempt',
+            message: 'Attempting to fetch overdue orders',
+            userId: profile?.id || null,
+            details: {
+                userRole: profile?.role,
+                isActionAuthorized,
+                isViewAuthorized
+            }
+        });
+
         try {
             setIsLoading(true);
             setError(null);
@@ -253,6 +274,20 @@ export default function Page() {
                     .order('order_no', { ascending: false });
 
                 if (supabaseError) {
+                    await logActivity({
+                        type: 'order',
+                        level: 'error',
+                        action: 'overdue_orders_fetch_failed',
+                        message: `Failed to fetch overdue orders: ${supabaseError.message}`,
+                        userId: profile?.id || null,
+                        details: {
+                            error: supabaseError,
+                            executionTimeMs: Date.now() - startTime,
+                            userRole: profile?.role
+                        },
+                        status: 'failed'
+                    });
+
                     throw supabaseError;
                 }
 
@@ -280,11 +315,40 @@ export default function Page() {
                 return hasReturnDatePassed(order.shipped_date);
             });
 
+            await logActivity({
+                type: 'order',
+                level: 'success',
+                action: 'overdue_orders_fetch_success',
+                message: `Successfully fetched ${filteredOrders.length} overdue orders`,
+                userId: profile?.id || null,
+                details: {
+                    totalOrders: ordersData.length,
+                    overdueOrders: filteredOrders.length,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
+
+
             setOrders(filteredOrders);
             // Reset selected rows when data is loaded
             setSelectedRows({});
 
         } catch (err: unknown) {
+            await logActivity({
+                type: 'order',
+                level: 'error',
+                action: 'overdue_orders_fetch_error',
+                message: 'Failed to fetch overdue orders',
+                userId: profile?.id || null,
+                details: {
+                    error: err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch orders');
             } else {
@@ -354,6 +418,7 @@ export default function Page() {
 
     // Replace the existing handleSendReminders function with this updated version:
 
+    // Modified handleSendReminders function - products fetch from order_items
     const handleSendReminders = async () => {
         const selectedOrderIds = Object.keys(selectedRows).filter(id => selectedRows[id]);
 
@@ -364,24 +429,46 @@ export default function Page() {
             return;
         }
 
+        await logActivity({
+            type: 'email',
+            level: 'info',
+            action: 'send_overdue_reminders_attempt',
+            message: `Attempting to send reminders for ${selectedOrderIds.length} overdue orders`,
+            userId: profile?.id || null,
+            details: {
+                selectedOrderIds: selectedOrderIds,
+                selectedCount: selectedOrderIds.length,
+                userRole: profile?.role
+            }
+        });
+
+        const startTime = Date.now();
+
         setIsSendingReminders(true);
 
         try {
             // Get selected orders with user data
             const { data: selectedOrdersData, error: orderError } = await supabase
                 .from('orders')
-                .select(`
-                *,
-                users:order_by (
-                    id,
-                    email
-                )
-            `)
+                .select('*, users:order_by (id, email)')
                 .in('id', selectedOrderIds);
 
             if (orderError) throw orderError;
 
             if (!selectedOrdersData || selectedOrdersData.length === 0) {
+                await logActivity({
+                    type: 'email',
+                    level: 'warning',
+                    action: 'send_overdue_reminders_no_orders',
+                    message: 'No orders found for selected IDs',
+                    userId: profile?.id || null,
+                    details: {
+                        selectedOrderIds: selectedOrderIds,
+                        userRole: profile?.role
+                    },
+                    status: 'failed'
+                });
+
                 toast.error("No orders found", {
                     style: { color: "white", backgroundColor: "red" }
                 });
@@ -389,7 +476,7 @@ export default function Page() {
             }
 
             // Prepare and send emails for each order
-            const emailPromises = selectedOrdersData.map(async (order) => {
+            const emailPromises = selectedOrdersData.map(async (order: any) => {
                 // Check if user has email
                 if (!order.users?.email) {
                     console.warn(`No email found for user with ID: ${order.order_by}`);
@@ -402,22 +489,127 @@ export default function Page() {
                 }
 
                 try {
-                    // Get product details if available
-                    let productName = "Standard Device Package";
-                    let productSlug = "-";
-                    let quantity = 1;
+                    const customerName = order.contact_name || order.company_name || "Customer";
+                    // Process product_id array and quantity array
+                    let products: any[] = [];
+                    let totalQuantity = 0;
 
-                    if (order.product_id) {
-                        const { data: productData } = await supabase
-                            .from('products')
-                            .select('product_name, slug')
-                            .eq('id', order.product_id)
-                            .single();
+                    // Debug: Check what's in the fields
+                    console.log(`Order ${order.order_no} product_id:`, order.product_id, typeof order.product_id);
+                    console.log(`Order ${order.order_no} quantity:`, order.quantity, typeof order.quantity);
 
-                        if (productData) {
-                            productName = productData.product_name;
-                            productSlug = productData.slug;
+                    try {
+                        // Handle product_id as JSON array string
+                        if (order.product_id && typeof order.product_id === 'string' && order.product_id.startsWith('[')) {
+                            try {
+                                // Parse product IDs from JSON array
+                                const productIds: string[] = JSON.parse(order.product_id);
+
+                                // Parse quantities
+                                let quantities: number[] = [];
+
+                                if (order.quantity && typeof order.quantity === 'string') {
+                                    if (order.quantity.startsWith('[')) {
+                                        // JSON array format
+                                        quantities = JSON.parse(order.quantity);
+                                    } else if (order.quantity.includes(',')) {
+                                        // Comma-separated format
+                                        quantities = order.quantity.split(',').map((q: string) => {
+                                            const num = parseInt(q.trim());
+                                            return isNaN(num) ? 1 : num;
+                                        });
+                                    } else {
+                                        // Single number
+                                        const singleQty = parseInt(order.quantity);
+                                        quantities = [isNaN(singleQty) ? 1 : singleQty];
+                                    }
+                                }
+
+                                // Ensure we have at least one quantity per product
+                                while (quantities.length < productIds.length) {
+                                    quantities.push(1);
+                                }
+
+                                console.log(`Parsed for order ${order.order_no}:`);
+                                console.log('Product IDs:', productIds);
+                                console.log('Quantities:', quantities);
+
+                                // Fetch all products
+                                if (productIds.length > 0) {
+                                    const { data: productsData, error: productsError } = await supabase
+                                        .from('products')
+                                        .select('id, product_name, slug')
+                                        .in('id', productIds);
+
+                                    if (!productsError && productsData && productsData.length > 0) {
+                                        // Create products array
+                                        products = productIds.map((productId: string, index: number) => {
+                                            const product = productsData.find(p => p.id === productId);
+                                            const quantity = quantities[index] || 1;
+
+                                            return {
+                                                name: product?.product_name || "Unknown Product",
+                                                quantity: quantity,
+                                                slug: product?.slug || undefined
+                                            };
+                                        });
+
+                                        totalQuantity = products.reduce((sum: number, product: any) => {
+                                            return sum + (Number(product.quantity) || 1);
+                                        }, 0);
+
+                                        console.log(`Successfully processed ${products.length} products for order ${order.order_no}`);
+                                    }
+                                }
+                            } catch (parseError) {
+                                console.error(`Error parsing product arrays for order ${order.order_no}:`, parseError);
+                            }
                         }
+
+                        // If no products found, fallback to single product
+                        if (products.length === 0) {
+                            console.log(`Using fallback for order ${order.order_no}`);
+                            // Try single product ID
+                            if (order.product_id && typeof order.product_id === 'string') {
+                                try {
+                                    const { data: productData } = await supabase
+                                        .from('products')
+                                        .select('product_name, slug')
+                                        .eq('id', order.product_id)
+                                        .single();
+
+                                    if (productData) {
+                                        products = [{
+                                            name: productData.product_name,
+                                            quantity: 1,
+                                            slug: productData.slug
+                                        }];
+                                        totalQuantity = 1;
+                                    }
+                                } catch (singleError) {
+                                    console.error(`Single product fetch error:`, singleError);
+                                }
+                            }
+
+                            // Final fallback
+                            if (products.length === 0) {
+                                products = [{
+                                    name: "Standard Device Package",
+                                    quantity: 1,
+                                    slug: "standard-device-package"
+                                }];
+                                totalQuantity = 1;
+                            }
+                        }
+                    } catch (itemsErr) {
+                        console.error(`Error processing products for order ${order.order_no}:`, itemsErr);
+                        // Use default product
+                        products = [{
+                            name: "Standard Device Package",
+                            quantity: 1,
+                            slug: "standard-device-package"
+                        }];
+                        totalQuantity = 1;
                     }
 
                     const daysSinceShipped = calculateDaysShipped(order.shipped_date);
@@ -433,22 +625,24 @@ export default function Page() {
                     const emailData = {
                         orderNumber: order.order_no,
                         orderDate: formatDate(order.order_date),
-                        productName: productName,
-                        productSlug: productSlug,
-                        quantity: quantity,
+                        customerName: customerName,
+                        customerEmail: order.users.email,
+
+                        products: products,
+                        totalQuantity: totalQuantity,
+
                         returnTracking: order.return_tracking || "Not provided yet",
                         fileLink: order.return_label || "https://tdsynnex.vercel.app",
+
                         salesExecutive: order.sales_executive || "N/A",
                         salesExecutiveEmail: order.se_email || "N/A",
                         salesManager: order.sales_manager || "N/A",
                         salesManagerEmail: order.sm_email || "N/A",
+
                         companyName: order.company_name || "N/A",
                         contactEmail: order.email || "N/A",
                         shippedDate: formatDate(order.shipped_date),
-                        daysCount: daysCountText,
-                        note: order.notes || "Please return the device as soon as possible.",
-                        customerName: order.company_name || "Customer",
-                        customerEmail: order.users.email
+                        daysCount: daysCountText
                     };
 
                     // Get email template
@@ -457,8 +651,8 @@ export default function Page() {
                         orderDate: emailData.orderDate,
                         customerName: emailData.customerName,
                         customerEmail: emailData.customerEmail,
-                        productName: emailData.productName,
-                        quantity: emailData.quantity,
+                        products: emailData.products,
+                        totalQuantity: emailData.totalQuantity,
                         returnTracking: emailData.returnTracking,
                         fileLink: emailData.fileLink,
                         salesExecutive: emailData.salesExecutive,
@@ -468,7 +662,6 @@ export default function Page() {
                         companyName: emailData.companyName,
                         contactEmail: emailData.contactEmail,
                         shippedDate: emailData.shippedDate,
-                        productSlug: emailData.productSlug,
                         daysCount: emailData.daysCount
                     });
 
@@ -478,6 +671,22 @@ export default function Page() {
                         subject: template.subject,
                         text: template.text,
                         html: template.html,
+                    });
+
+                    await logActivity({
+                        type: 'email',
+                        level: 'info',
+                        action: 'overdue_reminder_sent',
+                        message: `Reminder sent for order ${order.order_no}`,
+                        userId: profile?.id || null,
+                        orderId: order.id,
+                        details: {
+                            orderNumber: order.order_no,
+                            customerEmail: order.users.email,
+                            daysOverdue: daysOverdue,
+                            daysSinceShipped: daysSinceShipped,
+                        },
+                        status: 'sent'
                     });
 
                     // Log email sent in orders table (optional)
@@ -499,6 +708,21 @@ export default function Page() {
                     };
 
                 } catch (emailError: any) {
+                    await logActivity({
+                        type: 'email',
+                        level: 'error',
+                        action: 'overdue_reminder_failed',
+                        message: `Failed to send reminder for order ${order.order_no}`,
+                        userId: profile?.id || null,
+                        orderId: order.id,
+                        details: {
+                            orderNumber: order.order_no,
+                            customerEmail: order.users.email,
+                            error: emailError.message,
+                            errorDetails: emailError
+                        },
+                        status: 'failed'
+                    });
                     console.error(`Failed to send email for order ${order.order_no}:`, emailError);
                     return {
                         success: false,
@@ -515,6 +739,27 @@ export default function Page() {
             // Count success and failures
             const successful = results.filter(r => r.success).length;
             const failed = results.filter(r => !r.success).length;
+
+            await logActivity({
+                type: 'email',
+                level: successful > 0 ? 'success' : 'error',
+                action: 'send_overdue_reminders_complete',
+                message: `Sent reminders for ${successful} order(s), ${failed} failed`,
+                userId: profile?.id || null,
+                details: {
+                    totalAttempted: selectedOrderIds.length,
+                    successful: successful,
+                    failed: failed,
+                    executionTimeMs: Date.now() - startTime,
+                    successfulOrders: results.filter(r => r.success).map(r => r.orderNumber),
+                    failedOrders: results.filter(r => !r.success).map(r => ({
+                        orderNumber: r.orderNumber,
+                        reason: r.reason
+                    }))
+                },
+                status: successful > 0 ? 'completed' : 'failed'
+            });
+
 
             // Show summary toast
             if (successful > 0) {
@@ -533,6 +778,20 @@ export default function Page() {
             setSelectedRows({});
 
         } catch (err: any) {
+            await logActivity({
+                type: 'email',
+                level: 'error',
+                action: 'send_overdue_reminders_error',
+                message: `Failed to send overdue reminders: ${err.message}`,
+                userId: profile?.id || null,
+                details: {
+                    error: err.message,
+                    errorDetails: err,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
             toast.error(err.message || "Failed to send reminders", {
                 style: { color: "white", backgroundColor: "red" }
             });
@@ -1065,9 +1324,36 @@ export default function Page() {
     // Handle CSV export
     const handleExportCSV = () => {
         if (orders.length === 0) {
-            alert("No data to export");
+            logActivity({
+                type: 'export',
+                level: 'warning',
+                action: 'csv_export_empty',
+                message: 'Attempted to export CSV with no overdue orders data',
+                userId: profile?.id || null,
+                details: {
+                    ordersCount: orders.length,
+                    userRole: profile?.role
+                },
+                status: 'skipped'
+            });
+            toast.info("No data to export");
             return;
         }
+
+        const startTime = Date.now();
+
+        // Log export attempt
+        logActivity({
+            type: 'export',
+            level: 'info',
+            action: 'csv_export_attempt',
+            message: 'Attempting to export overdue orders to CSV',
+            userId: profile?.id || null,
+            details: {
+                ordersCount: orders.length,
+                userRole: profile?.role
+            }
+        });
 
         try {
             const data = orders.map(order => ({
@@ -1101,7 +1387,37 @@ export default function Page() {
 
             const csvString = convertToCSV(data);
             downloadCSV(csvString, `overdue_orders_${new Date().toISOString().split('T')[0]}.csv`);
+
+            // Log successful export
+            logActivity({
+                type: 'export',
+                level: 'success',
+                action: 'csv_export_success',
+                message: `Successfully exported ${orders.length} overdue orders to CSV`,
+                userId: profile?.id || null,
+                details: {
+                    ordersCount: orders.length,
+                    fileName: `overdue_orders_${new Date().toISOString().split('T')[0]}.csv`,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'completed'
+            });
         } catch (error) {
+            logActivity({
+                type: 'export',
+                level: 'error',
+                action: 'csv_export_failed',
+                message: `Failed to export overdue orders to CSV`,
+                userId: profile?.id || null,
+                details: {
+                    errorDetails: error,
+                    executionTimeMs: Date.now() - startTime,
+                    userRole: profile?.role
+                },
+                status: 'failed'
+            });
+
             setError('Failed to export CSV');
         }
     };

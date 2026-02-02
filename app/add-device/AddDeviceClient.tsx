@@ -6,6 +6,14 @@ import { toast } from "sonner";
 import { useAuth } from "@/app/context/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, ArrowLeft } from "lucide-react";
+import {
+    logActivity,
+    logError,
+    logSuccess,
+    logInfo,
+    logWarning,
+    logDb
+} from "@/lib/logger";
 
 interface FormData {
     productName: string;
@@ -61,6 +69,29 @@ export default function AddDeviceClient() {
     const [additionalImages, setAdditionalImages] = useState<File[]>([]);
     const [additionalImagesPreview, setAdditionalImagesPreview] = useState<string[]>([]);
     const [removedExistingImages, setRemovedExistingImages] = useState<string[]>([]);
+
+    // Helper function to get field section for logging
+    const getFieldSection = (field: string): string => {
+        const sections: Record<string, string> = {
+            productName: 'basic_info',
+            sku: 'basic_info',
+            formFactor: 'specifications',
+            processor: 'specifications',
+            memory: 'specifications',
+            storage: 'specifications',
+            screenSize: 'specifications',
+            technologies: 'specifications',
+            totalInventory: 'inventory',
+            stockQuantity: 'inventory',
+            inventoryType: 'inventory',
+            currentDate: 'basic_info',
+            description: 'details',
+            copilotPC: 'features',
+            fiveGEnabled: 'features',
+            postStatus: 'publishing'
+        };
+        return sections[field] || 'other';
+    };
 
     const getTodayDate = () => {
         return new Date().toISOString().split('T')[0];
@@ -148,9 +179,23 @@ export default function AddDeviceClient() {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
-            if(!editSlug){
+            logActivity({
+                type: 'auth',
+                level: 'warning',
+                action: 'unauthorized_device_access_attempt',
+                message: 'User attempted to access device page without proper authentication',
+                userId: profile?.userId || null,
+                details: {
+                    isLoggedIn,
+                    isVerified: profile?.isVerified,
+                    userRole: profile?.role,
+                    redirectTo: editSlug ? `add-device?_=${editSlug}` : 'add-device'
+                },
+                status: 'failed'
+            });
+            if (!editSlug) {
                 router.replace('/login/?redirect_to=add-device');
-            } else{
+            } else {
                 router.replace(`/login/?redirect_to=add-device?_=${editSlug}`);
             }
             return;
@@ -158,6 +203,20 @@ export default function AddDeviceClient() {
 
         // Check if user has permission to access this page
         if (!isAuthorized) {
+            logActivity({
+                type: 'auth',
+                level: 'warning',
+                action: 'unauthorized_role_device_access',
+                message: 'User attempted to access device page without proper role',
+                userId: profile.userId || null,
+                details: {
+                    userRole: profile.role,
+                    allowedRoles,
+                    isEditing,
+                    editSlug
+                },
+                status: 'failed'
+            });
             router.replace('/product-category/alldevices');
             return;
         }
@@ -638,9 +697,25 @@ export default function AddDeviceClient() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const submitStartTime = Date.now();
         setIsFormLoading(true);
 
         try {
+            await logActivity({
+                type: 'product',
+                level: 'info',
+                action: 'product_form_submission_attempt',
+                message: `Product form submission ${isEditing ? 'update' : 'create'} attempt`,
+                userId: profile?.userId || null,
+                details: {
+                    isEditing,
+                    productName: formData.productName,
+                    sku: formData.sku,
+                    userRole: profile?.role
+                },
+                status: 'processing'
+            });
+
             // Check for required fields
             const requiredFields = [
                 { field: 'productName', label: 'Product Name', value: formData.productName },
@@ -954,6 +1029,21 @@ export default function AddDeviceClient() {
 
                 toast.success("Device updated successfully!", {
                     style: { background: "black", color: "white" }
+                });
+
+                // Log validation passed
+                await logActivity({
+                    type: 'validation',
+                    level: 'success',
+                    action: 'form_validation_passed',
+                    message: 'Product form validation passed',
+                    userId: profile?.userId || null,
+                    details: {
+                        validationTimeMs: Date.now() - submitStartTime,
+                        hasPrimaryImage: !isEditing ? !!primaryImage : true,
+                        additionalImagesCount: additionalImages.length
+                    },
+                    status: 'completed'
                 });
 
                 router.push(`/product/${slug}`);

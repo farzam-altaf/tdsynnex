@@ -441,16 +441,17 @@ export const emailTemplates = {
         orderDate,
         customerName,
         customerEmail,
-
-        productName,
-        quantity,
-
+        products, // Changed from productName/quantity to products array
+        totalQuantity,
+        subtotal,
+        shipping,
+        tax,
+        total,
         salesExecutive,
         salesExecutiveEmail,
         salesManager,
         salesManagerEmail,
         reseller,
-
         companyName,
         contactName,
         contactEmail,
@@ -459,7 +460,6 @@ export const emailTemplates = {
         state,
         zip,
         deliveryDate,
-
         deviceUnits,
         budgetPerDevice,
         revenue,
@@ -472,23 +472,26 @@ export const emailTemplates = {
         usingCopilot,
         securityFactor,
         deviceProtection,
-
         note,
     }: {
         orderNumber: string | number;
         orderDate: string;
         customerName: string;
         customerEmail: string;
-
-        productName: string;
-        quantity: number;
-
+        products: Array<{
+            name: string;
+            quantity: number;
+        }>;
+        totalQuantity: number;
+        subtotal: number;
+        shipping: number;
+        tax: number;
+        total: number;
         salesExecutive: string;
         salesExecutiveEmail: string;
         salesManager: string;
         salesManagerEmail: string;
         reseller: string;
-
         companyName: string;
         contactName: string;
         contactEmail: string;
@@ -497,7 +500,6 @@ export const emailTemplates = {
         state: string;
         zip: string;
         deliveryDate: string;
-
         deviceUnits: number | string;
         budgetPerDevice: number | string;
         revenue: number | string;
@@ -510,12 +512,19 @@ export const emailTemplates = {
         usingCopilot: string;
         securityFactor: string;
         deviceProtection: string;
-
         note: string;
-    }) => ({
-        subject: `New Order #${orderNumber} | TD SYNNEX SURFACE`,
+    }) => {
+        // Generate product rows HTML
+        const productRows = products.map(product => `
+        <tr>
+            <td style="padding:10px; border:1px solid #ddd;">${product.name}</td>
+            <td style="padding:10px; border:1px solid #ddd; text-align:center;">${product.quantity}</td>
+        </tr>
+    `).join('');
 
-        text: `New TD SYNNEX Order (#${orderNumber})
+        return {
+            subject: `New Order #${orderNumber} | TD SYNNEX SURFACE`,
+            text: `New TD SYNNEX Order (#${orderNumber})
             Placed On ${orderDate}
 
             Hello ${customerName},
@@ -524,20 +533,10 @@ export const emailTemplates = {
             Once your order is approved, you will receive a confirmation email,
             after which it will be shipped to your customer.
 
-            <tr>
-                <td style="padding:0 0 30px 0;">
-                    <img 
-                        src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step1.png" 
-                        alt="Thank you for your order" 
-                        style="width:100%; max-width:720px; height:auto; display:block;"
-                        width="720"
-                    />
-                </td>
-            </tr>
-
             ORDER ITEMS
-            Product: ${productName}
-            Quantity: ${quantity}
+            ${products.map(p => `- ${p.name} (Quantity: ${p.quantity})`).join('\n')}
+            Total Items: ${totalQuantity}
+
 
             TEAM DETAILS
             Sales Executive: ${salesExecutive}
@@ -564,9 +563,7 @@ export const emailTemplates = {
             Vertical: ${vertical}
             Segment: ${segment}
 
-            Use Case:
-            ${useCase}
-
+            Use Case: ${useCase}
             Current Devices: ${currentDevices}
             Number of Licenses: ${licenses}
             Using Copilot: ${usingCopilot}
@@ -580,261 +577,252 @@ export const emailTemplates = {
 
             Best regards,
             The TD SYNNEX Team`,
-        html: `<div style="font-family: Arial, Helvetica, sans-serif; background-color:#f4f6f8; padding:30px 0;">
-        <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-                <td align="center">
+            html: `<div style="font-family: Arial, Helvetica, sans-serif; background-color:#f4f6f8; padding:30px 0;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                        <td align="center">
 
-                    <table width="720" cellpadding="0" cellspacing="0"
-                        style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
+                            <table width="720" cellpadding="0" cellspacing="0"
+                                style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
 
-                        <!-- HEADER -->
-                        <tr>
-                            <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
-                                <h1 style="color:#ffffff; margin:0; font-size:26px;">
-                                    New Order #${orderNumber}
-                                </h1>
-                            </td>
-                        </tr>
+                                <!-- HEADER -->
+                                <tr>
+                                    <td style="background:#0A4647; padding:30px; text-align:center;">
+                                        <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
+                                            style="max-width:160px; margin-bottom:12px;" />
+                                        <h1 style="color:#ffffff; margin:0; font-size:26px;">
+                                            New Order #${orderNumber}
+                                        </h1>
+                                    </td>
+                                </tr>
 
-                        <!-- INTRO -->
-                        <tr>
-                            <td style="padding:30px; color:#333;">
-                                <p style="margin:0 0 8px;"><strong>New TD SYNNEX Order (#${orderNumber})</strong></p>
-                                <p style="color:#666; margin:0 0 20px;">Placed On ${orderDate}</p>
+                                <!-- INTRO -->
+                                <tr>
+                                    <td style="padding:30px; color:#333;">
+                                        <p style="margin:0 0 8px;"><strong>New TD SYNNEX Order (#${orderNumber})</strong></p>
+                                        <p style="color:#666; margin:0 0 20px;">Placed On ${orderDate}</p>
 
-                                <p style="font-size:15px; line-height:1.6;">
-                                    Hello <strong>${customerName}</strong>,<br />
-                                    Thank you for your order from <strong>tdsynnex-surface.com</strong>.
-                                    Once your order is approved, you will receive a confirmation email after which
-                                    it will be shipped to your customer.
-                                </p>
-                            </td>
-                        </tr>
+                                        <p style="font-size:15px; line-height:1.6;">
+                                            Hello <strong>${customerName}</strong>,<br />
+                                            Thank you for your order from <strong>tdsynnex-surface.com</strong>.
+                                            Once your order is approved, you will receive a confirmation email after which
+                                            it will be shipped to your customer.
+                                        </p>
+                                    </td>
+                                </tr>
 
-                        <!-- PRODUCTS -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items
-                                        </th>
-                                    </tr>
-                                    <tr style="background:#f1f3f5;">
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;">${productName}</td>
-                                        <td style="padding:10px; border:1px solid #ddd; text-align:center;">${quantity}
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                                <!-- PRODUCTS -->
+                                <tr>
+                                    <td style="padding:0 30px 30px;">
+                                        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                            <tr>
+                                                <th colspan="2"
+                                                    style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                                    Order Items (${totalQuantity} items)
+                                                </th>
+                                            </tr>
+                                            <tr style="background:#f1f3f5;">
+                                                <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
+                                                <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity</th>
+                                            </tr>
+                                            ${productRows}
+                                        </table>
+                                    </td>
+                                </tr>
 
-                        <!-- TEAM DETAILS -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Team Details
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales
-                                                Executive</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive
-                                                Email</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager
-                                                Email</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Reseller</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${reseller}</td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                                <!-- TEAM DETAILS -->
+                                <tr>
+                                    <td style="padding:0 30px 30px;">
+                                        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                            <tr>
+                                                <th colspan="2"
+                                                    style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                                    Team Details
+                                                </th>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive Email</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager Email</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Reseller</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${reseller}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+        <!-- SHIPPING DETAILS -->
+                                <tr>
+                                    <td style="padding:0 30px 30px;">
+                                        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                            <tr>
+                                                <th colspan="2"
+                                                    style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                                    Shipping Details
+                                                </th>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Company Name</strong>
+                                                </td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${companyName}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Contact Name</strong>
+                                                </td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${contactName}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Email Address</strong>
+                                                </td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Shipping
+                                                        Address</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${shippingAddress}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>City</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${city}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>State</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${state}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Zip</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${zip}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Desired Demo Delivery
+                                                        Date</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${deliveryDate}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
 
-                        <!-- SHIPPING DETAILS -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Shipping Details
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Company Name</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${companyName}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Contact Name</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${contactName}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Email Address</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipping
-                                                Address</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${shippingAddress}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>City</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${city}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>State</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${state}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Zip</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${zip}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Desired Demo Delivery
-                                                Date</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${deliveryDate}</td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                                <!-- OPPORTUNITY DETAILS -->
+                                <tr>
+                                    <td style="padding:0 30px 30px;">
+                                        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                            <tr>
+                                                <th colspan="2"
+                                                    style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                                    Opportunity Details
+                                                </th>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Device Opportunity Size
+                                                        (Units)</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${deviceUnits}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Budget Per Device
+                                                        ($)</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${budgetPerDevice}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Revenue Opportunity
+                                                        Size ($)</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${revenue}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>CRM Account #</strong>
+                                                </td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${crmAccount}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Vertical</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${vertical}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Segment</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${segment}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Use Case for this Demo
+                                                        Request</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${useCase}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Current
+                                                        Devices</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${currentDevices}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Number of
+                                                        Licenses</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${licenses}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Using Copilot</strong>
+                                                </td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${usingCopilot}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Is Security a
+                                                        Factor</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${securityFactor}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Device
+                                                        Protection</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${deviceProtection}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
 
-                        <!-- OPPORTUNITY DETAILS -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Opportunity Details
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device Opportunity Size
-                                                (Units)</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${deviceUnits}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Budget Per Device
-                                                ($)</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${budgetPerDevice}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Revenue Opportunity
-                                                Size ($)</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${revenue}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>CRM Account #</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${crmAccount}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Vertical</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${vertical}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Segment</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${segment}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Use Case for this Demo
-                                                Request</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${useCase}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Current
-                                                Devices</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${currentDevices}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Number of
-                                                Licenses</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${licenses}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Using Copilot</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${usingCopilot}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Is Security a
-                                                Factor</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${securityFactor}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device
-                                                Protection</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${deviceProtection}</td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                                <!-- NOTE -->
+                                <tr>
+                                    <td style="padding:0 30px 30px;">
+                                        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                            <tr>
+                                                <th style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                                    Note
+                                                </th>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:12px; border:1px solid #ddd; color:#555;">
+                                                    ${note}
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
 
-                        <!-- NOTE -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Note
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:12px; border:1px solid #ddd; color:#555;">
-                                            ${note}
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                                <!-- Footer -->
+                                <tr>
+                                    <td
+                                        style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666;">
+                                        <p style="margin:0;">
+                                            Best regards,<br>
+                                            <strong>The TD SYNNEX Team</strong>
+                                        </p>
+                                    </td>
+                                </tr>
 
-                        <!-- Footer -->
-                        <tr>
-                            <td
-                                style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666;">
-                                <p style="margin:0;">
-                                    Best regards,<br>
-                                    <strong>The TD SYNNEX Team</strong>
-                                </p>
-                            </td>
-                        </tr>
+                            </table>
 
-                    </table>
-
-                </td>
-            </tr>
-        </table>
-    </div>`,
-    }),
+                        </td>
+                    </tr>
+                </table>
+    </div>`
+        };
+    },
 
 
     newOrderEmail: ({
@@ -843,8 +831,7 @@ export const emailTemplates = {
         customerName,
         customerEmail,
 
-        productName,
-        quantity,
+        products,
 
         salesExecutive,
         salesExecutiveEmail,
@@ -881,8 +868,10 @@ export const emailTemplates = {
         customerName: string;
         customerEmail: string;
 
-        productName: string;
-        quantity: number;
+        products: Array<{ // CHANGED: Array type
+            name: string;
+            quantity: number;
+        }>;
 
         salesExecutive: string;
         salesExecutiveEmail: string;
@@ -913,19 +902,31 @@ export const emailTemplates = {
         deviceProtection: string;
 
         note: string;
-    }) => ({
-        subject: `New Order #${orderNumber} | TD SYNNEX SURFACE`,
+    }) => {
+        // ✅ CALCULATIONS HERE
+        const totalQuantity = products.reduce((sum, product) => sum + product.quantity, 0);
 
-        text: `New TD SYNNEX Order (#${orderNumber})
+        const productRows = products.map(product => `
+        <tr>
+            <td style="padding:10px; border:1px solid #ddd;">${product.name}</td>
+            <td style="padding:10px; border:1px solid #ddd; text-align:center;">${product.quantity}</td>
+        </tr>
+    `).join('');
+
+        const productListText = products.map(p => `Product: ${p.name}, Quantity: ${p.quantity}`).join('\n');
+
+        // ✅ RETURN OBJECT HERE
+        return {
+            subject: `New Order #${orderNumber} | TD SYNNEX SURFACE`,
+            text: `New TD SYNNEX Order (#${orderNumber})
             Placed On ${orderDate}
 
             Hello Team TD SYNNEX,
 
             You have received a new order from tdsynnex-surface.com. Please click on the link below to Review and Approve/Reject.
 
-            ORDER ITEMS
-            Product: ${productName}
-            Quantity: ${quantity}
+            ORDER ITEMS (${totalQuantity} items)
+            ${productListText}
 
             TEAM DETAILS
             Sales Executive: ${salesExecutive}
@@ -968,7 +969,7 @@ export const emailTemplates = {
 
             Best regards,
             The TD SYNNEX Team`,
-        html: `
+            html: `
         <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
         <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
@@ -1012,26 +1013,21 @@ export const emailTemplates = {
                                 />
                             </td>
                         </tr>
-                        <!-- PRODUCTS -->
+                        <!-- PRODUCTS - UPDATED FOR MULTIPLE PRODUCTS -->
                         <tr>
                             <td style="padding:0 30px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                                     <tr>
                                         <th colspan="2"
                                             style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items
+                                            Order Items (${totalQuantity} items)
                                         </th>
                                     </tr>
                                     <tr style="background:#f1f3f5;">
                                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
-                                        </th>
+                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity</th>
                                     </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;">${productName}</td>
-                                        <td style="padding:10px; border:1px solid #ddd; text-align:center;">${quantity}
-                                        </td>
-                                    </tr>
+                                    ${productRows}
                                 </table>
                             </td>
                         </tr>
@@ -1047,23 +1043,19 @@ export const emailTemplates = {
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales
-                                                Executive</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive
-                                                Email</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive Email</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong>
-                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager
-                                                Email</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager Email</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
                                     </tr>
                                     <tr>
@@ -1100,8 +1092,7 @@ export const emailTemplates = {
                                         <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipping
-                                                Address</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipping Address</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${shippingAddress}</td>
                                     </tr>
                                     <tr>
@@ -1117,8 +1108,7 @@ export const emailTemplates = {
                                         <td style="padding:10px; border:1px solid #ddd;">${zip}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Desired Demo Delivery
-                                                Date</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Desired Demo Delivery Date</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deliveryDate}</td>
                                     </tr>
                                 </table>
@@ -1136,23 +1126,19 @@ export const emailTemplates = {
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device Opportunity Size
-                                                (Units)</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device Opportunity Size (Units)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deviceUnits}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Budget Per Device
-                                                ($)</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Budget Per Device ($)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${budgetPerDevice}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Revenue Opportunity
-                                                Size ($)</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Revenue Opportunity Size ($)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${revenue}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>CRM Account #</strong>
-                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>CRM Account #</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${crmAccount}</td>
                                     </tr>
                                     <tr>
@@ -1164,33 +1150,27 @@ export const emailTemplates = {
                                         <td style="padding:10px; border:1px solid #ddd;">${segment}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Use Case for this Demo
-                                                Request</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Use Case for this Demo Request</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${useCase}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Current
-                                                Devices</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Current Devices</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${currentDevices}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Number of
-                                                Licenses</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Number of Licenses</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${licenses}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Using Copilot</strong>
-                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Using Copilot</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${usingCopilot}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Is Security a
-                                                Factor</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Is Security a Factor</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${securityFactor}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device
-                                                Protection</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device Protection</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deviceProtection}</td>
                                     </tr>
                                 </table>
@@ -1233,7 +1213,8 @@ export const emailTemplates = {
         </table>
     </div>
         `,
-    }),
+        };
+    },
 
 
     approvedOrderEmail: ({
@@ -1242,8 +1223,8 @@ export const emailTemplates = {
         customerName,
         customerEmail,
 
-        productName,
-        quantity,
+        products, // CHANGED: Array of products instead of single product
+        totalQuantity, // ADDED: Total quantity
 
         salesExecutive,
         salesExecutiveEmail,
@@ -1280,8 +1261,11 @@ export const emailTemplates = {
         customerName: string;
         customerEmail: string;
 
-        productName: string;
-        quantity: number;
+        products: Array<{ // CHANGED: Array type
+            name: string;
+            quantity: number;
+        }>;
+        totalQuantity: number; // ADDED
 
         salesExecutive: string;
         salesExecutiveEmail: string;
@@ -1312,9 +1296,20 @@ export const emailTemplates = {
         deviceProtection: string;
 
         note: string;
-    }) => ({
-        subject: `Order Approved #${orderNumber} | TD SYNNEX SURFACE`,
-        text: `Approved TD SYNNEX Order (#${orderNumber})
+    }) => {
+        // Generate product rows HTML
+        const productRows = products.map(product => `
+        <tr>
+            <td style="padding:10px; border:1px solid #ddd;">${product.name}</td>
+            <td style="padding:10px; border:1px solid #ddd; text-align:center;">${product.quantity}</td>
+        </tr>
+    `).join('');
+
+        const productListText = products.map(p => `- ${p.name} (Quantity: ${p.quantity})`).join('\n');
+
+        return {
+            subject: `Order Approved #${orderNumber} | TD SYNNEX SURFACE`,
+            text: `Approved TD SYNNEX Order (#${orderNumber})
             Placed On ${orderDate}
 
             Hello,
@@ -1324,9 +1319,8 @@ export const emailTemplates = {
             Once your package ships, you will receive a separate email containing
             shipping details, tracking information, and a prepaid return label.
 
-            ORDER ITEMS
-            Product: ${productName}
-            Quantity: ${quantity}
+            ORDER ITEMS (${totalQuantity} items)
+            ${productListText}
 
             TEAM DETAILS
             Sales Executive: ${salesExecutive}
@@ -1369,7 +1363,7 @@ export const emailTemplates = {
 
             Best regards,
             The TD SYNNEX Team`,
-        html: `
+            html: `
         <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
         <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
@@ -1392,14 +1386,13 @@ export const emailTemplates = {
                         <!-- INTRO -->
                         <tr>
                             <td style="padding:30px; color:#333;">
-                                <p style="margin:0 0 8px;  font-size:20px;;"><strong>Approved Order (#${orderNumber})</strong></p>
+                                <p style="margin:0 0 8px; font-size:20px;"><strong>Approved Order (#${orderNumber})</strong></p>
                                 <p style="color:#666; margin:0 0 20px; font-size:18px;">Placed On ${orderDate}</p>
 
                                 <p style="font-size:15px; line-height:1.6;">
                                     Your order on tdsynnex-surface.com has been approved. Once your package ships, you
                                     will receive a shipping email with tracking information and a prepaid Return Label
                                     for your order.
-
                                 </p>
                                 <p>
                                     If you have any questions please contact us at support@tdsynnex-surface.com.
@@ -1418,26 +1411,21 @@ export const emailTemplates = {
                             </td>
                         </tr>
 
-                        <!-- PRODUCTS -->
+                        <!-- PRODUCTS - UPDATED FOR MULTIPLE PRODUCTS -->
                         <tr>
                             <td style="padding:0 30px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                                     <tr>
                                         <th colspan="2"
                                             style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items
+                                            Order Items (${totalQuantity} items)
                                         </th>
                                     </tr>
                                     <tr style="background:#f1f3f5;">
                                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
-                                        </th>
+                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity</th>
                                     </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;">${productName}</td>
-                                        <td style="padding:10px; border:1px solid #ddd; text-align:center;">${quantity}
-                                        </td>
-                                    </tr>
+                                    ${productRows}
                                 </table>
                             </td>
                         </tr>
@@ -1453,23 +1441,19 @@ export const emailTemplates = {
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales
-                                                Executive</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive
-                                                Email</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive Email</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong>
-                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager
-                                                Email</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager Email</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
                                     </tr>
                                     <tr>
@@ -1506,8 +1490,7 @@ export const emailTemplates = {
                                         <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipping
-                                                Address</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipping Address</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${shippingAddress}</td>
                                     </tr>
                                     <tr>
@@ -1523,8 +1506,7 @@ export const emailTemplates = {
                                         <td style="padding:10px; border:1px solid #ddd;">${zip}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Desired Demo Delivery
-                                                Date</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Desired Demo Delivery Date</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deliveryDate}</td>
                                     </tr>
                                 </table>
@@ -1542,23 +1524,19 @@ export const emailTemplates = {
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device Opportunity Size
-                                                (Units)</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device Opportunity Size (Units)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deviceUnits}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Budget Per Device
-                                                ($)</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Budget Per Device ($)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${budgetPerDevice}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Revenue Opportunity
-                                                Size ($)</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Revenue Opportunity Size ($)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${revenue}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>CRM Account #</strong>
-                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>CRM Account #</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${crmAccount}</td>
                                     </tr>
                                     <tr>
@@ -1570,33 +1548,27 @@ export const emailTemplates = {
                                         <td style="padding:10px; border:1px solid #ddd;">${segment}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Use Case for this Demo
-                                                Request</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Use Case for this Demo Request</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${useCase}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Current
-                                                Devices</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Current Devices</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${currentDevices}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Number of
-                                                Licenses</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Number of Licenses</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${licenses}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Using Copilot</strong>
-                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Using Copilot</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${usingCopilot}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Is Security a
-                                                Factor</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Is Security a Factor</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${securityFactor}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device
-                                                Protection</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device Protection</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deviceProtection}</td>
                                     </tr>
                                 </table>
@@ -1639,7 +1611,8 @@ export const emailTemplates = {
         </table>
     </div>
         `,
-    }),
+        };
+    },
 
 
     rejectedOrderEmail: ({
@@ -1648,8 +1621,8 @@ export const emailTemplates = {
         customerName,
         customerEmail,
 
-        productName,
-        quantity,
+        products, // CHANGED: Array of products
+        totalQuantity, // ADDED
 
         salesExecutive,
         salesExecutiveEmail,
@@ -1686,8 +1659,11 @@ export const emailTemplates = {
         customerName: string;
         customerEmail: string;
 
-        productName: string;
-        quantity: number;
+        products: Array<{
+            name: string;
+            quantity: number;
+        }>;
+        totalQuantity: number;
 
         salesExecutive: string;
         salesExecutiveEmail: string;
@@ -1718,18 +1694,28 @@ export const emailTemplates = {
         deviceProtection: string;
 
         note: string;
-    }) => ({
-        subject: `Rejected Order #${orderNumber} | TD SYNNEX SURFACE`,
-        text: `Rejected TD SYNNEX Order (#${orderNumber})
+    }) => {
+        // Generate product rows HTML
+        const productRows = products.map(product => `
+        <tr>
+            <td style="padding:10px; border:1px solid #ddd;">${product.name}</td>
+            <td style="padding:10px; border:1px solid #ddd; text-align:center;">${product.quantity}</td>
+        </tr>
+    `).join('');
+
+        const productListText = products.map(p => `- ${p.name} (Quantity: ${p.quantity})`).join('\n');
+
+        return {
+            subject: `Rejected Order #${orderNumber} | TD SYNNEX SURFACE`,
+            text: `Rejected TD SYNNEX Order (#${orderNumber})
             Placed On ${orderDate}
 
             Hello,
 
             Your order placed on tdsynnex-surface.com has been rejected.
 
-            ORDER ITEMS
-            Product: ${productName}
-            Quantity: ${quantity}
+            ORDER ITEMS (${totalQuantity} items)
+            ${productListText}
 
             TEAM DETAILS
             Sales Executive: ${salesExecutive}
@@ -1773,7 +1759,7 @@ export const emailTemplates = {
             Best regards,
             The TD SYNNEX Team`,
 
-        html: `
+            html: `
         <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
         <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
@@ -1801,26 +1787,21 @@ export const emailTemplates = {
                             </td>
                         </tr>
 
-                        <!-- PRODUCTS -->
+                        <!-- PRODUCTS - UPDATED FOR MULTIPLE PRODUCTS -->
                         <tr>
                             <td style="padding:0 30px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                                     <tr>
                                         <th colspan="2"
                                             style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items
+                                            Order Items (${totalQuantity} items)
                                         </th>
                                     </tr>
                                     <tr style="background:#f1f3f5;">
                                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
-                                        </th>
+                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity</th>
                                     </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;">${productName}</td>
-                                        <td style="padding:10px; border:1px solid #ddd; text-align:center;">${quantity}
-                                        </td>
-                                    </tr>
+                                    ${productRows}
                                 </table>
                             </td>
                         </tr>
@@ -1836,23 +1817,19 @@ export const emailTemplates = {
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales
-                                                Executive</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive
-                                                Email</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive Email</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong>
-                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager
-                                                Email</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager Email</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
                                     </tr>
                                     <tr>
@@ -1889,8 +1866,7 @@ export const emailTemplates = {
                                         <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipping
-                                                Address</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipping Address</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${shippingAddress}</td>
                                     </tr>
                                     <tr>
@@ -1906,8 +1882,7 @@ export const emailTemplates = {
                                         <td style="padding:10px; border:1px solid #ddd;">${zip}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Desired Demo Delivery
-                                                Date</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Desired Demo Delivery Date</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deliveryDate}</td>
                                     </tr>
                                 </table>
@@ -1925,23 +1900,19 @@ export const emailTemplates = {
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device Opportunity Size
-                                                (Units)</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device Opportunity Size (Units)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deviceUnits}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Budget Per Device
-                                                ($)</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Budget Per Device ($)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${budgetPerDevice}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Revenue Opportunity
-                                                Size ($)</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Revenue Opportunity Size ($)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${revenue}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>CRM Account #</strong>
-                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>CRM Account #</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${crmAccount}</td>
                                     </tr>
                                     <tr>
@@ -1953,33 +1924,27 @@ export const emailTemplates = {
                                         <td style="padding:10px; border:1px solid #ddd;">${segment}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Use Case for this Demo
-                                                Request</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Use Case for this Demo Request</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${useCase}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Current
-                                                Devices</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Current Devices</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${currentDevices}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Number of
-                                                Licenses</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Number of Licenses</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${licenses}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Using Copilot</strong>
-                                        </td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Using Copilot</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${usingCopilot}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Is Security a
-                                                Factor</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Is Security a Factor</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${securityFactor}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device
-                                                Protection</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device Protection</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deviceProtection}</td>
                                     </tr>
                                 </table>
@@ -2022,7 +1987,8 @@ export const emailTemplates = {
         </table>
     </div>
         `,
-    }),
+        };
+    },
 
 
     returnedOrderEmail: ({
@@ -2031,8 +1997,10 @@ export const emailTemplates = {
         customerName,
         customerEmail,
 
-        productName,
-        quantity,
+        products, // CHANGED: Now an array of products with shippedQuantity, returnedQuantity, leftWithCustomer
+        totalQuantity, // Total shipped quantity
+        totalReturned, // Total returned quantity
+        totalLeft, // Total left with customer
 
         salesExecutive,
         salesExecutiveEmail,
@@ -2069,8 +2037,15 @@ export const emailTemplates = {
         customerName: string;
         customerEmail: string;
 
-        productName: string;
-        quantity: number;
+        products: Array<{
+            name: string;
+            shippedQuantity: number;
+            returnedQuantity: number;
+            leftWithCustomer: number;
+        }>;
+        totalQuantity: number;
+        totalReturned: number;
+        totalLeft: number;
 
         salesExecutive: string;
         salesExecutiveEmail: string;
@@ -2101,343 +2076,293 @@ export const emailTemplates = {
         deviceProtection: string;
 
         note: string;
-    }) => ({
-        subject: `Order Returned #${orderNumber} | TD SYNNEX SURFACE`,
-        text: `Returned TD SYNNEX Order (#${orderNumber})
-            Placed On ${orderDate}
+    }) => {
+        const productRows = products.map(product => {
+            const returnedText = product.returnedQuantity > 0
+                ? `<span style="
+                        background:#e8f5e9;
+                        color:#388e3c;
+                        padding:4px 8px;
+                        border-radius:4px;
+                        font-weight:600;
+                    ">${product.returnedQuantity}</span>`
+                : `<span style="color:#999;">0</span>`;
 
-            Hello,
+            const leftText = product.leftWithCustomer > 0
+                ? `<span style="
+                        background:#fdecea;
+                        color:#d32f2f;
+                        padding:4px 8px;
+                        border-radius:4px;
+                        font-weight:600;
+                        text-decoration:line-through;
+                    ">${product.leftWithCustomer}</span>`
+                : `<span style="color:#999;">0</span>`;
 
-            Your order placed on tdsynnex-surface.com has been returned.
+            return `
+                <tr>
+                    <td style="padding:12px; border:1px solid #ddd; font-size:14px;">
+                        ${product.name}
+                    </td>
 
-            ORDER ITEMS
-            Product: ${productName}
-            Quantity: ${quantity}
+                    <td style="padding:12px; border:1px solid #ddd;">
+                        <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                                <td style="font-size:13px; padding-bottom:6px;">
+                                    <strong>Shipped:</strong>
+                                    <span style="font-weight:600;">
+                                        ${product.shippedQuantity}
+                                    </span>
+                                </td>
+                            </tr>
 
-            TEAM DETAILS
-            Sales Executive: ${salesExecutive}
-            Sales Executive Email: ${salesExecutiveEmail}
-            Sales Manager: ${salesManager}
-            Sales Manager Email: ${salesManagerEmail}
-            Reseller: ${reseller}
+                            <tr>
+                                <td style="font-size:13px; padding-bottom:6px;">
+                                    <strong>Returned:</strong> ${returnedText}
+                                </td>
+                            </tr>
 
-            SHIPPING DETAILS
-            Company Name: ${companyName}
-            Contact Name: ${contactName}
-            Email Address: ${contactEmail}
-            Shipping Address: ${shippingAddress}
-            City: ${city}
-            State: ${state}
-            Zip: ${zip}
-            Desired Demo Delivery Date: ${deliveryDate}
+                            <tr>
+                                <td style="font-size:13px;">
+                                    <strong>Left:</strong> ${leftText}
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            `;
+        }).join('');
 
-            OPPORTUNITY DETAILS
-            Device Opportunity Size (Units): ${deviceUnits}
-            Budget Per Device ($): ${budgetPerDevice}
-            Revenue Opportunity Size ($): ${revenue}
-            CRM Account #: ${crmAccount}
-            Vertical: ${vertical}
-            Segment: ${segment}
 
-            Use Case for this Demo Request:
-            ${useCase}
+        // Generate text version
+        const productListText = products.map(p => {
+            const returnedText = p.returnedQuantity > 0 ? ` (${p.returnedQuantity} returned, ${p.leftWithCustomer} left with customer)` : '';
+            return `- ${p.name}: Shipped ${p.shippedQuantity}${returnedText}`;
+        }).join('\n');
 
-            Current Devices: ${currentDevices}
-            Number of Licenses: ${licenses}
-            Using Copilot: ${usingCopilot}
-            Is Security a Factor: ${securityFactor}
-            Device Protection: ${deviceProtection}
+        return {
+            subject: `Order Returned #${orderNumber} | TD SYNNEX SURFACE`,
+            text: `Returned TD SYNNEX Order (#${orderNumber})
+Placed On ${orderDate}
 
-            NOTE
-            ${note}
+Hello ${customerName},
 
-            If you have any questions, please contact us at support@tdsynnex-surface.com.
+Your order placed on tdsynnex-surface.com has been returned.
 
-            Best regards,
+ORDER ITEMS (${totalQuantity} items shipped, ${totalReturned} returned)
+${productListText}
+
+SUMMARY:
+Total Shipped: ${totalQuantity} items
+Total Returned: ${totalReturned} items
+Still With Customer: ${totalLeft} items
+
+TEAM DETAILS
+Sales Executive: ${salesExecutive}
+Sales Executive Email: ${salesExecutiveEmail}
+Sales Manager: ${salesManager}
+Sales Manager Email: ${salesManagerEmail}
+Reseller: ${reseller}
+
+SHIPPING DETAILS
+Company Name: ${companyName}
+Contact Name: ${contactName}
+Email Address: ${contactEmail}
+Shipping Address: ${shippingAddress}
+City: ${city}
+State: ${state}
+Zip: ${zip}
+Desired Demo Delivery Date: ${deliveryDate}
+
+OPPORTUNITY DETAILS
+Device Opportunity Size (Units): ${deviceUnits}
+Budget Per Device ($): ${budgetPerDevice}
+Revenue Opportunity Size ($): ${revenue}
+CRM Account #: ${crmAccount}
+Vertical: ${vertical}
+Segment: ${segment}
+
+Use Case for this Demo Request:
+${useCase}
+
+Current Devices: ${currentDevices}
+Number of Licenses: ${licenses}
+Using Copilot: ${usingCopilot}
+Is Security a Factor: ${securityFactor}
+Device Protection: ${deviceProtection}
+
+NOTE
+${note}
+
+If you have any questions, please contact us at support@tdsynnex-surface.com.
+
+Best regards,
             The TD SYNNEX Team`,
 
-        html: `
-        <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
-        <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-                <td align="center">
+            html: `
+<div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+            <td align="center">
+                <table width="720" cellpadding="0" cellspacing="0"
+                    style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
 
-                    <table width="720" cellpadding="0" cellspacing="0"
-                        style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
+                    <!-- HEADER -->
+                    <tr>
+                        <td style="background:#0A4647; padding:30px; text-align:center;">
+                            <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
+                                style="max-width:160px; margin-bottom:12px;" />
+                            <h1 style="color:#ffffff; margin:0; font-size:26px;">
+                                Order Returned #${orderNumber}
+                            </h1>
+                            <p style="color:#ffffff; margin:10px 0 0; font-size:16px;">
+                                ${totalReturned} item(s) returned to stock
+                            </p>
+                        </td>
+                    </tr>
 
-                        <!-- HEADER -->
-                        <tr>
-                            <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
-                                <h1 style="color:#ffffff; margin:0; font-size:26px;">
-                                    Order Returned #${orderNumber}
-                                </h1>
-                            </td>
-                        </tr>
 
-                        <!-- INTRO -->
-                        <tr>
-                            <td style="padding:30px 30px 0 30px; color:#333;">
-                                <p style="margin:0 0 8px; font-size:18px;"><strong>Returned Order
-                                        (#${orderNumber})</strong></p>
-                                <p style="color:#666; margin:0 0 20px; font-size:16px;">Placed On ${orderDate}</p>
-                                <p style="color:#666; margin:0 0 20px; font-size:15px;"><strong>Hello, ${customerName}</strong></p>
-                                <p style="color:#666; margin:0 0 20px; font-size:15px;">Your order has been returned.</p>
-                                <p style="margin:4px; font-size:15px;"><strong>If this TD SYNNEX Surface order
-                                        helped you close, you can Report a Win on the program.</strong></p>
-                                <!-- CTA Button -->
-                                <div style="text-align:center; margin:30px 0;">
-                                    <a href="${process.env.NEXT_PUBLIC_APP_URL}/wins" style="
-                                            background:#0A4647;
-                                            color:#ffffff;
-                                            padding:14px 34px;
-                                            text-decoration:none;
-                                            border-radius:6px;
-                                            font-size:16px;
-                                            font-weight:600;
-                                            display:inline-block;
-                                        ">
-                                        Report a Win
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
+                    <!-- INTRO -->
+                    <tr>
+                        <td style="padding: 30px; color:#333; margin-top: 20px;">
+                            <p style="margin:0 0 8px; font-size:18px;"><strong>Returned Order (#${orderNumber})</strong></p>
+                            <p style="color:#666; margin:0 0 20px; font-size:16px;">Placed On ${orderDate}</p>
+                            <p style="color:#666; margin:0 0 20px; font-size:15px;"><strong>Hello, ${customerName}</strong></p>
+                            <p style="color:#666; margin:0 0 20px; font-size:15px;">
+                                Your order has been partially returned. Below are the details of returned items.
+                            </p>
+                        </td>
+                    </tr>
 
-                        
-                        <tr>
-                            <td style="padding:30px;">
-                                <img 
-                                    src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step4.png" 
-                                    alt="Thank you for your order" 
-                                    style="width:100%; max-width:720px; height:auto; display:block;"
-                                    width="720"
-                                />
-                            </td>
-                        </tr>
+                    <tr>
+                        <td style="padding: 30px;">
+                            <img 
+                                src="${process.env.NEXT_PUBLIC_APP_URL || 'https://tdsynnex.vercel.app'}/step4.png" 
+                                alt="Thank you for your order" 
+                                style="width:100%; max-width:720px; height:auto; display:block;"
+                                width="720"
+                            />
+                        </td>
+                    </tr>
 
-                        <!-- PRODUCTS -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items
-                                        </th>
-                                    </tr>
-                                    <tr style="background:#f1f3f5;">
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;">${productName}</td>
-                                        <td style="padding:10px; border:1px solid #ddd; text-align:center;">${quantity}
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                    <!-- PRODUCTS - UPDATED WITH RETURN DETAILS -->
+                    <tr>
+                        <td style="padding:20px 30px;">
+                            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; border:1px solid #ddd;">
+                                <tr>
+                                    <th colspan="2"
+                                        style="background:#0A4647; color:#ffffff; padding:12px; text-align:left; font-size:16px;">
+                                        Return Details (${totalQuantity} items shipped)
+                                    </th>
+                                </tr>
+                                <tr style="background:#f1f3f5;">
+                                    <th style="padding:12px; border:1px solid #ddd; text-align:left; width:75%;">Product</th>
+                                    <th style="padding:12px; border:1px solid #ddd; text-align:center; width:25%;">Quantity Status</th>
+                                </tr>
+                                ${productRows}
+                            </table>
+                        </td>
+                    </tr>
 
-                        <!-- TEAM DETAILS -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Team Details
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales
-                                                Executive</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive
-                                                Email</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager
-                                                Email</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Reseller</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${reseller}</td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                    <!-- REST OF THE EMAIL TEMPLATE REMAINS THE SAME -->
+                    <!-- TEAM DETAILS -->
+                    <tr>
+                        <td style="padding:20px 30px;">
+                            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; border:1px solid #ddd;">
+                                <tr>
+                                    <th colspan="2"
+                                        style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                        Team Details
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive Email</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager Email</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Reseller</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${reseller}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
 
-                        <!-- SHIPPING DETAILS -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Shipping Details
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Company Name</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${companyName}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Contact Name</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${contactName}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Email Address</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipping
-                                                Address</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${shippingAddress}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>City</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${city}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>State</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${state}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Zip</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${zip}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Desired Demo Delivery
-                                                Date</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${deliveryDate}</td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                    <!-- SHIPPING DETAILS -->
+                    <tr>
+                        <td style="padding:20px 30px;">
+                            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; border:1px solid #ddd;">
+                                <tr>
+                                    <th colspan="2"
+                                        style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                        Shipping Details
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Company Name</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${companyName}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Contact Name</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${contactName}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Email Address</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Shipping Address</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${shippingAddress}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>City</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${city}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>State</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${state}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Zip</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${zip}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Desired Demo Delivery Date</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${deliveryDate}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
 
-                        <!-- OPPORTUNITY DETAILS -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Opportunity Details
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device Opportunity Size
-                                                (Units)</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${deviceUnits}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Budget Per Device
-                                                ($)</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${budgetPerDevice}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Revenue Opportunity
-                                                Size ($)</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${revenue}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>CRM Account #</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${crmAccount}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Vertical</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${vertical}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Segment</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${segment}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Use Case for this Demo
-                                                Request</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${useCase}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Current
-                                                Devices</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${currentDevices}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Number of
-                                                Licenses</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${licenses}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Using Copilot</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${usingCopilot}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Is Security a
-                                                Factor</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${securityFactor}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device
-                                                Protection</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${deviceProtection}</td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                    <!-- FOOTER -->
+                    <tr>
+                        <td style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666; border-top:1px solid #ddd;">
+                            <p style="margin:0;">
+                                Best regards,<br>
+                                <strong>The TD SYNNEX Team</strong>
+                            </p>
+                        </td>
+                    </tr>
 
-                        <!-- NOTE -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Note
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:12px; border:1px solid #ddd; color:#555;">
-                                            ${note}
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
-
-                        <!-- Footer -->
-                        <tr>
-                            <td
-                                style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666;">
-                                <p style="margin:0;">
-                                    Best regards,<br>
-                                    <strong>The TD SYNNEX Team</strong>
-                                </p>
-                            </td>
-                        </tr>
-
-                    </table>
-
-                </td>
-            </tr>
-        </table>
-    </div>
+                </table>
+            </td>
+        </tr>
+    </table>
+</div>
         `,
-    }),
+        };
+    },
 
 
     shippedOrderEmail: ({
@@ -2446,8 +2371,8 @@ export const emailTemplates = {
         customerName,
         customerEmail,
 
-        productName,
-        quantity,
+        products, // CHANGED: Now an array of products
+        totalQuantity, // ADDED: Total quantity
 
         returnTracking,
         orderTracking,
@@ -2491,14 +2416,16 @@ export const emailTemplates = {
         customerName: string;
         customerEmail: string;
 
-        productName: string;
-        quantity: number;
+        products: Array<{ // CHANGED: Array type
+            name: string;
+            quantity: number;
+        }>;
+        totalQuantity: number; // ADDED
 
         returnTracking: string;
         orderTracking: string;
         fileLink: string;
         caseType: string;
-
         orderTrackingLink: string;
         returnTrackingLink: string;
 
@@ -2531,18 +2458,28 @@ export const emailTemplates = {
         deviceProtection: string;
 
         note: string;
-    }) => ({
-        subject: `Order Shipped #${orderNumber} | TD SYNNEX SURFACE`,
-        text: `Shipped TD SYNNEX Order (#${orderNumber})
+    }) => {
+        // Generate product rows HTML
+        const productRows = products.map(product => `
+        <tr>
+            <td style="padding:10px; border:1px solid #ddd;">${product.name}</td>
+            <td style="padding:10px; border:1px solid #ddd; text-align:center;">${product.quantity}</td>
+        </tr>
+    `).join('');
+
+        const productListText = products.map(p => `- ${p.name} (Quantity: ${p.quantity})`).join('\n');
+
+        return {
+            subject: `Order Shipped #${orderNumber} | TD SYNNEX SURFACE`,
+            text: `Shipped TD SYNNEX Order (#${orderNumber})
             Placed On ${orderDate}
 
             Hello,
 
             Your order placed on tdsynnex-surface.com has been shipped.
 
-            ORDER ITEMS
-            Product: ${productName}
-            Quantity: ${quantity}
+            ORDER ITEMS (${totalQuantity} items)
+            ${productListText}
 
             TEAM DETAILS
             Sales Executive: ${salesExecutive}
@@ -2586,7 +2523,7 @@ export const emailTemplates = {
             Best regards,
             The TD SYNNEX Team`,
 
-        html: `
+            html: `
         <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
         <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
@@ -2678,26 +2615,21 @@ export const emailTemplates = {
                             </td>
                         </tr>
 
-                        <!-- PRODUCTS -->
+                        <!-- PRODUCTS - UPDATED FOR MULTIPLE PRODUCTS -->
                         <tr>
                             <td style="padding:0 30px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                                     <tr>
                                         <th colspan="2"
                                             style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items
+                                            Order Items (${totalQuantity} items)
                                         </th>
                                     </tr>
                                     <tr style="background:#f1f3f5;">
                                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
-                                        </th>
+                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity</th>
                                     </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;">${productName}</td>
-                                        <td style="padding:10px; border:1px solid #ddd; text-align:center;">${quantity}
-                                        </td>
-                                    </tr>
+                                    ${productRows}
                                 </table>
                             </td>
                         </tr>
@@ -2899,15 +2831,19 @@ export const emailTemplates = {
         </table>
     </div>
         `,
-    }),
+        };
+    },
 
 
     returnReminderEmail: ({
         orderNumber,
         orderDate,
+        customerName,
+        customerEmail,
         productName,
-        productSlug,
-        quantity,
+        productListText,
+        productListHtml,
+        totalQuantity,
         returnTracking,
         fileLink,
         salesExecutive,
@@ -2922,19 +2858,16 @@ export const emailTemplates = {
         orderDate: string;
         customerName: string;
         customerEmail: string;
-
         productName: string;
-        productSlug: string;
-        quantity: number;
-
+        productListText: string;
+        productListHtml: string;
+        totalQuantity: number;
         returnTracking: string;
         fileLink: string;
-
         salesExecutive: string;
         salesExecutiveEmail: string;
         salesManager: string;
         salesManagerEmail: string;
-
         companyName: string;
         contactEmail: string;
         shippedDate: string;
@@ -2942,217 +2875,212 @@ export const emailTemplates = {
         subject: `Return Reminder - Order #${orderNumber} (${companyName}) | TD SYNNEX SURFACE`,
         text: `Return Reminder Notification | TD SYNNEX SURFACE
 
-            Return Reminder - Order #${orderNumber} (${companyName}) 
-            Placed On: ${orderDate}
+        Return Reminder - Order #${orderNumber} (${companyName}) 
+        Placed On: ${orderDate}
 
-            Hello,
+        Hello,
 
-            Thank you for using TD SYNNEX SURFACE! We hope your experience was very positive.
+        Thank you for using TD SYNNEX SURFACE! We hope your experience was very positive.
 
-            Your order for ${companyName} is now due for return. 
-            You can view your return label using the link below or request it via email at support@tdsynnex-surface.com:
+        Your order for ${companyName} is now due for return. 
+        You can view your return label using the link below or request it via email at support@tdsynnex-surface.com:
 
-            View Return Label: ${fileLink}
+        View Return Label: ${fileLink}
 
-            ORDER ITEMS
-            Product: ${productName}
-            Quantity: ${quantity}
+        ORDER ITEMS
+        ${productListText}
+        Total Quantity: ${totalQuantity}
 
-            ORDER DETAILS
-            Sales Executive: ${salesExecutive}
-            Sales Executive Email: ${salesExecutiveEmail}
-            Sales Manager: ${salesManager}
-            Sales Manager Email: ${salesManagerEmail}
-            Customer Company Name: ${companyName}
-            Customer Contact Email: ${contactEmail}
-            Shipped Date: ${shippedDate}
-            Returned Tracking: ${returnTracking}
+        ORDER DETAILS
+        Sales Executive: ${salesExecutive}
+        Sales Executive Email: ${salesExecutiveEmail}
+        Sales Manager: ${salesManager}
+        Sales Manager Email: ${salesManagerEmail}
+        Customer Company Name: ${companyName}
+        Customer Contact Email: ${contactEmail}
+        Shipped Date: ${shippedDate}
+        Returned Tracking: ${returnTracking}
 
-            If you have any questions, please contact us at support@tdsynnex-surface.com.
+        If you have any questions, please contact us at support@tdsynnex-surface.com.
 
-            Best regards,
-            The TD SYNNEX Team`,
+        Best regards,
+        The TD SYNNEX Team`,
         html: `
-        <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
-        <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-                <td align="center">
+            <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                        <td align="center">
 
-                    <table width="720" cellpadding="0" cellspacing="0"
-                        style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
+                            <table width="720" cellpadding="0" cellspacing="0"
+                                style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
 
-                        <!-- HEADER -->
-                        <tr>
-                            <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
-                                <h1 style="color:#ffffff; margin:0; font-size:26px;">
-                                    Return Reminder Notification Order #${orderNumber} (${companyName}) | TD SYNNEX
-                                    SURFACE
-                                </h1>
-                            </td>
-                        </tr>
+                                <!-- HEADER -->
+                                <tr>
+                                    <td style="background:#0A4647; padding:30px; text-align:center;">
+                                        <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
+                                            style="max-width:160px; margin-bottom:12px;" />
+                                        <h1 style="color:#ffffff; margin:0; font-size:26px;">
+                                            Return Reminder Notification Order #${orderNumber} (${companyName}) | TD SYNNEX
+                                            SURFACE
+                                        </h1>
+                                    </td>
+                                </tr>
 
-                        <!-- INTRO -->
-                        <tr>
-                            <td style="padding:30px 30px 0 30px; color:#333;">
-                                <p style="margin:0 0 8px;  font-size:20px;"><strong>Return Reminder Order
-                                        #${orderNumber}</strong></p>
-                                <p style="margin:0 0 8px;  font-size:14px;">Placed On ${orderDate}</p>
-                                <p style="font-size:15px; line-height:1.6;">
-                                    Thank you for using TD SYNNEX SURFACE! We hope your experience was very positive.
-                                </p>
-                                <p>
-                                    Your order for ${companyName} is now due for return. You can also
-                                    obtain a soft copy of the return label by clicking on the below or sending a request
-                                    at support@tdsynnex-surface.com,
-                                </p>
-                            </td>
-                        </tr>
+                                <!-- INTRO -->
+                                <tr>
+                                    <td style="padding:30px 30px 0 30px; color:#333;">
+                                        <p style="margin:0 0 8px;  font-size:20px;"><strong>Return Reminder Order
+                                                #${orderNumber}</strong></p>
+                                        <p style="margin:0 0 8px;  font-size:14px;">Placed On ${orderDate}</p>
+                                        <p style="font-size:15px; line-height:1.6;">
+                                            Thank you for using TD SYNNEX SURFACE! We hope your experience was very positive.
+                                        </p>
+                                        <p>
+                                            Your order for ${companyName} is now due for return. You can also
+                                            obtain a soft copy of the return label by clicking on the below or sending a request
+                                            at support@tdsynnex-surface.com,
+                                        </p>
+                                    </td>
+                                </tr>
 
-                        <tr>
-                            <td style="padding:0; color:#333;">
-                                <div style="text-align:center; margin:30px 0;">
-                                    <a href=${fileLink} style="
-                                            background:#0A4647;
-                                            color:#ffffff;
-                                            padding:14px 34px;
-                                            text-decoration:none;
-                                            border-radius:6px;
-                                            font-size:16px;
-                                            font-weight:600;
-                                            display:inline-block;
-                                        ">
-                                        View Return Label
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
+                                <tr>
+                                    <td style="padding:0; color:#333;">
+                                        <div style="text-align:center; margin:30px 0;">
+                                            <a href=${fileLink} style="
+                                                    background:#0A4647;
+                                                    color:#ffffff;
+                                                    padding:14px 34px;
+                                                    text-decoration:none;
+                                                    border-radius:6px;
+                                                    font-size:16px;
+                                                    font-weight:600;
+                                                    display:inline-block;
+                                                ">
+                                                View Return Label
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
 
-                        <!-- PRODUCTS -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items
-                                        </th>
-                                    </tr>
-                                    <tr style="background:#f1f3f5;">
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><a href=${`${process.env.NEXT_PUBLIC_APP_URL}/product/${productSlug}`}>${productName}</a></td>
-                                        <td style="padding:10px; border:1px solid #ddd; text-align:center;">${quantity}
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                                <!-- PRODUCTS -->
+                                <tr>
+                                    <td style="padding:0 30px 30px;">
+                                        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                            <tr>
+                                                <th colspan="2"
+                                                    style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                                    Order Items (${totalQuantity} items total)
+                                                </th>
+                                            </tr>
+                                            <tr style="background:#f1f3f5;">
+                                                <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
+                                                <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity</th>
+                                            </tr>
+                                            ${productListHtml}
+                                        </table>
+                                    </td>
+                                </tr>
 
-                        <!-- Order DETAILS -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Details
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales
-                                                Executive</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive
-                                                Email</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager
-                                                Email</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Customer Company
-                                                Name</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${companyName}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Customer Contact
-                                                Name</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipped Date</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${shippedDate}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Returned
-                                                Tracking</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${returnTracking}</td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                                <!-- Order DETAILS -->
+                                <tr>
+                                    <td style="padding:0 30px 30px;">
+                                        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                            <tr>
+                                                <th colspan="2"
+                                                    style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                                    Order Details
+                                                </th>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive Email</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager Email</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Customer Company Name</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${companyName}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Customer Contact Email</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Shipped Date</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${shippedDate}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:10px; border:1px solid #ddd;"><strong>Returned Tracking</strong></td>
+                                                <td style="padding:10px; border:1px solid #ddd;">${returnTracking}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
 
-                        <!-- Footer -->
-                        <tr>
-                            <td
-                                style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666;">
-                                <p style="margin:0;">
-                                    Best regards,<br>
-                                    <strong>The TD SYNNEX Team</strong>
-                                </p>
-                            </td>
-                        </tr>
+                                <!-- Footer -->
+                                <tr>
+                                    <td
+                                        style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666;">
+                                        <p style="margin:0;">
+                                            Best regards,<br>
+                                            <strong>The TD SYNNEX Team</strong>
+                                        </p>
+                                    </td>
+                                </tr>
 
-                    </table>
+                            </table>
 
-                </td>
-            </tr>
-        </table>
-    </div>
-        `,
+                        </td>
+                    </tr>
+                </table>
+            </div>
+    `,
     }),
 
 
     returnReminderCronEmail: ({
         orderNumber,
         orderDate,
-        productName,
-        productSlug,
-        quantity,
-        daysCount,
+        customerName,
+        customerEmail,
+
+        products, // CHANGED: Array of products instead of single product
+        totalQuantity, // ADDED: Total quantity
+
         returnTracking,
         fileLink,
+
         salesExecutive,
         salesExecutiveEmail,
         salesManager,
         salesManagerEmail,
+
         companyName,
         contactEmail,
         shippedDate,
+        daysCount,
     }: {
         orderNumber: string | number;
         orderDate: string;
         customerName: string;
         customerEmail: string;
 
-        productName: string;
-        productSlug: string;
-        quantity: number;
+        products: Array<{ // CHANGED: Array type
+            name: string;
+            quantity: number;
+            slug?: string; // Optional slug for product link
+        }>;
+        totalQuantity: number; // ADDED
 
         returnTracking: string;
         fileLink: string;
@@ -3166,206 +3094,217 @@ export const emailTemplates = {
         companyName: string;
         contactEmail: string;
         shippedDate: string;
-    }) => ({
-        subject: `Overdue Reminder - Order #${orderNumber} (${companyName}) | TD SYNNEX SURFACE`,
-        text: `Overdue Reminder Notification | TD SYNNEX SURFACE
+    }) => {
+        // Generate product rows HTML
+        const productRows = products.map(product => {
+            const productLink = product.slug
+                ? `${process.env.NEXT_PUBLIC_APP_URL}/product/${product.slug}`
+                : '#';
 
-            Return Reminder - Order #${orderNumber} (${companyName}) 
-            Placed On: ${orderDate}
+            return `
+        <tr>
+            <td style="padding:10px; border:1px solid #ddd;">
+                ${product.slug
+                    ? `<a href="${productLink}" style="color:#0A4647; text-decoration:none;">${product.name}</a>`
+                    : product.name
+                }
+            </td>
+            <td style="padding:10px; border:1px solid #ddd; text-align:center;">${product.quantity}</td>
+        </tr>
+        `;
+        }).join('');
 
-            Hello,
+        const productListText = products.map(p => `- ${p.name} (Quantity: ${p.quantity})`).join('\n');
 
-            Thank you for using TD SYNNEX SURFACE! We hope your experience was very positive.
+        return {
+            subject: `Overdue Reminder - Order #${orderNumber} (${companyName}) | TD SYNNEX SURFACE`,
+            text: `Overdue Reminder Notification | TD SYNNEX SURFACE
 
-            Your order for ${companyName} is now due for return. 
-            You can view your return label using the link below or request it via email at support@tdsynnex-surface.com:
+                Return Reminder - Order #${orderNumber} (${companyName}) 
+                Placed On: ${orderDate}
 
-            View Return Label: ${fileLink}
+                Hello,
 
-            ORDER ITEMS
-            Product: ${productName}
-            Quantity: ${quantity}
+                Thank you for using TD SYNNEX SURFACE! We hope your experience was very positive.
 
-            ORDER DETAILS
-            Sales Executive: ${salesExecutive}
-            Sales Executive Email: ${salesExecutiveEmail}
-            Sales Manager: ${salesManager}
-            Sales Manager Email: ${salesManagerEmail}
-            Customer Company Name: ${companyName}
-            Customer Contact Email: ${contactEmail}
-            Shipped Date: ${shippedDate}
-            Returned Tracking: ${returnTracking}
+                Your order for ${companyName} is now due for return. 
+                You can view your return label using the link below or request it via email at support@tdsynnex-surface.com:
 
-            If you have any questions, please contact us at support@tdsynnex-surface.com.
+                View Return Label: ${fileLink}
 
-            Best regards,
-            The TD SYNNEX Team`,
-        html: `
-        <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
-        <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-                <td align="center">
+                ORDER ITEMS (${totalQuantity} items)
+                ${productListText}
 
-                    <table width="720" cellpadding="0" cellspacing="0"
-                        style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
+                ORDER DETAILS
+                Sales Executive: ${salesExecutive}
+                Sales Executive Email: ${salesExecutiveEmail}
+                Sales Manager: ${salesManager}
+                Sales Manager Email: ${salesManagerEmail}
+                Customer Company Name: ${companyName}
+                Customer Contact Email: ${contactEmail}
+                Shipped Date: ${shippedDate}
+                Days Since Shipped: ${daysCount}
+                Returned Tracking: ${returnTracking}
 
-                        <!-- HEADER -->
-                        <tr>
-                            <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
-                                <h1 style="color:#ffffff; margin:0; font-size:26px;">
-                                    Overdue Reminder Notification Order #${orderNumber} (${companyName}) | TD SYNNEX
-                                    SURFACE
-                                </h1>
-                            </td>
-                        </tr>
+                If you have any questions, please contact us at support@tdsynnex-surface.com.
 
-                        <!-- INTRO -->
-                        <tr>
-                            <td style="padding:30px 30px 0 30px; color:#333;">
-                                <p style="margin:0 0 8px;  font-size:20px;"><strong>Return Reminder Order
-                                        #${orderNumber}</strong></p>
-                                <p style="margin:0 0 8px;  font-size:14px;">Placed On ${orderDate}</p>
-                                <p style="font-size:15px; line-height:1.6;">
-                                     This is a message from the TD SYNNEX SURFACE team that <b>Order #${orderNumber}</b> for <b>(${companyName})</b> has now
-                                    been shipped for a period of <b>${daysCount}</b> against the 30-day trial period.
-                                </p>
-                                <p>
-                                    Your order for ${companyName} is now due for return. You can also
-                                    obtain a soft copy of the return label by clicking on the below or sending a request
-                                    at support@tdsynnex-surface.com,
-                                </p>
-                            </td>
-                        </tr>
+                Best regards,
+                The TD SYNNEX Team`,
 
-                        <tr>
-                            <td style="padding:0; color:#333;">
-                                <div style="text-align:center; margin:30px 0;">
-                                    <a href=${fileLink} style="
-                                            background:#0A4647;
-                                            color:#ffffff;
-                                            padding:14px 34px;
-                                            text-decoration:none;
-                                            border-radius:6px;
-                                            font-size:16px;
-                                            font-weight:600;
-                                            display:inline-block;
-                                        ">
-                                        View Return Label
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
+            html: `
+<div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+            <td align="center">
+                <table width="720" cellpadding="0" cellspacing="0"
+                    style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
 
-                        <!-- PRODUCTS -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items
-                                        </th>
-                                    </tr>
-                                    <tr style="background:#f1f3f5;">
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><a href=${`${process.env.NEXT_PUBLIC_APP_URL}/product/${productSlug}`}>${productName}</a></td>
-                                        <td style="padding:10px; border:1px solid #ddd; text-align:center;">${quantity}
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                    <!-- HEADER -->
+                    <tr>
+                        <td style="background:#0A4647; padding:30px; text-align:center;">
+                            <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
+                                style="max-width:160px; margin-bottom:12px;" />
+                            <h1 style="color:#ffffff; margin:0; font-size:26px;">
+                                Overdue Reminder Notification Order #${orderNumber} (${companyName}) | TD SYNNEX SURFACE
+                            </h1>
+                        </td>
+                    </tr>
 
-                        <!-- Order DETAILS -->
-                        <tr>
-                            <td style="padding:0 30px 30px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Details
-                                        </th>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales
-                                                Executive</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive
-                                                Email</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager
-                                                Email</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Customer Company
-                                                Name</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${companyName}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Customer Contact
-                                                Name</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipped Date</strong>
-                                        </td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${shippedDate}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Returned
-                                                Tracking</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${returnTracking}</td>
-                                    </tr>
-                                </table>
-                            </td>
-                        </tr>
+                    <!-- INTRO -->
+                    <tr>
+                        <td style="padding:30px 30px 0 30px; color:#333;">
+                            <p style="margin:0 0 8px;  font-size:20px;"><strong>Return Reminder Order #${orderNumber}</strong></p>
+                            <p style="margin:0 0 8px;  font-size:14px;">Placed On ${orderDate}</p>
+                            <p style="font-size:15px; line-height:1.6;">
+                                This is a message from the TD SYNNEX SURFACE team that <b>Order #${orderNumber}</b> for <b>(${companyName})</b> has now
+                                been shipped for a period of <b>${daysCount}</b> against the 45-day trial period.
+                            </p>
+                            <p>
+                                Your order for ${companyName} is now due for return. You can also
+                                obtain a soft copy of the return label by clicking on the below or sending a request
+                                at support@tdsynnex-surface.com,
+                            </p>
+                        </td>
+                    </tr>
 
-                        <!-- Footer -->
-                        <tr>
-                            <td
-                                style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666;">
-                                <p style="margin:0;">
-                                    Best regards,<br>
-                                    <strong>The TD SYNNEX Team</strong>
-                                </p>
-                            </td>
-                        </tr>
+                    <!-- RETURN LABEL BUTTON -->
+                    <tr>
+                        <td style="padding:0; color:#333;">
+                            <div style="text-align:center; margin:30px 0;">
+                                <a href="${fileLink}" style="
+                                        background:#0A4647;
+                                        color:#ffffff;
+                                        padding:14px 34px;
+                                        text-decoration:none;
+                                        border-radius:6px;
+                                        font-size:16px;
+                                        font-weight:600;
+                                        display:inline-block;
+                                    ">
+                                    View Return Label
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
 
-                    </table>
+                    <!-- PRODUCTS TABLE - UPDATED FOR MULTIPLE PRODUCTS -->
+                    <tr>
+                        <td style="padding:0 30px 30px;">
+                            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                <tr>
+                                    <th colspan="2"
+                                        style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                        Order Items (${totalQuantity} items)
+                                    </th>
+                                </tr>
+                                <tr style="background:#f1f3f5;">
+                                    <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
+                                    <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity</th>
+                                </tr>
+                                ${productRows}
+                            </table>
+                        </td>
+                    </tr>
 
-                </td>
-            </tr>
-        </table>
-    </div>
+                    <!-- Order DETAILS -->
+                    <tr>
+                        <td style="padding:0 30px 30px;">
+                            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                                <tr>
+                                    <th colspan="2"
+                                        style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
+                                        Order Details
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive Email</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager Email</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Customer Company Name</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${companyName}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Customer Contact Email</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Shipped Date</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${shippedDate}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Days Since Shipped</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${daysCount}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px; border:1px solid #ddd;"><strong>Returned Tracking</strong></td>
+                                    <td style="padding:10px; border:1px solid #ddd;">${returnTracking}</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- FOOTER -->
+                    <tr>
+                        <td
+                            style="background:#f1f3f5; padding:20px; text-align:center; font-size:14px; color:#666;">
+                            <p style="margin:0;">
+                                Best regards,<br>
+                                <strong>The TD SYNNEX Team</strong>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</div>
         `,
-    }),
+        };
+    },
 
 
     reportWinEmail: ({
         orderNumber,
+        synnexOrderNumber, // NEW: Add this parameter
         orderDate,
         customerName,
         submittedEmail,
-
         productName,
+        productDetails, // NEW: For product details display
         quantity,
-
         resellerAccount,
         units,
         pType,
@@ -3374,33 +3313,50 @@ export const emailTemplates = {
         notes,
     }: {
         orderNumber: string | number;
+        synnexOrderNumber?: string; // NEW: Optional parameter
         orderDate: string;
         customerName: string;
         submittedEmail: string;
-
         productName: string;
+        productDetails?: string; // NEW: Optional parameter
         quantity: number;
-
         reseller: string;
         resellerAccount: string;
         units: string;
         pType: string;
         dealRev: string;
         notes: string;
-    }) => ({
-        subject: `Report a Win | TD SYNNEX SURFACE`,
-        text: `Report a Win | TD SYNNEX SURFACE
+    }) => {
+        // Generate product rows HTML for multiple products
+        let productDisplayHTML = '';
+        let productText = '';
+
+        if (productDetails && productDetails.length > 0) {
+            // If we have product details array (for multiple products)
+            productDisplayHTML = productDetails;
+            productText = productName; // productName will contain the formatted text
+        } else {
+            // Single product or no details
+            productDisplayHTML = `
+        <tr>
+            <td style="padding:10px; border:1px solid #ddd;">${productName}</td>
+        </tr>`;
+            productText = `Product: ${productName}`;
+        }
+
+        return {
+            subject: `Report a Win | TD SYNNEX SURFACE`,
+            text: `Report a Win | TD SYNNEX SURFACE
             Submitted by: ${submittedEmail}
             Win Reported Order#: ${orderNumber}
 
             ORDER ITEMS
-            Product: ${productName}
-            Quantity: ${quantity}
+            ${productText}
 
             RESELLER & ORDER DETAILS
             Reseller Account #: ${resellerAccount}
             Reseller Name: ${reseller}
-            Synnex Order#: ${orderNumber}
+            Synnex Order#: ${synnexOrderNumber || orderNumber}
             Customer Name: ${customerName}
             Number of Units: ${units}
             One-time purchase or roll out?: ${pType}
@@ -3415,8 +3371,8 @@ export const emailTemplates = {
 
             Best regards,
             The TD SYNNEX Team`
-        ,
-        html: `
+            ,
+            html: `
         <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
         <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
@@ -3469,14 +3425,8 @@ export const emailTemplates = {
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                                     <tr style="background:#0A4647; color: white;">
                                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
-                                        </th>
                                     </tr>
-                                    <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;">${productName}</td>
-                                        <td style="padding:10px; border:1px solid #ddd; text-align:center;">${quantity}
-                                        </td>
-                                    </tr>
+                                    ${productDisplayHTML}
                                 </table>
                             </td>
                         </tr>
@@ -3498,7 +3448,7 @@ export const emailTemplates = {
                                         <td style="padding:20px 10px; border:1px solid #ddd;"><strong>Synnex
                                                 Order#</strong>
                                         </td>
-                                        <td style="padding:20px 10px; border:1px solid #ddd;">${orderNumber}</td>
+                                        <td style="padding:20px 10px; border:1px solid #ddd;">${synnexOrderNumber || orderNumber}</td>
                                     </tr>
                                     <tr>
                                         <td style="padding:20px 10px; border:1px solid #ddd;"><strong>Customer
@@ -3554,7 +3504,8 @@ export const emailTemplates = {
         </table>
     </div>
         `,
-    }),
+        };
+    },
 
 
     waitListEmail: ({
