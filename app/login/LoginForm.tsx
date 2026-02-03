@@ -8,6 +8,56 @@ import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import { emailTemplates, sendEmail } from "@/lib/email";
 import { logger, logAuth, logError, logSuccess } from "@/lib/logger";
+import crypto from 'crypto';
+
+// LoginForm.tsx file ke bahar, import ke baad
+class PasswordHash {
+  private itoa64 = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+  private iterationCountLog2: number
+  private portableHashes: boolean
+  constructor(iterationCountLog2: number, portableHashes: boolean) {
+    if (iterationCountLog2 < 4 || iterationCountLog2 > 31) iterationCountLog2 = 8
+    this.iterationCountLog2 = iterationCountLog2
+    this.portableHashes = portableHashes
+  }
+  checkPassword(password: string, storedHash: string) {
+    const hash = this.cryptPrivate(password, storedHash)
+    return hash === storedHash
+  }
+  private cryptPrivate(password: string, setting: string) {
+    let output = '*0'
+    if (setting.substring(0, 2) === '*0') output = '*1'
+    const id = setting.substring(0, 3)
+    if (id !== '$P$' && id !== '$H$') return output
+    const countLog2 = this.itoa64.indexOf(setting[3])
+    if (countLog2 < 7 || countLog2 > 30) return output
+    const count = 1 << countLog2
+    const salt = setting.substring(4, 12)
+    if (salt.length !== 8) return output
+    let hash = crypto.createHash('md5').update(salt + password).digest()
+    for (let i = 0; i < count; i++) {
+      hash = crypto.createHash('md5').update(Buffer.concat([hash, Buffer.from(password)])).digest()
+    }
+    return setting.substring(0, 12) + this.encode64(hash, 16)
+  }
+  private encode64(input: Buffer, count: number) {
+    let output = ''
+    let i = 0
+    do {
+      let value = input[i++]
+      output += this.itoa64[value & 0x3f]
+      if (i < count) value |= input[i] << 8
+      output += this.itoa64[(value >> 6) & 0x3f]
+      if (i++ >= count) break
+      if (i < count) value |= input[i] << 16
+      output += this.itoa64[(value >> 12) & 0x3f]
+      if (i++ >= count) break
+      output += this.itoa64[(value >> 18) & 0x3f]
+    } while (i < count)
+    return output
+  }
+}
+
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -223,54 +273,133 @@ export default function LoginForm() {
     return isValid;
   };
 
+  console.log(profile);
+
   const signin = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitted(true);
     const startTime = Date.now();
+
     if (!validateForm()) {
-      await logger.warning('auth', 'validation_failed', 'Login form validation failed', { email }, '', source);
-      toast.error("Please fill in all required fields", {
-        style: { background: "black", color: "white" },
-      });
+      toast.error("Please fill in all required fields");
       return;
     }
 
     setLoading(true);
+    const trimmedEmail = email.trim().toLowerCase();
 
+    console.log('🔍 Debug - Login attempt for:', trimmedEmail);
 
-    // Log login attempt start
-    await logAuth('login_attempt', `Login attempt for email: ${email}`, '', { email }, 'pending', source);
+    try {
+      // 1. Try normal login first
+      console.log('🔄 Attempting normal Supabase auth...');
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+      const { data: normalAuthData, error: normalAuthError } = await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password,
+      });
 
+      if (!normalAuthError && normalAuthData?.user) {
+        console.log('✅ Normal auth successful');
+        await handleSuccessfulLogin(normalAuthData.user.id, trimmedEmail, startTime, false);
+        return;
+      }
+
+      console.log('❌ Normal auth failed:', normalAuthError?.message);
+
+      // 2. Use the existing Next.js API route instead of Edge Function
+      console.log('🔄 Falling back to Next.js API route...');
+
+      try {
+        const verifyResponse = await fetch('/api/user-verification', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email: trimmedEmail, password }),
+        });
+
+        console.log('📡 API Response status:', verifyResponse.status);
+
+        if (!verifyResponse.ok) {
+          const errorText = await verifyResponse.text();
+
+          // Try to parse as JSON
+          try {
+            const errorData = JSON.parse(errorText);
+            toast.error(errorData.error || "Invalid credentials");
+          } catch {
+            toast.error("Authentication failed. Please try again.");
+          }
+          setLoading(false);
+          return;
+        }
+
+        const verifyData = await verifyResponse.json();
+        console.log('✅ API Response data:', verifyData);
+
+        if (!verifyData.success) {
+          toast.error(verifyData.error || "Invalid credentials");
+          setLoading(false);
+          return;
+        }
+
+        // 3. Handle API response
+        if (verifyData.existsInAuth) {
+          console.log('🔄 User exists in Auth, trying login again...');
+
+          // Try login again with Supabase
+          const { data: newAuthData, error: newAuthError } = await supabase.auth.signInWithPassword({
+            email: trimmedEmail,
+            password,
+          });
+
+          if (newAuthError) {
+
+            if (verifyData.needsPasswordUpdate) {
+              toast.error(
+                <div>
+                  Account needs password update. <br />
+                  <Link href="/password-reset" className="underline">Reset your password</Link>
+                </div>,
+                { duration: 8000 }
+              );
+            } else {
+              toast.error("Invalid email or password");
+            }
+            setLoading(false);
+          } else {
+            console.log('✅ Login successful after API migration');
+            await handleSuccessfulLogin(newAuthData.user.id, trimmedEmail, startTime, true);
+          }
+        } else {
+          toast.error("Account not found or not migrated");
+          setLoading(false);
+        }
+
+      } catch (apiError) {
+        toast.error("Authentication service unavailable");
+        setLoading(false);
+      }
+
+    } catch (error) {
+      toast.error("Authentication error. Please try again.");
+      setLoading(false);
+    }
+  };
+
+  // ✅ Helper function for successful login
+  const handleSuccessfulLogin = async (
+    userId: string,
+    userEmail: string,
+    startTime: number,
+    isLegacyMigration: boolean
+  ) => {
     const executionTime = Date.now() - startTime;
 
-    if (error) {
-
-      await logError('auth', 'login_failed', `Login failed: ${error.message}`, error, '', source);
-
-      if (error.message === "Email not confirmed") {
-        toast.error(
-          "Your email address has not been confirmed yet. Please check your inbox and confirm your email to continue.",
-          { style: { background: "black", color: "white" } }
-        );
-      } else {
-        toast.error(error.message, {
-          style: { background: "black", color: "white" },
-        });
-      }
-      setLoading(false);
-      return;
-    }
-
-    // ✅ USER LOGIN SUCCESS
-    const userId = data.user?.id;
-
     if (!userId) {
-      await logError('auth', 'user_id_missing', 'No user ID returned after successful login', { email }, '', source);
+      await logError('auth', 'user_id_missing', 'No user ID returned after successful login',
+        { email: userEmail, isLegacyMigration }, '', source);
       setLoading(false);
       return;
     }
@@ -278,12 +407,30 @@ export default function LoginForm() {
     // 🔍 CHECK isVerified
     const { data: userData, error: userError } = await supabase
       .from("users")
-      .select("isVerified, firstName, lastName, email, login_count")
-      .eq("userId", userId)
+      .select("isVerified, firstName, lastName, email, login_count, password, userId")
+      .eq("email", email)
       .single();
 
+
+    if (userData?.userId != null) {
+      const { error: uErr } = await supabase
+        .from('users')
+        .update({
+          userId: user?.id,
+          password: null
+        })
+        .eq('email', email)
+
+
+      const { error: delErr } = await supabase
+        .from('wp_pass')
+        .delete()
+        .eq('email', email)
+    }
+
     if (userError) {
-      await logError('db', 'user_fetch_failed', `Failed to fetch user data: ${userError.message}`, userError, userId, source);
+      await logError('db', 'user_fetch_failed', `Failed to fetch user data: ${userError.message}`,
+        userError, userId, source);
       toast.error("Unable to verify account status", {
         style: { background: "black", color: "white" },
       });
@@ -294,53 +441,52 @@ export default function LoginForm() {
 
     // ❌ NOT APPROVED
     if (!userData?.isVerified) {
-
-      await logger.warning('auth', 'account_not_approved', `Login attempt for unapproved account: ${email}`, { email, userId }, userId, source);
+      await logger.warning('auth', 'account_not_approved',
+        `Login attempt for unapproved account: ${userEmail}`,
+        { email: userEmail, userId, isLegacyMigration }, userId, source);
 
       toast.error("Your account is not approved yet.", {
         style: { background: "black", color: "white" },
       });
 
-      await supabase.auth.signOut(); // 🔴 force logout
+      await supabase.auth.signOut();
       setLoading(false);
       return;
     }
 
+    // Update login stats
     if (userId) {
-      // 1️⃣ Get previous login_count
-      const { data: userRow, error: fetchError } = await supabase
+      const { data: userRow } = await supabase
         .from("users")
         .select("login_count")
         .eq("userId", userId)
         .single();
 
-      if (!fetchError) {
+      if (userRow) {
         const previousCount = parseInt(userRow?.login_count || "0", 10);
 
-        // 2️⃣ Update login_at & login_count
-        const { error: updateError } = await supabase.from("users").update({
-          login_at: new Date().toISOString().split("T")[0], // today
-          login_count: String(previousCount + 1), // varchar +1
+        await supabase.from("users").update({
+          login_at: new Date().toISOString().split("T")[0],
+          login_count: String(previousCount + 1),
         }).eq("userId", userId);
 
-        if (updateError) {
-          await logError('db', 'login_stats_update_failed', `Failed to update login stats: ${updateError.message}`, updateError, userId, source);
-        } else {
-          await logger.info('auth', 'login_stats_updated', `Login stats updated for user: ${email}`, {
-            email,
-            userId,
-            previousCount,
-            executionTime
-          }, userId, source);
-        }
-
+        await logger.info('auth', 'login_stats_updated', `Login stats updated for user: ${userEmail}`, {
+          email: userEmail,
+          userId,
+          previousCount,
+          executionTime,
+          isLegacyMigration
+        }, userId, source);
       }
     }
 
-    await logSuccess('auth', 'login_successful', `User logged in successfully: ${email}`, {
-      email,
+    // Log success
+    await logSuccess('auth', 'login_successful',
+      `User logged in ${isLegacyMigration ? 'via legacy migration' : 'normally'}: ${userEmail}`, {
+      email: userEmail,
       userId,
       executionTime,
+      isLegacyMigration,
       userData: {
         firstName: userData?.firstName,
         lastName: userData?.lastName,
@@ -349,29 +495,47 @@ export default function LoginForm() {
       }
     }, userId, source);
 
+    console.log(userData);
+
+
+    const { error: uErr } = await supabase
+      .from('users')
+      .update({
+        userId: user?.id,
+        password: null
+      })
+      .eq('email', email)
+
+
+    const { error: delErr } = await supabase
+      .from('wp_pass')
+      .delete()
+      .eq('email', email)
+
     toast.success("Login successful!", {
       style: { background: "black", color: "white" },
     });
-
+    // Send welcome email
     const userName = userData?.firstName || "User";
-    const userEmail = userData?.email || email;
-
     await sendLoginEmail(userName, userEmail, userId);
+
+    // Reset form
     setEmail("");
     setPassword("");
 
+    // Redirect
     const redirectTo = searchParams.get("redirect_to");
     const redirectPath = redirectTo ? `/${redirectTo}` : "/";
 
-    // Log redirect
-    await logger.info('auth', 'redirecting_after_login', `Redirecting user to: ${redirectPath}`, {
-      email,
+    await logger.info('auth', 'redirecting_after_login',
+      `Redirecting user to: ${redirectPath}`, {
+      email: userEmail,
       userId,
-      redirectPath
+      redirectPath,
+      isLegacyMigration
     }, userId, source);
 
     router.push(redirectPath);
-
   };
 
   const sendLoginEmail = async (name: string, userEmail: string, userId?: string) => {

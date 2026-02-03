@@ -48,19 +48,19 @@ export async function POST(request: NextRequest) {
       senderFrom = `${senderFrom} <${process.env.SMTP_USER}>`;
     }
 
-    // Send email
-    const info = await transporter.sendMail({
-      from: senderFrom,
-      to,
-      subject,
-      text,
-      html: html || `<p>${text}</p>`,
-    });
+    // // Send email
+    // const info = await transporter.sendMail({
+    //   from: senderFrom,
+    //   to,
+    //   subject,
+    //   text,
+    //   html: html || `<p>${text}</p>`,
+    // });
 
     return NextResponse.json({
       success: true,
-      messageId: info.messageId,
-      message: "Email sent successfully",
+      // messageId: info.messageId,
+      message: "Email not sent successfully",
     });
   } catch (error: any) {
     console.error("Nodemailer Error:", error);

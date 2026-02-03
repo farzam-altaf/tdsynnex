@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronDown, ExternalLink, Pencil } from "lucide-react"
+import { CheckCircle, ChevronDown, ExternalLink, Pencil, XCircle } from "lucide-react"
 import {
     Select,
     SelectContent,
@@ -3169,10 +3169,14 @@ export default function Page() {
 
     return (
         <div className="container mx-auto py-10 px-5">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold">Order #{order.order_no}</h1>
-                <p className="text-gray-600 mt-2">Order Date: {order.order_date}</p>
-            </div>
+            {order.order_status !== process.env.NEXT_PUBLIC_STATUS_AWAITING && profile?.role !== process.env.NEXT_PUBLIC_SUBSCRIBER && (
+                <>
+                    <div className="mb-6">
+                        <h1 className="text-2xl font-bold">Order #{order.order_no}</h1>
+                        <p className="text-gray-600 mt-2">Order Date: {order.order_date}</p>
+                    </div>
+                </>
+            )}
 
             {/* Main content with 70/30 split */}
             <div className="flex flex-col lg:flex-row gap-6">
@@ -3180,39 +3184,45 @@ export default function Page() {
                 <div className="lg:w-[70%] space-y-6">
                     {/* Orders Section with Approve/Reject Buttons */}
                     <div>
-                        <h2 className="text-lg font-semibold mb-4">Order Details</h2>
+                        {order.order_status !== process.env.NEXT_PUBLIC_STATUS_AWAITING && profile?.role !== process.env.NEXT_PUBLIC_SUBSCRIBER && (
+                            <>
+                                <h2 className="text-lg font-semibold mb-4">Order Details</h2>
+                            </>
+                        )}
                         {order.order_status === process.env.NEXT_PUBLIC_STATUS_AWAITING && profile?.role !== process.env.NEXT_PUBLIC_SUBSCRIBER ? (
-                            <Table className="border">
-                                <TableHeader>
+                            <>
+                                <Table className="hover:bg-white">
+                                    {/* <TableHeader>
                                     <TableRow>
                                         <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }}>Approve</TableHead>
                                         <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }}>Reject</TableHead>
                                     </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    <TableRow>
-                                        <TableCell>
-                                            <Button
-                                                onClick={handleApprove}
-                                                className="bg-green-600 hover:bg-green-700 text-white cursor-pointer"
-                                                disabled={!isActionAuthorized}
-                                            >
-                                                Approve Order
-                                            </Button>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Button
-                                                onClick={handleReject}
-                                                className="bg-red-600 hover:bg-red-700 text-white cursor-pointer"
-                                                variant="destructive"
-                                                disabled={!isActionAuthorized}
-                                            >
-                                                Reject Order
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                </TableBody>
-                            </Table>
+                                </TableHeader> */}
+                                    <div className="flex">
+                                        <Button
+                                            onClick={handleApprove}
+                                            className="bg-[#0A4647] hover:bg-[#093131] text-white cursor-pointer flex items-center gap-2"
+                                            disabled={!isActionAuthorized}
+                                        >
+                                            <CheckCircle size={18} />
+                                            Approve Order
+                                        </Button>
+                                        <Button
+                                            onClick={handleReject}
+                                            className="bg-red-700 hover:bg-red-800 text-white cursor-pointer mx-4 flex items-center gap-2"
+                                            variant="destructive"
+                                            disabled={!isActionAuthorized}
+                                        >
+                                            <XCircle size={18} />
+                                            Reject Order
+                                        </Button>
+                                    </div>
+                                </Table>
+                                <div className="my-6">
+                                    <h1 className="text-2xl font-bold">Order #{order.order_no}</h1>
+                                    <p className="text-gray-600 mt-2">Order Date: {order.order_date}</p>
+                                </div>
+                            </>
                         ) : (
                             <Table className="border">
                                 {order.order_status == process.env.NEXT_PUBLIC_STATUS_REJECTED ? (
@@ -3633,6 +3643,6 @@ export default function Page() {
                 </div>
             </div>
             {renderReturnModal()}
-        </div>
+        </div >
     )
 }

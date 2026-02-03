@@ -972,7 +972,7 @@ export default function Navbar() {
                 {navigation.map((item) => {
                   const isProducts = item.name === 'Products'
                   const finalHref =
-                    isProducts && !isLoggedIn ? '/login/?redirect_to=products' : item.href
+                    isProducts && !isLoggedIn ? '/login/?redirect_to=product-category/alldevices' : item.href
 
                   const isActive = pathname === finalHref
 

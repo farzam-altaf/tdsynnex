@@ -6,8 +6,9 @@ export const supabase: SupabaseClient = createClient(
     process.env.NEXT_PUBLIC_ANON_KEY!,
     {
         auth: {
-            persistSession: true,  // ✅ MUST
-            detectSessionInUrl: true, // optional for OAuth redirects
-        },
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
+        }
     }
 )

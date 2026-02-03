@@ -39,6 +39,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return;
         }
 
+        const { data: existingUser, error: fetchErr } = await supabase
+            .from("users")
+            .select("*")
+            .eq("email", authUser.email)
+            .single();
+
+        if (existingUser?.userId == null) {
+            const { error: uErr } = await supabase
+                .from('users')
+                .update({
+                    userId: authUser?.id,
+                    password: null
+                })
+                .eq('email', authUser.email)
+                
+                console.log(authUser)
+        }
+
         const { data, error } = await supabase
             .from("users")
             .select("*")
@@ -61,6 +79,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const { data } = await supabase.auth.getSession();
             const authUser = data.session?.user ?? null;
             setUser(authUser);
+
+
 
             if (authUser) {
                 setIsLoggedIn(true);

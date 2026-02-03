@@ -13,7 +13,7 @@ import {
     type SortingState,
     type VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown, Search, Filter, Calendar, Eye } from "lucide-react"
+import { ArrowUpDown, ChevronDown, Search, Filter, Calendar, Eye, ChevronLeft, ChevronRight } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useAuth } from "../context/AuthContext"
@@ -88,10 +88,12 @@ export default function LogsPage() {
     const [dateTo, setDateTo] = useState<string>("");
     const [searchQuery, setSearchQuery] = useState<string>("");
 
-    // Table states
+    // Table states - initialize with default values
     const [sorting, setSorting] = useState<SortingState>([{ id: "created_at", desc: true }])
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
     const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+
+    // Pagination state for the table
     const [pagination, setPagination] = useState({
         pageIndex: 0,
         pageSize: 50,
@@ -120,27 +122,24 @@ export default function LogsPage() {
 
     }, [loading, isLoggedIn, profile, router, isAdmin]);
 
-    const fetchLogs = async () => {
+    const fetchLogs = async (pageIndex: number, pageSize: number) => {
         try {
             setIsLoading(true);
             setError(null);
 
-            // Debug: Log the Supabase client state
-            console.log('Fetching logs with Supabase client:', {
-                url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-                table: 'logs',
-                pagination: pagination,
-                filters: { typeFilter, levelFilter, statusFilter, dateFrom, dateTo, searchQuery }
-            });
+            // 🚨 IMPORTANT: Clear previous logs while loading new data
+            setLogs([]); // Add this line to clear previous data
 
-            // Start building the query - simplify first to test basic connection
+            console.log('Fetching logs for page:', { pageIndex, pageSize });
+
+            // Start building the query
             let query = supabase
                 .from('logs')
                 .select('*', { count: 'exact' })
                 .order('created_at', { ascending: false })
                 .range(
-                    pagination.pageIndex * pagination.pageSize,
-                    (pagination.pageIndex + 1) * pagination.pageSize - 1
+                    pageIndex * pageSize,
+                    (pageIndex + 1) * pageSize - 1
                 );
 
             // Apply filters
@@ -168,19 +167,12 @@ export default function LogsPage() {
                 query = query.or(`action.ilike.%${searchQuery}%,message.ilike.%${searchQuery}%`);
             }
 
-            console.log('Executing Supabase query...');
             const { data, error: supabaseError, count } = await query;
 
             if (supabaseError) {
-                // Check if supabaseError is an object and log it properly
-                console.error('Supabase Error Object:', supabaseError);
-                console.error('Supabase Error Type:', typeof supabaseError);
-
-                // Try different ways to extract error message
                 let errorMessage = 'Database query failed';
 
                 if (supabaseError && typeof supabaseError === 'object') {
-                    // Check for PostgREST error format
                     if ('message' in supabaseError && supabaseError.message) {
                         errorMessage = supabaseError.message;
                     } else if ('details' in supabaseError && supabaseError.details) {
@@ -190,7 +182,6 @@ export default function LogsPage() {
                     } else if ('code' in supabaseError && supabaseError.code) {
                         errorMessage = `Error code: ${supabaseError.code}`;
                     } else {
-                        // Stringify the entire object for debugging
                         errorMessage = `Database error: ${JSON.stringify(supabaseError)}`;
                     }
                 } else if (typeof supabaseError === 'string') {
@@ -203,7 +194,7 @@ export default function LogsPage() {
             console.log('Query successful, data length:', data?.length || 0);
 
             if (data) {
-                // Now fetch related data if needed
+                // Fetch related data
                 const processedLogs = await Promise.all(
                     data.map(async (log) => {
                         let userEmail = null;
@@ -254,10 +245,8 @@ export default function LogsPage() {
             }
 
         } catch (err: unknown) {
-            console.error('Error in fetchLogs:');
-            console.error('Full error:', err);
+            console.error('Error in fetchLogs:', err);
 
-            // Better error handling
             let errorMessage = 'Failed to fetch logs';
 
             if (err instanceof Error) {
@@ -265,7 +254,6 @@ export default function LogsPage() {
             } else if (typeof err === 'string') {
                 errorMessage = err;
             } else if (err && typeof err === 'object') {
-                // Check for common error formats
                 const errorObj = err as any;
                 if (errorObj.message) {
                     errorMessage = errorObj.message;
@@ -281,8 +269,6 @@ export default function LogsPage() {
             }
 
             setError(errorMessage);
-
-            // Also show toast notification
             toast.error(errorMessage);
 
         } finally {
@@ -290,10 +276,10 @@ export default function LogsPage() {
         }
     };
 
-    // Fetch data when filters change
+    // Fetch data when filters or pagination changes
     useEffect(() => {
         if (!loading && isLoggedIn && profile?.isVerified && isAdmin) {
-            fetchLogs();
+            fetchLogs(pagination.pageIndex, pagination.pageSize);
         }
     }, [
         loading,
@@ -318,7 +304,17 @@ export default function LogsPage() {
         setDateFrom("");
         setDateTo("");
         setSearchQuery("");
-        setPagination({ pageIndex: 0, pageSize: 50 });
+        setPagination(prev => ({ ...prev, pageIndex: 0 }));
+    };
+
+    // Handle page change
+    const handlePageChange = (pageIndex: number) => {
+        setPagination(prev => ({ ...prev, pageIndex }));
+    };
+
+    // Handle page size change
+    const handlePageSizeChange = (pageSize: number) => {
+        setPagination(prev => ({ ...prev, pageSize, pageIndex: 0 }));
     };
 
     // Format date for display
@@ -346,8 +342,8 @@ export default function LogsPage() {
     const getLevelBadge = (level: LogLevel) => {
         switch (level) {
             case 'error': return 'destructive';
-            case 'warning': return 'secondary'; // Changed from 'warning' to 'secondary'
-            case 'success': return 'outline';   // Changed from 'success' to 'outline'
+            case 'warning': return 'secondary';
+            case 'success': return 'outline';
             case 'info': return 'default';
             default: return 'secondary';
         }
@@ -363,7 +359,7 @@ export default function LogsPage() {
             case 'email': return 'outline';
             case 'db': return 'default';
             case 'system': return 'destructive';
-            case 'cron': return 'secondary'; // Changed from 'warning' to 'secondary'
+            case 'cron': return 'secondary';
             default: return 'secondary';
         }
     };
@@ -548,28 +544,150 @@ export default function LogsPage() {
                 const details = row.original.details;
                 const orderNo = row.original.order_no;
                 const productName = row.original.product_name;
+                const [showFullDetails, setShowFullDetails] = useState(false);
+
+                // Function to render a preview of details
+                const renderPreview = (data: any) => {
+                    if (!data) return null;
+
+                    try {
+                        const detailsObj = typeof data === 'string' ? JSON.parse(data) : data;
+                        const entries = Object.entries(detailsObj);
+                        const previewCount = 3; // Show only first 3 key-value pairs
+
+                        return (
+                            <div className="space-y-1 max-w-xs">
+                                {entries.slice(0, previewCount).map(([key, value], index) => {
+                                    const formattedKey = key
+                                        .replace(/_/g, ' ')
+                                        .replace(/\b\w/g, char => char.toUpperCase());
+
+                                    let formattedValue = value;
+                                    if (typeof value === 'boolean') {
+                                        formattedValue = value ? 'Yes' : 'No';
+                                    } else if (value === null || value === undefined) {
+                                        formattedValue = 'null';
+                                    } else if (typeof value === 'object') {
+                                        formattedValue = 'Object';
+                                    }
+
+                                    return (
+                                        <div key={index} className="text-xs">
+                                            <span className="text-gray-500 font-medium">{formattedKey}:</span>{' '}
+                                            <span className="font-mono text-gray-800 truncate block">
+                                                {String(formattedValue).substring(0, 50)}
+                                                {String(formattedValue).length > 50 ? '...' : ''}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+
+                                {entries.length > previewCount && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 text-xs p-0 text-blue-600 hover:text-blue-800 cursor-pointer"
+                                        onClick={() => setShowFullDetails(true)}
+                                    >
+                                        +{entries.length - previewCount} more
+                                    </Button>
+                                )}
+                            </div>
+                        );
+                    } catch (error) {
+                        return (
+                            <div className="text-xs">
+                                <span className="text-gray-500">Details:</span>{' '}
+                                <span className="font-mono text-gray-800 truncate block">
+                                    {String(data).substring(0, 100)}
+                                    {String(data).length > 100 ? '...' : ''}
+                                </span>
+                            </div>
+                        );
+                    }
+                };
 
                 return (
-                    <div className="text-left ps-2 space-y-1">
-                        {orderNo && (
-                            <div className="text-xs">
-                                <span className="text-gray-500">Order:</span>{' '}
-                                <span className="font-medium">{orderNo}</span>
+                    <>
+                        <div className="text-left ps-2 space-y-1 max-w-md">
+                            {orderNo && (
+                                <div className="text-xs">
+                                    <span className="text-gray-500 font-medium">Order:</span>{' '}
+                                    <span className="font-mono text-gray-800">{orderNo}</span>
+                                </div>
+                            )}
+                            {productName && (
+                                <div className="text-xs">
+                                    <span className="text-gray-500 font-medium">Product:</span>{' '}
+                                    <span className="font-mono text-gray-800">{productName}</span>
+                                </div>
+                            )}
+                            {details && renderPreview(details)}
+                        </div>
+
+                        {/* Full Details Dialog */}
+                        {showFullDetails && details && (
+                            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+                                <div className="bg-white rounded-lg p-6 max-w-2xl max-h-[80vh] overflow-auto shadow-xl">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-lg font-semibold">Full Details</h3>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setShowFullDetails(false)}
+                                            className="h-8 w-8 p-0 cursor-pointer"
+                                        >
+                                            ✕
+                                        </Button>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        {orderNo && (
+                                            <div>
+                                                <span className="text-gray-500 font-medium">Order:</span>{' '}
+                                                <span className="font-mono text-gray-800">{orderNo}</span>
+                                            </div>
+                                        )}
+                                        {productName && (
+                                            <div>
+                                                <span className="text-gray-500 font-medium">Product:</span>{' '}
+                                                <span className="font-mono text-gray-800">{productName}</span>
+                                            </div>
+                                        )}
+
+                                        {(() => {
+                                            try {
+                                                const detailsObj = typeof details === 'string' ? JSON.parse(details) : details;
+                                                return (
+                                                    <div className="space-y-2">
+                                                        <h4 className="font-medium">Details Object:</h4>
+                                                        <pre className="bg-gray-50 p-4 rounded text-sm overflow-auto border">
+                                                            {JSON.stringify(detailsObj, null, 2)}
+                                                        </pre>
+                                                    </div>
+                                                );
+                                            } catch (error) {
+                                                return (
+                                                    <div>
+                                                        <span className="text-gray-500 font-medium">Raw Details:</span>
+                                                        <pre className="bg-gray-50 p-4 rounded text-sm overflow-auto border">
+                                                            {String(details)}
+                                                        </pre>
+                                                    </div>
+                                                );
+                                            }
+                                        })()}
+                                    </div>
+                                </div>
                             </div>
                         )}
-                        {productName && (
-                            <div className="text-xs">
-                                <span className="text-gray-500">Product:</span>{' '}
-                                <span className="font-medium">{productName}</span>
-                            </div>
-                        )}
-                    </div>
+                    </>
                 )
             },
         },
     ];
 
-    // Initialize table
+    // Initialize table with the logs data
     const table = useReactTable({
         data: logs,
         columns,
@@ -581,6 +699,8 @@ export default function LogsPage() {
         getSortedRowModel: getSortedRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
         onColumnVisibilityChange: setColumnVisibility,
+        manualPagination: true, // Important: We're handling pagination manually
+        pageCount: Math.ceil(totalCount / pagination.pageSize),
         state: {
             sorting,
             columnFilters,
@@ -588,6 +708,11 @@ export default function LogsPage() {
             pagination,
         },
     });
+
+    // Calculate total pages
+    const totalPages = Math.ceil(totalCount / pagination.pageSize);
+    const currentPage = pagination.pageIndex;
+    const pageSize = pagination.pageSize;
 
     // Filter options
     const typeOptions = [
@@ -661,13 +786,18 @@ export default function LogsPage() {
                 </Button>
             </div>
 
-            {/* Filter Section */}
-            <Card className="mb-6">
-                <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                        <Filter className="h-5 w-5" />
-                        Filters
-                    </CardTitle>
+            {/* Filter Section - Improved UI */}
+            <Card className="mb-6 shadow-sm">
+                <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Filter className="h-5 w-5 text-gray-600" />
+                            <CardTitle className="text-lg">Filters</CardTitle>
+                        </div>
+                        <Badge variant="outline" className="text-xs">
+                            {totalCount} total logs
+                        </Badge>
+                    </div>
                     <CardDescription>
                         Filter logs by type, level, date, and search terms
                     </CardDescription>
@@ -676,9 +806,12 @@ export default function LogsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         {/* Type Filter */}
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Log Type</label>
+                            <label className="text-sm font-medium flex items-center gap-2">
+                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                Log Type
+                            </label>
                             <Select value={typeFilter} onValueChange={setTypeFilter}>
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full bg-white">
                                     <SelectValue placeholder="Select type" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -693,9 +826,12 @@ export default function LogsPage() {
 
                         {/* Level Filter */}
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Log Level</label>
+                            <label className="text-sm font-medium flex items-center gap-2">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                Log Level
+                            </label>
                             <Select value={levelFilter} onValueChange={setLevelFilter}>
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full bg-white">
                                     <SelectValue placeholder="Select level" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -710,9 +846,12 @@ export default function LogsPage() {
 
                         {/* Status Filter */}
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Status</label>
+                            <label className="text-sm font-medium flex items-center gap-2">
+                                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                                Status
+                            </label>
                             <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full bg-white">
                                     <SelectValue placeholder="Select status" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -727,41 +866,55 @@ export default function LogsPage() {
 
                         {/* Search */}
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Search</label>
+                            <label className="text-sm font-medium flex items-center gap-2">
+                                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                                Search
+                            </label>
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                                 <Input
                                     placeholder="Search actions/messages..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10"
+                                    className="pl-10 bg-white"
                                 />
                             </div>
                         </div>
 
                         {/* Date Range */}
-                        <div className="md:col-span-2 space-y-2">
+                        <div className="md:col-span-4 space-y-2">
                             <label className="text-sm font-medium flex items-center gap-2">
-                                <Calendar className="h-4 w-4" />
+                                <Calendar className="h-4 w-4 text-gray-600" />
                                 Date Range
                             </label>
-                            <div className="flex gap-2">
+                            <div className="flex gap-3">
                                 <div className="flex-1">
-                                    <Input
-                                        type="date"
-                                        placeholder="From"
-                                        value={dateFrom}
-                                        onChange={(e) => setDateFrom(e.target.value)}
-                                    />
+                                    <div className="relative">
+                                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                                        <Input
+                                            type="date"
+                                            placeholder="From"
+                                            value={dateFrom}
+                                            onChange={(e) => setDateFrom(e.target.value)}
+                                            className="pl-10 bg-white"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex items-center">
+                                    <span className="text-gray-400">to</span>
                                 </div>
                                 <div className="flex-1">
-                                    <Input
-                                        type="date"
-                                        placeholder="To"
-                                        value={dateTo}
-                                        onChange={(e) => setDateTo(e.target.value)}
-                                        min={dateFrom}
-                                    />
+                                    <div className="relative">
+                                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                                        <Input
+                                            type="date"
+                                            placeholder="To"
+                                            value={dateTo}
+                                            onChange={(e) => setDateTo(e.target.value)}
+                                            min={dateFrom}
+                                            className="pl-10 bg-white"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -777,245 +930,280 @@ export default function LogsPage() {
 
             {/* Logs Table */}
             <div className="w-full">
-                <div className="flex items-center py-4 gap-4">
-                    <div className="flex items-center space-x-2">
-                        <span className="text-sm text-gray-600 whitespace-nowrap">Show</span>
-                        <select
-                            value={pagination.pageSize}
-                            onChange={e => {
-                                table.setPageSize(Number(e.target.value));
-                            }}
-                            className="border rounded px-2 py-1 text-sm"
-                        >
-                            {[10, 20, 50, 100, 200].map(pageSize => (
-                                <option key={pageSize} value={pageSize}>
-                                    {pageSize}
-                                </option>
-                            ))}
-                        </select>
-                        <span className="text-sm text-gray-600 whitespace-nowrap">entries</span>
+                <div className="flex flex-col sm:flex-row items-center justify-between py-4 gap-4">
+                    <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2">
+                            <span className="text-sm text-gray-600 whitespace-nowrap">Show</span>
+                            <select
+                                value={pageSize}
+                                onChange={e => handlePageSizeChange(Number(e.target.value))}
+                                className="border rounded px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                {[10, 20, 50, 100, 200].map(size => (
+                                    <option key={size} value={size}>
+                                        {size} rows
+                                    </option>
+                                ))}
+                            </select>
+                            <span className="text-sm text-gray-600 whitespace-nowrap">per page</span>
+                        </div>
+                        <div className="text-sm text-gray-600 bg-gray-50 px-3 py-1.5 rounded">
+                            Page {currentPage + 1} of {totalPages}
+                        </div>
                     </div>
 
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="ml-auto">
-                                Columns <ChevronDown className="ml-2 h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            {table
-                                .getAllColumns()
-                                .filter((column) => column.getCanHide())
-                                .map((column) => {
-                                    return (
-                                        <DropdownMenuCheckboxItem
-                                            key={column.id}
-                                            className="capitalize"
-                                            checked={column.getIsVisible()}
-                                            onCheckedChange={(value: boolean) =>
-                                                column.toggleVisibility(!!value)
-                                            }
-                                        >
-                                            {column.id.replace('_', ' ')}
-                                        </DropdownMenuCheckboxItem>
-                                    )
-                                })}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-
-                <div className="overflow-hidden rounded-md border">
-                    <Table>
-                        <TableHeader>
-                            {table.getHeaderGroups().map((headerGroup) => (
-                                <TableRow key={headerGroup.id} className="bg-[#0A4647] hover:bg-[#0A4647]">
-                                    {headerGroup.headers.map((header) => {
+                    <div className="flex items-center space-x-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="gap-2">
+                                    <Eye className="h-4 w-4" />
+                                    Columns
+                                    <ChevronDown className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {table
+                                    .getAllColumns()
+                                    .filter((column) => column.getCanHide())
+                                    .map((column) => {
                                         return (
-                                            <TableHead
-                                                key={header.id}
-                                                className="text-white font-semibold border-r border-[#2d5f60] last:border-r-0"
+                                            <DropdownMenuCheckboxItem
+                                                key={column.id}
+                                                className="capitalize"
+                                                checked={column.getIsVisible()}
+                                                onCheckedChange={(value: boolean) =>
+                                                    column.toggleVisibility(!!value)
+                                                }
                                             >
-                                                {header.isPlaceholder
-                                                    ? null
-                                                    : flexRender(
-                                                        header.column.columnDef.header,
-                                                        header.getContext()
-                                                    )}
-                                            </TableHead>
+                                                {column.id.replace('_', ' ')}
+                                            </DropdownMenuCheckboxItem>
                                         )
                                     })}
-                                </TableRow>
-                            ))}
-                        </TableHeader>
-                        <TableBody>
-                            {table.getRowModel().rows?.length ? (
-                                table.getRowModel().rows.map((row) => (
-                                    <TableRow
-                                        key={row.id}
-                                        className="hover:bg-gray-50"
-                                    >
-                                        {row.getVisibleCells().map((cell) => (
-                                            <TableCell
-                                                key={cell.id}
-                                                className="border-r border-gray-200 last:border-r-0 align-middle"
-                                            >
-                                                {flexRender(
-                                                    cell.column.columnDef.cell,
-                                                    cell.getContext()
-                                                )}
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-                                ))
-                            ) : (
-                                <TableRow>
-                                    <TableCell
-                                        colSpan={columns.length}
-                                        className="h-24 text-center border-r-0"
-                                    >
-                                        {isLoading ? (
-                                            <div className="flex items-center justify-center">
-                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                                                <span className="ml-2">Loading logs...</span>
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-8">
-                                                <Eye className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                                                <p className="text-gray-500">No logs found matching your criteria.</p>
-                                                <p className="text-gray-400 text-sm mt-1">Try adjusting your filters.</p>
-                                            </div>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
 
-                {/* Pagination */}
-                <div className="flex flex-col gap-4 py-4">
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                        {/* Page info for desktop */}
-                        <div className="text-sm text-gray-600">
-                            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()} • Showing {logs.length} of {totalCount} logs
-                        </div>
+                <div className="overflow-hidden rounded-lg border shadow-sm">
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                {table.getHeaderGroups().map((headerGroup) => (
+                                    <TableRow key={headerGroup.id} className="bg-[#0A4647] hover:bg-[#0A4647]">
+                                        {headerGroup.headers.map((header) => {
+                                            return (
+                                                <TableHead
+                                                    key={header.id}
+                                                    className="text-white font-semibold border-r border-[#2d5f60] last:border-r-0"
+                                                >
+                                                    {header.isPlaceholder
+                                                        ? null
+                                                        : flexRender(
+                                                            header.column.columnDef.header,
+                                                            header.getContext()
+                                                        )}
+                                                </TableHead>
+                                            )
+                                        })}
+                                    </TableRow>
+                                ))}
+                            </TableHeader>
+                            <TableBody>
+                                {table.getRowModel().rows?.length ? (
+                                    table.getRowModel().rows.map((row) => (
+                                        <TableRow
+                                            key={row.id}
+                                            className="hover:bg-gray-50 border-b"
+                                        >
+                                            {row.getVisibleCells().map((cell) => (
+                                                <TableCell
+                                                    key={cell.id}
+                                                    className="border-r border-gray-200 last:border-r-0 align-middle py-3"
+                                                >
+                                                    {flexRender(
+                                                        cell.column.columnDef.cell,
+                                                        cell.getContext()
+                                                    )}
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow>
+                                        <TableCell
+                                            colSpan={columns.length}
+                                            className="h-24 text-center border-r-0"
+                                        >
+                                            {isLoading ? (
+                                                <div className="flex flex-col items-center justify-center py-8">
+                                                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#0A4647] mb-4"></div>
+                                                    <p className="text-gray-600">Loading logs...</p>
+                                                    <p className="text-gray-400 text-sm mt-1">Please wait while we fetch your data.</p>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-8">
+                                                    <Eye className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                                                    <p className="text-gray-500">No logs found matching your criteria.</p>
+                                                    <p className="text-gray-400 text-sm mt-1">Try adjusting your filters or reset them.</p>
+                                                </div>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </div>
 
-                        <div className="flex items-center justify-center space-x-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => table.previousPage()}
-                                disabled={!table.getCanPreviousPage()}
-                            >
-                                Previous
-                            </Button>
+                {/* Pagination - Enhanced UI */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-6">
+                    <div className="text-sm text-gray-600">
+                        Showing {(currentPage * pageSize) + 1} to {Math.min((currentPage + 1) * pageSize, totalCount)} of {totalCount} entries
+                    </div>
 
-                            <div className="flex items-center space-x-1">
-                                {(() => {
-                                    const pageCount = table.getPageCount();
-                                    const currentPage = table.getState().pagination.pageIndex;
+                    <div className="flex items-center space-x-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(0)}
+                            disabled={currentPage === 0}
+                            className="gap-1"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                            <ChevronLeft className="h-4 w-4 -ml-2" />
+                        </Button>
 
-                                    if (pageCount <= 5) {
-                                        return Array.from({ length: pageCount }, (_, i) => i).map(pageIndex => (
-                                            <Button
-                                                key={pageIndex}
-                                                variant={currentPage === pageIndex ? "default" : "outline"}
-                                                size="sm"
-                                                onClick={() => table.setPageIndex(pageIndex)}
-                                                className="w-8 h-8 p-0"
-                                            >
-                                                {pageIndex + 1}
-                                            </Button>
-                                        ));
-                                    }
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage === 0}
+                            className="gap-1"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                        </Button>
 
-                                    const pages = [];
+                        <div className="flex items-center space-x-1">
+                            {(() => {
+                                const pageCount = totalPages;
+                                const current = currentPage;
+
+                                if (pageCount <= 7) {
+                                    return Array.from({ length: pageCount }, (_, i) => i).map(pageIndex => (
+                                        <Button
+                                            key={pageIndex}
+                                            variant={current === pageIndex ? "default" : "outline"}
+                                            size="sm"
+                                            onClick={() => handlePageChange(pageIndex)}
+                                            className="w-9 h-9 p-0"
+                                        >
+                                            {pageIndex + 1}
+                                        </Button>
+                                    ));
+                                }
+
+                                const pages = [];
+                                pages.push(
+                                    <Button
+                                        key={0}
+                                        variant={current === 0 ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => handlePageChange(0)}
+                                        className="w-9 h-9 p-0"
+                                    >
+                                        1
+                                    </Button>
+                                );
+
+                                let start = Math.max(1, current - 2);
+                                let end = Math.min(pageCount - 2, current + 2);
+
+                                if (current <= 3) {
+                                    start = 1;
+                                    end = 4;
+                                }
+
+                                if (current >= pageCount - 4) {
+                                    start = pageCount - 5;
+                                    end = pageCount - 2;
+                                }
+
+                                if (start > 1) {
+                                    pages.push(
+                                        <span key="ellipsis1" className="px-2 text-gray-500">
+                                            ...
+                                        </span>
+                                    );
+                                }
+
+                                for (let i = start; i <= end; i++) {
                                     pages.push(
                                         <Button
-                                            key={0}
-                                            variant={currentPage === 0 ? "default" : "outline"}
+                                            key={i}
+                                            variant={current === i ? "default" : "outline"}
                                             size="sm"
-                                            onClick={() => table.setPageIndex(0)}
-                                            className="w-8 h-8 p-0"
+                                            onClick={() => handlePageChange(i)}
+                                            className="w-9 h-9 p-0"
                                         >
-                                            1
+                                            {i + 1}
                                         </Button>
                                     );
+                                }
 
-                                    let start = Math.max(1, currentPage - 1);
-                                    let end = Math.min(pageCount - 2, currentPage + 1);
-
-                                    if (currentPage <= 2) {
-                                        start = 1;
-                                        end = 3;
-                                    }
-
-                                    if (currentPage >= pageCount - 3) {
-                                        start = pageCount - 4;
-                                        end = pageCount - 2;
-                                    }
-
-                                    if (start > 1) {
-                                        pages.push(
-                                            <span key="ellipsis1" className="px-2 text-gray-500">
-                                                ...
-                                            </span>
-                                        );
-                                    }
-
-                                    for (let i = start; i <= end; i++) {
-                                        pages.push(
-                                            <Button
-                                                key={i}
-                                                variant={currentPage === i ? "default" : "outline"}
-                                                size="sm"
-                                                onClick={() => table.setPageIndex(i)}
-                                                className="w-8 h-8 p-0"
-                                            >
-                                                {i + 1}
-                                            </Button>
-                                        );
-                                    }
-
-                                    if (end < pageCount - 2) {
-                                        pages.push(
-                                            <span key="ellipsis2" className="px-2 text-gray-500">
-                                                ...
-                                            </span>
-                                        );
-                                    }
-
+                                if (end < pageCount - 2) {
                                     pages.push(
-                                        <Button
-                                            key={pageCount - 1}
-                                            variant={currentPage === pageCount - 1 ? "default" : "outline"}
-                                            size="sm"
-                                            onClick={() => table.setPageIndex(pageCount - 1)}
-                                            className="w-8 h-8 p-0"
-                                        >
-                                            {pageCount}
-                                        </Button>
+                                        <span key="ellipsis2" className="px-2 text-gray-500">
+                                            ...
+                                        </span>
                                     );
+                                }
 
-                                    return pages;
-                                })()}
-                            </div>
+                                pages.push(
+                                    <Button
+                                        key={pageCount - 1}
+                                        variant={current === pageCount - 1 ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => handlePageChange(pageCount - 1)}
+                                        className="w-9 h-9 p-0"
+                                    >
+                                        {pageCount}
+                                    </Button>
+                                );
 
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => table.nextPage()}
-                                disabled={!table.getCanNextPage()}
-                            >
-                                Next
-                            </Button>
+                                return pages;
+                            })()}
                         </div>
+
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={currentPage >= totalPages - 1}
+                            className="gap-1"
+                        >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePageChange(totalPages - 1)}
+                            disabled={currentPage >= totalPages - 1}
+                            className="gap-1"
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="h-4 w-4 -mr-2" />
+                        </Button>
                     </div>
                 </div>
             </div>
 
             {/* Stats Section */}
-            <Card className="mt-8">
+            <Card className="mt-8 shadow-sm">
                 <CardHeader>
                     <CardTitle className="text-lg">Log Statistics</CardTitle>
                     <CardDescription>
@@ -1024,28 +1212,52 @@ export default function LogsPage() {
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                            <div className="text-sm text-blue-600 font-medium">Info Logs</div>
-                            <div className="text-2xl font-bold text-blue-800">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition-colors">
+                            <div className="text-sm text-blue-600 font-medium flex items-center gap-2">
+                                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                                Info Logs
+                            </div>
+                            <div className="text-2xl font-bold text-blue-800 mt-2">
                                 {logs.filter(log => log.level === 'info').length}
                             </div>
+                            <div className="text-xs text-blue-600 mt-1">
+                                {((logs.filter(log => log.level === 'info').length / logs.length) * 100 || 0).toFixed(1)}%
+                            </div>
                         </div>
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                            <div className="text-sm text-green-600 font-medium">Success Logs</div>
-                            <div className="text-2xl font-bold text-green-800">
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 hover:bg-green-100 transition-colors">
+                            <div className="text-sm text-green-600 font-medium flex items-center gap-2">
+                                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                Success Logs
+                            </div>
+                            <div className="text-2xl font-bold text-green-800 mt-2">
                                 {logs.filter(log => log.level === 'success').length}
                             </div>
-                        </div>
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                            <div className="text-sm text-yellow-600 font-medium">Warning Logs</div>
-                            <div className="text-2xl font-bold text-yellow-800">
-                                {logs.filter(log => log.level === 'warning').length}
+                            <div className="text-xs text-green-600 mt-1">
+                                {((logs.filter(log => log.level === 'success').length / logs.length) * 100 || 0).toFixed(1)}%
                             </div>
                         </div>
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                            <div className="text-sm text-red-600 font-medium">Error Logs</div>
-                            <div className="text-2xl font-bold text-red-800">
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 hover:bg-yellow-100 transition-colors">
+                            <div className="text-sm text-yellow-600 font-medium flex items-center gap-2">
+                                <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                                Warning Logs
+                            </div>
+                            <div className="text-2xl font-bold text-yellow-800 mt-2">
+                                {logs.filter(log => log.level === 'warning').length}
+                            </div>
+                            <div className="text-xs text-yellow-600 mt-1">
+                                {((logs.filter(log => log.level === 'warning').length / logs.length) * 100 || 0).toFixed(1)}%
+                            </div>
+                        </div>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 hover:bg-red-100 transition-colors">
+                            <div className="text-sm text-red-600 font-medium flex items-center gap-2">
+                                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                                Error Logs
+                            </div>
+                            <div className="text-2xl font-bold text-red-800 mt-2">
                                 {logs.filter(log => log.level === 'error').length}
+                            </div>
+                            <div className="text-xs text-red-600 mt-1">
+                                {((logs.filter(log => log.level === 'error').length / logs.length) * 100 || 0).toFixed(1)}%
                             </div>
                         </div>
                     </div>
