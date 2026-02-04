@@ -36,12 +36,34 @@ export default function Page() {
         howHelped: "",
         submittedBy: profile?.email || "",
     });
+    const router = useRouter();
+
+
+
+    // Check if current user is admin
+    const isShopManager = profile?.role === shopManager;
+
+    // Handle auth check
+    useEffect(() => {
+        if (loading) return;
+
+        if (!isLoggedIn || !profile?.isVerified) {
+            router.replace(`/login/?redirect_to=wins`);
+            return;
+        }
+
+        if (isShopManager) {
+            toast.error("Access denied. Admin privileges required.");
+            router.replace('/product-category/alldevices');
+            return;
+        }
+
+    }, [loading, isLoggedIn, profile, router, isShopManager]);
 
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [products, setProducts] = useState<any[]>([]);
     const [showOtherInput, setShowOtherInput] = useState(false);
     const [loadingProducts, setLoadingProducts] = useState(false);
-    const router = useRouter();
 
     const source = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/wins`;
 
@@ -85,7 +107,7 @@ export default function Page() {
                 query = query.not('order_status', 'in', `(${statusAwaiting},${statusRejected})`);
             }
 
-            if (profile?.role === subscriber) {
+            if (profile?.role === subscriber || profile?.role === shopManager) {
                 query = query.eq('order_by', profile?.id);
             }
 
@@ -544,7 +566,7 @@ export default function Page() {
                             isOther: false,
                             otherDesc: null,
                             reseller: formData.resellerName,
-                            orderHash: orderHash, // Use orderHash from orders table
+                            orderHash: orderHash,
                             resellerAccount: formData.resellerAccountNumber,
                             customerName: formData.customerName,
                             units: parseInt(formData.numberOfUnits),
@@ -1026,7 +1048,7 @@ export default function Page() {
                                                 value="product"
                                                 checked={formData.deviceType === "product"}
                                                 onChange={handleChange}
-                                                className="h-4 w-4 text-[#3ba1da] focus:ring-[#3ba1da] mt-1 flex-shrink-0"
+                                                className="h-4 w-4 text-[#3ba1da] focus:ring-[#3ba1da] mt-1 shrink-0"
                                             />
                                             <div className="flex-1 min-w-0">
                                                 <span className="font-medium text-gray-700 text-sm">
@@ -1045,7 +1067,7 @@ export default function Page() {
                                                 value="other"
                                                 checked={formData.deviceType === "other"}
                                                 onChange={handleChange}
-                                                className="h-4 w-4 text-[#3ba1da] focus:ring-[#3ba1da] mt-1 flex-shrink-0"
+                                                className="h-4 w-4 text-[#3ba1da] focus:ring-[#3ba1da] mt-1 shrink-0"
                                             />
                                             <div className="flex-1 min-w-0">
                                                 <span className="font-medium text-gray-700 text-sm">Other Product</span>
@@ -1083,7 +1105,7 @@ export default function Page() {
                                                                     type="checkbox"
                                                                     checked={formData.selectedProducts.includes(product.id)}
                                                                     onChange={() => handleProductSelection(product.id)}
-                                                                    className="h-4 w-4 text-[#3ba1da] focus:ring-[#3ba1da] mt-1 flex-shrink-0"
+                                                                    className="h-4 w-4 text-[#3ba1da] focus:ring-[#3ba1da] mt-1 shrink-0"
                                                                 />
                                                                 <div className="flex-1 min-w-0">
                                                                     <span className="font-medium text-gray-700 text-sm">
