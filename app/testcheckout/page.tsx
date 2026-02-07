@@ -128,7 +128,7 @@ export default function Page() {
                 },
                 status: 'failed'
             });
-            router.replace('/login/?redirect_to=checkout');
+            router.replace('/login/?redirect_to=testcheckout');
         } else {
             setAuthChecked(true);
             logActivity({
@@ -153,26 +153,6 @@ export default function Page() {
         }
     }, [authChecked, authInitialized]);
 
-    useEffect(() => {
-        if (cartCount < 1) {
-            if (!cartLoading) {
-                logActivity({
-                    type: 'cart',
-                    level: 'warning',
-                    action: 'invalid_cart_count',
-                    message: `User attempted checkout with ${cartCount} items (expected 1)`,
-                    userId: profile?.id || null,
-                    details: {
-                        cartCount,
-                        expectedCount: 1,
-                        cartItems: cartItems.length
-                    },
-                    status: 'failed'
-                });
-                router.replace('/cart');
-            }
-        }
-    }, [cartCount, cartLoading]);
 
     // Handle input changes
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
