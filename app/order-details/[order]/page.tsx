@@ -524,7 +524,34 @@ export default function Page() {
 
 
     const renderAllProducts = () => {
-        if (!order.products_array || !order.product_id || !order.quantity_array) {
+        // Safely handle product_id - it could be string or array
+        let productIds: string[] = [];
+
+        if (order.product_id) {
+            if (Array.isArray(order.product_id)) {
+                productIds = order.product_id;
+            } else if (typeof order.product_id === 'string') {
+                try {
+                    // Try to parse JSON string
+                    const parsed = JSON.parse(order.product_id);
+                    if (Array.isArray(parsed)) {
+                        productIds = parsed;
+                    } else {
+                        // If not an array, treat as single ID
+                        productIds = [order.product_id];
+                    }
+                } catch (error) {
+                    // If parsing fails, treat as single ID
+                    productIds = [order.product_id];
+                }
+            }
+        }
+
+        // Also handle products_array safely
+        const productsArray = order.products_array || [];
+        const quantityArray = order.quantity_array || [];
+
+        if (productIds.length === 0 || productsArray.length === 0) {
             return (
                 <TableRow>
                     <TableCell colSpan={2} className="text-center">
@@ -534,10 +561,10 @@ export default function Page() {
             );
         }
 
-        return order.product_id.map((productId, index) => {
+        return productIds.map((productId, index) => {
             // Find the product details for this productId
-            const product = order.products_array?.find(p => p.id === productId);
-            const quantity = order.quantity_array?.[index] || 0;
+            const product = productsArray.find(p => p.id === productId);
+            const quantity = quantityArray[index] || 0;
 
             return (
                 <TableRow key={`${productId}-${index}`}>
@@ -1474,6 +1501,9 @@ export default function Page() {
 
         const startTime = Date.now();
 
+        // Store the old value in case we need to revert
+        const oldValue = order[field as keyof Order];
+
         // Log edit attempt
         await logActivity({
             type: 'order',
@@ -1485,7 +1515,7 @@ export default function Page() {
             details: {
                 orderNumber: order.order_no,
                 field,
-                oldValue: order[field as keyof Order],
+                oldValue: oldValue,
                 newValue: editedValue,
                 userRole: profile?.role
             }
@@ -1740,13 +1770,83 @@ export default function Page() {
                 }
             }
 
+            // ✅ FIRST: Optimistically update local state
+            setOrders(prev => {
+                const updatedOrder = prev.map(o => {
+                    if (o.id === order.id) {
+                        const updated = { ...o, [field]: editedValue };
+
+                        // Special handling for product_id field
+                        if (field === "product_id") {
+                            // Ensure product_id remains as array
+                            if (typeof editedValue === 'string') {
+                                try {
+                                    updated.product_id = JSON.parse(editedValue);
+                                } catch (error) {
+                                    // If parsing fails, keep as array with single value
+                                    updated.product_id = [editedValue];
+                                }
+                            } else if (Array.isArray(editedValue)) {
+                                updated.product_id = editedValue;
+                            } else {
+                                updated.product_id = order.product_id; // Keep original if invalid
+                            }
+                        }
+
+                        // Update revenue opportunity if needed
+                        if (field === "dev_opportunity" || field === "dev_budget") {
+                            const devOpportunity = field === "dev_opportunity" ? parseInt(editedValue) : order.dev_opportunity;
+                            const devBudget = field === "dev_budget" ? parseFloat(editedValue) : order.dev_budget;
+
+                            if (devOpportunity && devBudget) {
+                                updated.rev_opportunity = devOpportunity * devBudget;
+                            }
+                        }
+                        // Update dates in local state
+                        if (field === "order_status") {
+                            if (editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED ||
+                                editedValue === process.env.NEXT_PUBLIC_STATUS_EXTENSION) {
+                                updated.shipped_date = new Date().toISOString().split('T')[0];
+                            }
+                            if (editedValue === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
+                                updated.returned_date = new Date().toISOString().split('T')[0];
+                            }
+                        }
+                        return updated;
+                    }
+                    return o;
+                });
+                return updatedOrder;
+            });
+
+            // ✅ SECOND: Now update the database
             const { error } = await supabase
                 .from('orders')
                 .update(updateData)
                 .eq('id', order.id);
 
-
             if (error) {
+                // ✅ If error, revert the optimistic update
+                setOrders(prev => {
+                    const revertedOrder = prev.map(o => {
+                        if (o.id === order.id) {
+                            const reverted = { ...o, [field]: oldValue };
+                            // Also revert revenue if needed
+                            if (field === "dev_opportunity" || field === "dev_budget") {
+                                const devOpportunity = field === "dev_opportunity" ? parseInt(oldValue as string) : order.dev_opportunity;
+                                const devBudget = field === "dev_budget" ? parseFloat(oldValue as string) : order.dev_budget;
+
+                                if (devOpportunity && devBudget) {
+                                    reverted.rev_opportunity = devOpportunity * devBudget;
+                                }
+                            }
+                            return reverted;
+                        }
+                        return o;
+                    });
+                    return revertedOrder;
+                });
+
                 await logActivity({
                     type: 'order',
                     level: 'error',
@@ -1777,7 +1877,7 @@ export default function Page() {
                 details: {
                     orderNumber: order.order_no,
                     field,
-                    oldValue: order[field as keyof Order],
+                    oldValue: oldValue,
                     newValue: editedValue,
                     executionTimeMs: Date.now() - startTime,
                     userRole: profile?.role
@@ -1842,44 +1942,44 @@ export default function Page() {
                 });
             }
 
-            // Update local state without full reload
-            setOrders(prev => {
-                const updatedOrder = prev.map(o => {
-                    if (o.id === order.id) {
-                        const updated = { ...o, [field]: editedValue };
-                        // Update revenue opportunity if needed
-                        if (field === "dev_opportunity" || field === "dev_budget") {
-                            const devOpportunity = field === "dev_opportunity" ? parseInt(editedValue) : order.dev_opportunity;
-                            const devBudget = field === "dev_budget" ? parseFloat(editedValue) : order.dev_budget;
-
-                            if (devOpportunity && devBudget) {
-                                updated.rev_opportunity = devOpportunity * devBudget;
-                            }
-                        }
-                        // Update dates in local state
-                        if (field === "order_status") {
-                            if (editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED ||
-                                editedValue === process.env.NEXT_PUBLIC_STATUS_EXTENSION) {
-                                updated.shipped_date = new Date().toISOString().split('T')[0];
-                            }
-                            if (editedValue === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
-                                updated.returned_date = new Date().toISOString().split('T')[0];
-                            }
-                        }
-                        return updated;
-                    }
-                    return o;
-                });
-                return updatedOrder;
-            });
-
-            // Refresh data to get updated product info
-            await fetchOrders();
-
-            // Reset editing state
+            // ✅ Reset editing state immediately (UI will update from optimistic update)
             setEditingField(null);
             setEditingRowId(null);
             setEditedValue("");
+
+            // ✅ Optional: Background mein data refresh (agar zaroori ho)
+            // setTimeout se thoda delay dekar background mein refresh karein
+            setTimeout(async () => {
+                try {
+                    // Sirf specific order ko refresh karein, pure page ko nahi
+                    const { data: updatedData, error: refreshError } = await supabase
+                        .from('orders')
+                        .select(`
+                        *,
+                        approved_user:users!orders_approved_by_fkey(id, email, firstName, lastName),
+                        rejected_user:users!orders_rejected_by_fkey(id, email, firstName, lastName),
+                        order_by_user:users!orders_order_by_fkey(id, email, firstName, lastName),
+                        wins:wins(*) 
+                    `)
+                        .eq('id', order.id)
+                        .single();
+
+                    if (!refreshError && updatedData) {
+                        // Update only the specific order in state
+                        setOrders(prev => prev.map(o =>
+                            o.id === order.id ? {
+                                ...o,
+                                ...updatedData,
+                                // Additional processing if needed
+                            } : o
+                        ));
+                    }
+                } catch (err) {
+                    console.error('Background refresh failed:', err);
+                    // Ignore background refresh errors
+                }
+            }, 1000);
+
         } catch (err) {
             await logActivity({
                 type: 'order',
@@ -1897,6 +1997,9 @@ export default function Page() {
                 },
                 status: 'failed'
             });
+
+            // Show error toast
+            toast.error(`Failed to update ${field}`);
         }
     };
 
@@ -1974,6 +2077,20 @@ export default function Page() {
                 throw error;
             }
 
+            // ✅ IMPORTANT: Update local state immediately
+            setOrders(prev => prev.map(o =>
+                o.id === order.id ? {
+                    ...o,
+                    tracking: trackingData.tracking,
+                    return_tracking: trackingData.return_tracking,
+                    tracking_link: trackingData.tracking_link,
+                    return_tracking_link: trackingData.return_tracking_link,
+                    username: trackingData.username,
+                    case_type: trackingData.case_type,
+                    password: trackingData.password
+                } : o
+            ));
+
             await logActivity({
                 type: 'order',
                 level: 'success',
@@ -2042,7 +2159,7 @@ export default function Page() {
                     throw statusError;
                 }
 
-                // Update local state
+                // ✅ Update local state for status change as well
                 setOrders(prev => prev.map(o =>
                     o.id === order.id ? {
                         ...o,
@@ -2068,7 +2185,6 @@ export default function Page() {
                     },
                     status: 'sent'
                 });
-
 
                 // Reset everything
                 setEditingField(null);
