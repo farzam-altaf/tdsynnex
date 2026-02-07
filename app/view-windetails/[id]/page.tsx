@@ -310,7 +310,7 @@ export default function WinDetailsPage() {
                                         </div>
                                     )
                                 ) : (
-                                    "-"
+                                     <div>{win.otherDesc || "Unknown Product"}</div>
                                 )}
                             </TableCell>
                         </TableRow>

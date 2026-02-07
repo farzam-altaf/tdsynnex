@@ -485,12 +485,31 @@ export default function AddDeviceClient() {
     };
 
     const createSlug = (text: string) => {
-        return text
+        // Generate random 10-character string
+        const generateRandomString = (length: number) => {
+            const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < length; i++) {
+                result += characters.charAt(Math.floor(Math.random() * characters.length));
+            }
+            return result;
+        };
+
+        const randomString = generateRandomString(10);
+
+        // Create base slug from text
+        const baseSlug = text
             .toLowerCase()
             .replace(/[^\w\s-]/g, '')
             .replace(/\s+/g, '-')
             .replace(/--+/g, '-')
             .trim();
+
+        // Remove trailing dash if exists
+        const cleanBaseSlug = baseSlug.replace(/-$/, '');
+
+        // Combine with random string
+        return `${cleanBaseSlug}-${randomString}`;
     };
 
     const insertCustomFilter = async (title: string, type: string) => {
@@ -914,21 +933,6 @@ export default function AddDeviceClient() {
             const toBool = (value?: string) => value === "Yes";
 
             if (isEditing && productId) {
-                // UPDATE EXISTING PRODUCT
-                const { data: pRow } = await supabase
-                    .from("products")
-                    .select("product_name")
-                    .eq("product_name", finalFormData.productName)
-                    .neq("id", productId)
-                    .single();
-
-                if (pRow) {
-                    toast.error("Unable to update the device because a device with the same title already exists.", {
-                        style: { background: "red", color: "white" }
-                    });
-                    setIsFormLoading(false);
-                    return;
-                }
 
                 const { data: pRowSKU } = await supabase
                     .from("products")
@@ -1016,8 +1020,7 @@ export default function AddDeviceClient() {
                         gallery: finalGallery,
                         updated_at: new Date().toISOString(),
                     })
-                    .eq("id", productId)
-                    .eq("user_id", profile?.userId);
+                    .eq("id", productId);
 
                 if (error) {
                     toast.error("Failed to update device. Please try again.", {
@@ -1049,20 +1052,6 @@ export default function AddDeviceClient() {
                 router.push(`/product/${slug}`);
 
             } else {
-                // CREATE NEW PRODUCT
-                const { data: pRow } = await supabase
-                    .from("products")
-                    .select("product_name")
-                    .eq("product_name", finalFormData.productName)
-                    .single();
-
-                if (pRow) {
-                    toast.error("Unable to add the device because a device with the same title already exists.", {
-                        style: { background: "red", color: "white" }
-                    });
-                    setIsFormLoading(false);
-                    return;
-                }
 
                 const { data: pRowSKU } = await supabase
                     .from("products")
@@ -1104,7 +1093,7 @@ export default function AddDeviceClient() {
                         isInStock: true,
                         thumbnail: imageUrls.primary,
                         gallery: imageUrls.additional,
-                        user_id: user?.id,
+                        user_id: profile?.userId,
                     });
 
                 if (error) {

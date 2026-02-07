@@ -545,15 +545,12 @@ export default function Page() {
                         {product ? (
                             <div className="flex items-center gap-2">
                                 <span>{product.product_name}</span>
-                                {product.sku && (
-                                    <span className="text-sm text-gray-500">(SKU: {product.sku})</span>
-                                )}
                             </div>
                         ) : (
                             <span className="text-gray-500">Product not found (ID: {productId})</span>
                         )}
                     </TableCell>
-                    <TableCell className="w-[15%] border-l text-center">
+                    <TableCell className="w-[8%] border-l text-center">
                         {quantity}
                     </TableCell>
                 </TableRow>
@@ -3180,8 +3177,8 @@ export default function Page() {
 
             {/* Main content with 70/30 split */}
             <div className="flex flex-col lg:flex-row gap-6">
-                {/* Left column - 70% */}
-                <div className="lg:w-[70%] space-y-6">
+                {/* Left column - 75% */}
+                <div className="lg:w-[72%] space-y-6">
                     {/* Orders Section with Approve/Reject Buttons */}
                     <div>
                         {order.order_status !== process.env.NEXT_PUBLIC_STATUS_AWAITING && profile?.role !== process.env.NEXT_PUBLIC_SUBSCRIBER && (
@@ -3192,31 +3189,31 @@ export default function Page() {
                         {order.order_status === process.env.NEXT_PUBLIC_STATUS_AWAITING && profile?.role !== process.env.NEXT_PUBLIC_SUBSCRIBER ? (
                             <>
                                 <Table className="hover:bg-white">
-                                    {/* <TableHeader>
-                                    <TableRow>
-                                        <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }}>Approve</TableHead>
-                                        <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }}>Reject</TableHead>
-                                    </TableRow>
-                                </TableHeader> */}
-                                    <div className="flex">
-                                        <Button
-                                            onClick={handleApprove}
-                                            className="bg-[#0A4647] hover:bg-[#093131] text-white cursor-pointer flex items-center gap-2"
-                                            disabled={!isActionAuthorized}
-                                        >
-                                            <CheckCircle size={18} />
-                                            Approve Order
-                                        </Button>
-                                        <Button
-                                            onClick={handleReject}
-                                            className="bg-red-700 hover:bg-red-800 text-white cursor-pointer mx-4 flex items-center gap-2"
-                                            variant="destructive"
-                                            disabled={!isActionAuthorized}
-                                        >
-                                            <XCircle size={18} />
-                                            Reject Order
-                                        </Button>
-                                    </div>
+                                    <TableBody>
+                                        <TableRow>
+                                            <TableCell colSpan={2}>
+                                                <div className="flex">
+                                                    <Button
+                                                        onClick={handleApprove}
+                                                        className="bg-[#0A4647] hover:bg-[#093131] text-white cursor-pointer flex items-center gap-2"
+                                                        disabled={!isActionAuthorized}
+                                                    >
+                                                        <CheckCircle size={18} />
+                                                        Approve Order
+                                                    </Button>
+                                                    <Button
+                                                        onClick={handleReject}
+                                                        className="bg-red-700 hover:bg-red-800 text-white cursor-pointer mx-4 flex items-center gap-2"
+                                                        variant="destructive"
+                                                        disabled={!isActionAuthorized}
+                                                    >
+                                                        <XCircle size={18} />
+                                                        Reject Order
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableBody>
                                 </Table>
                                 <div className="my-6">
                                     <h1 className="text-2xl font-bold">Order #{order.order_no}</h1>
@@ -3496,8 +3493,8 @@ export default function Page() {
                     </div>
                 </div>
 
-                {/* Right column - 30% */}
-                <div className="lg:w-[30%] space-y-6">
+                {/* Right column - 25% */}
+                <div className="lg:w-[28%] space-y-6">
                     <div>
                         <h2 className="text-lg font-semibold mb-4">Shipping Details</h2>
                         <Table className="border">

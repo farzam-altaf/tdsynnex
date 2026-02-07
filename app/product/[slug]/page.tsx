@@ -1079,7 +1079,7 @@ export default function Page() {
                             {/* Main Image Carousel - Only show if there are images */}
                             {galleryImages.length > 0 ? (
                                 <div className="relative rounded-lg overflow-hidden mb-4">
-                                    {admin === profile?.role || shopManager === profile?.role && (
+                                    {shopManager === profile?.role ? (
                                         <div className="absolute top-8 left-5 z-10">
                                             <div className="flex gap-2">
                                                 <Link href={`/add-device?_=${product?.slug}`}>
@@ -1103,7 +1103,31 @@ export default function Page() {
                                                 </Popconfirm>
                                             </div>
                                         </div>
-                                    )}
+                                    ) : admin === profile?.role ? (
+                                        <div className="absolute top-8 left-5 z-10">
+                                            <div className="flex gap-2">
+                                                <Link href={`/add-device?_=${product?.slug}`}>
+                                                    <div className="cursor-pointer bg-white/90 text-[#41abd6] border border-[#41abd6] backdrop-blur-sm rounded-full p-2">
+                                                        <FaEdit />
+                                                    </div>
+                                                </Link>
+                                                <Popconfirm
+                                                    title="Delete the device"
+                                                    description="Are you sure to delete this device?"
+                                                    okText="Yes"
+                                                    cancelText="No"
+                                                    onConfirm={handleDeleteDevice}
+                                                    okButtonProps={{
+                                                        danger: true,
+                                                    }}
+                                                >
+                                                    <div className="cursor-pointer bg-white/90 text-red-500 border border-red-500 backdrop-blur-sm rounded-full p-2">
+                                                        <MdDelete />
+                                                    </div>
+                                                </Popconfirm>
+                                            </div>
+                                        </div>
+                                    ) : (null)}
 
                                     {/* Carousel Container with Custom Navigation */}
                                     <div className="relative">

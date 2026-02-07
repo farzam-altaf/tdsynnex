@@ -98,7 +98,7 @@ export default function Page() {
     const [rowSelection, setRowSelection] = useState({})
     const [pagination, setPagination] = useState({
         pageIndex: 0,
-        pageSize: 10,
+        pageSize: 1000,
     });
 
     // Role constants from environment variables
@@ -968,7 +968,7 @@ export default function Page() {
         });
     }
 
-    // Initialize table
+    // Add autoResetPageIndex: false to table options
     const table = useReactTable({
         data: products,
         columns,
@@ -981,6 +981,7 @@ export default function Page() {
         getFilteredRowModel: getFilteredRowModel(),
         onColumnVisibilityChange: setColumnVisibility,
         onRowSelectionChange: setRowSelection,
+        autoResetPageIndex: false, // Add this line
         state: {
             sorting,
             columnFilters,
@@ -1270,6 +1271,7 @@ export default function Page() {
                 <div className="flex flex-col gap-4 py-4">
                     {/* Top row: Rows per page selector */}
                     <div className="flex justify-between items-center">
+
                         <div className="flex items-center space-x-2">
                             <span className="text-sm text-gray-600 whitespace-nowrap">Show</span>
                             <select
@@ -1277,9 +1279,9 @@ export default function Page() {
                                 onChange={e => table.setPageSize(Number(e.target.value))}
                                 className="border rounded px-2 py-1 text-sm"
                             >
-                                {[5, 10, 20, 30, 50].map(pageSize => (
+                                {[1000, 5, 10, 20, 30, 50].map(pageSize => (
                                     <option key={pageSize} value={pageSize}>
-                                        {pageSize}
+                                        {pageSize === 1000 ? "All" : pageSize}
                                     </option>
                                 ))}
                             </select>

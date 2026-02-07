@@ -86,7 +86,7 @@ export default function UsersList() {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
     const [isUnverifiedOnly, setIsUnverifiedOnly] = useState(false);
-    
+
     // Table states
     const [sorting, setSorting] = useState<SortingState>([])
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -149,9 +149,9 @@ export default function UsersList() {
 
             // Log unauthorized access
             logAuth(
-                'access_denied', 
-                'Unauthorized access to users list', 
-                profile?.id, 
+                'access_denied',
+                'Unauthorized access to users list',
+                profile?.id,
                 {
                     isLoggedIn,
                     isVerified: profile?.isVerified,
@@ -168,9 +168,9 @@ export default function UsersList() {
         // Check if user has permission to access this page
         if (!isAuthorized) {
             logWarning(
-                'auth', 
-                'unauthorized_access', 
-                `User attempted to access users list without permission`, 
+                'auth',
+                'unauthorized_access',
+                `User attempted to access users list without permission`,
                 {
                     email: profile.email,
                     role: profile.role,
@@ -179,16 +179,16 @@ export default function UsersList() {
                 profile.id,
                 source
             );
-            
+
             router.replace('/product-category/alldevices');
             return;
         }
 
         // Log successful access
         logAuth(
-            'page_access', 
-            `User accessed users list page`, 
-            profile.id, 
+            'page_access',
+            `User accessed users list page`,
+            profile.id,
             {
                 role: profile.role,
                 isUnverifiedOnly: searchParams.get('_') === 'true'
@@ -230,9 +230,9 @@ export default function UsersList() {
                 setUsers(data as User[]);
                 const executionTime = Date.now() - startTime;
                 logSuccess(
-                    'db', 
-                    'users_fetch_success', 
-                    `Successfully fetched ${data.length} users`, 
+                    'db',
+                    'users_fetch_success',
+                    `Successfully fetched ${data.length} users`,
                     {
                         count: data.length,
                         isUnverifiedOnly: hasUnverifiedParam,
@@ -247,9 +247,9 @@ export default function UsersList() {
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch users');
                 logError(
-                    'db', 
-                    'users_fetch_failed', 
-                    `Failed to fetch users: ${err.message}`, 
+                    'db',
+                    'users_fetch_failed',
+                    `Failed to fetch users: ${err.message}`,
                     err,
                     profile?.id,
                     source
@@ -257,9 +257,9 @@ export default function UsersList() {
             } else {
                 setError('Failed to fetch users');
                 logError(
-                    'db', 
-                    'users_fetch_failed', 
-                    'Failed to fetch users', 
+                    'db',
+                    'users_fetch_failed',
+                    'Failed to fetch users',
                     { error: err },
                     profile?.id,
                     source
@@ -282,9 +282,9 @@ export default function UsersList() {
         setEditUser(user);
         setIsEditDialogOpen(true);
         logInfo(
-            'user', 
-            'edit_user_clicked', 
-            `Edit user clicked for: ${user.email}`, 
+            'user',
+            'edit_user_clicked',
+            `Edit user clicked for: ${user.email}`,
             {
                 userId: user.id,
                 email: user.email,
@@ -313,9 +313,9 @@ export default function UsersList() {
 
             const executionTime = Date.now() - startTime;
             logSuccess(
-                'user', 
-                'user_updated', 
-                `User updated: ${editUser.email}`, 
+                'user',
+                'user_updated',
+                `User updated: ${editUser.email}`,
                 {
                     userId: editUser.id,
                     email: editUser.email,
@@ -336,9 +336,9 @@ export default function UsersList() {
             const executionTime = Date.now() - startTime;
             setError('Failed to update user');
             logError(
-                'db', 
-                'user_update_failed', 
-                `Failed to update user ${editUser.email}`, 
+                'db',
+                'user_update_failed',
+                `Failed to update user ${editUser.email}`,
                 {
                     error: error.message,
                     userId: editUser.id,
@@ -357,9 +357,9 @@ export default function UsersList() {
         setSelectedRole(user.role);
         setIsRoleDialogOpen(true);
         logInfo(
-            'user', 
-            'change_role_clicked', 
-            `Change role clicked for: ${user.email}`, 
+            'user',
+            'change_role_clicked',
+            `Change role clicked for: ${user.email}`,
             {
                 userId: user.id,
                 email: user.email,
@@ -384,9 +384,9 @@ export default function UsersList() {
 
             const executionTime = Date.now() - startTime;
             logSuccess(
-                'user', 
-                'role_changed', 
-                `Role changed for ${changeRoleUser.email}`, 
+                'user',
+                'role_changed',
+                `Role changed for ${changeRoleUser.email}`,
                 {
                     userId: changeRoleUser.id,
                     email: changeRoleUser.email,
@@ -408,9 +408,9 @@ export default function UsersList() {
             const executionTime = Date.now() - startTime;
             setError('Failed to update role');
             logError(
-                'db', 
-                'role_change_failed', 
-                `Failed to change role for ${changeRoleUser.email}`, 
+                'db',
+                'role_change_failed',
+                `Failed to change role for ${changeRoleUser.email}`,
                 {
                     error: error.message,
                     userId: changeRoleUser.id,
@@ -438,9 +438,9 @@ export default function UsersList() {
 
             const executionTime = Date.now() - startTime;
             logSuccess(
-                'user', 
-                'user_approved', 
-                `User approved: ${email}`, 
+                'user',
+                'user_approved',
+                `User approved: ${email}`,
                 {
                     userId,
                     email,
@@ -458,9 +458,9 @@ export default function UsersList() {
             const executionTime = Date.now() - startTime;
             setError('Failed to verify user');
             logError(
-                'db', 
-                'user_approval_failed', 
-                `Failed to approve user ${email}`, 
+                'db',
+                'user_approval_failed',
+                `Failed to approve user ${email}`,
                 {
                     error: error.message,
                     userId,
@@ -486,9 +486,9 @@ export default function UsersList() {
 
             const executionTime = Date.now() - startTime;
             logWarning(
-                'user', 
-                'user_rejected', 
-                `User rejected: ${email}`, 
+                'user',
+                'user_rejected',
+                `User rejected: ${email}`,
                 {
                     userId,
                     email,
@@ -506,9 +506,9 @@ export default function UsersList() {
             const executionTime = Date.now() - startTime;
             setError('Failed to unverify user');
             logError(
-                'db', 
-                'user_rejection_failed', 
-                `Failed to reject user ${email}`, 
+                'db',
+                'user_rejection_failed',
+                `Failed to reject user ${email}`,
                 {
                     error: error.message,
                     userId,
@@ -535,9 +535,9 @@ export default function UsersList() {
 
             if (result.success) {
                 logSuccess(
-                    'email', 
-                    'approval_email_sent', 
-                    `Approval email sent to: ${userEmail}`, 
+                    'email',
+                    'approval_email_sent',
+                    `Approval email sent to: ${userEmail}`,
                     {
                         to: userEmail,
                         subject: template.subject
@@ -547,9 +547,9 @@ export default function UsersList() {
                 );
             } else {
                 logWarning(
-                    'email', 
-                    'approval_email_failed', 
-                    `Failed to send approval email to: ${userEmail}`, 
+                    'email',
+                    'approval_email_failed',
+                    `Failed to send approval email to: ${userEmail}`,
                     {
                         to: userEmail,
                         error: result.error
@@ -560,9 +560,9 @@ export default function UsersList() {
             }
         } catch (emailError: any) {
             logError(
-                'email', 
-                'approval_email_exception', 
-                `Exception while sending approval email: ${emailError.message}`, 
+                'email',
+                'approval_email_exception',
+                `Exception while sending approval email: ${emailError.message}`,
                 emailError,
                 profile?.id,
                 source
@@ -583,9 +583,9 @@ export default function UsersList() {
 
             if (result.success) {
                 logSuccess(
-                    'email', 
-                    'rejection_email_sent', 
-                    `Rejection email sent to: ${userEmail}`, 
+                    'email',
+                    'rejection_email_sent',
+                    `Rejection email sent to: ${userEmail}`,
                     {
                         to: userEmail,
                         subject: template.subject
@@ -595,9 +595,9 @@ export default function UsersList() {
                 );
             } else {
                 logWarning(
-                    'email', 
-                    'rejection_email_failed', 
-                    `Failed to send rejection email to: ${userEmail}`, 
+                    'email',
+                    'rejection_email_failed',
+                    `Failed to send rejection email to: ${userEmail}`,
                     {
                         to: userEmail,
                         error: result.error
@@ -608,9 +608,9 @@ export default function UsersList() {
             }
         } catch (emailError: any) {
             logError(
-                'email', 
-                'rejection_email_exception', 
-                `Exception while sending rejection email: ${emailError.message}`, 
+                'email',
+                'rejection_email_exception',
+                `Exception while sending rejection email: ${emailError.message}`,
                 emailError,
                 profile?.id,
                 source
@@ -794,9 +794,9 @@ export default function UsersList() {
                                         onClick={() => {
                                             navigator.clipboard.writeText(user.email);
                                             logInfo(
-                                                'user', 
-                                                'email_copied', 
-                                                `Email copied to clipboard: ${user.email}`, 
+                                                'user',
+                                                'email_copied',
+                                                `Email copied to clipboard: ${user.email}`,
                                                 {
                                                     email: user.email
                                                 },
@@ -866,6 +866,12 @@ export default function UsersList() {
         getFilteredRowModel: getFilteredRowModel(),
         onColumnVisibilityChange: setColumnVisibility,
         onRowSelectionChange: setRowSelection,
+        initialState: {
+            pagination: {
+                pageSize: 100, // Set a safe default value instead of users.length
+                pageIndex: 0,
+            },
+        },
         state: {
             sorting,
             columnFilters,
@@ -879,9 +885,9 @@ export default function UsersList() {
         if (users.length === 0) {
             toast.error("No data to export");
             logWarning(
-                'export', 
-                'csv_export_empty', 
-                'Attempted to export CSV with no data', 
+                'export',
+                'csv_export_empty',
+                'Attempted to export CSV with no data',
                 {
                     usersCount: users.length
                 },
@@ -912,9 +918,9 @@ export default function UsersList() {
             downloadCSV(csvString, `users_${new Date().toISOString().split('T')[0]}.csv`);
 
             logSuccess(
-                'export', 
-                'csv_export_success', 
-                `CSV exported with ${users.length} records`, 
+                'export',
+                'csv_export_success',
+                `CSV exported with ${users.length} records`,
                 {
                     recordCount: users.length,
                     isUnverifiedOnly,
@@ -922,14 +928,14 @@ export default function UsersList() {
                 profile?.id,
                 source
             );
-            
+
             toast.success("CSV exported successfully!");
         } catch (error: any) {
             setError('Failed to export CSV');
             logError(
-                'export', 
-                'csv_export_failed', 
-                `Failed to export CSV: ${error.message}`, 
+                'export',
+                'csv_export_failed',
+                `Failed to export CSV: ${error.message}`,
                 {
                     error: error.message,
                     usersCount: users.length,
@@ -985,9 +991,9 @@ export default function UsersList() {
     // Handle refresh
     const handleRefresh = async () => {
         logInfo(
-            'user', 
-            'manual_refresh', 
-            'Manually refreshing users list', 
+            'user',
+            'manual_refresh',
+            'Manually refreshing users list',
             {
                 currentCount: users.length,
                 isUnverifiedOnly
@@ -1002,9 +1008,9 @@ export default function UsersList() {
     const handleViewToggle = (viewType: 'all' | 'pending') => {
         const newPath = viewType === 'pending' ? '/users-list?_=true' : '/users-list';
         logInfo(
-            'navigation', 
-            'view_toggle', 
-            `Toggled view to: ${viewType}`, 
+            'navigation',
+            'view_toggle',
+            `Toggled view to: ${viewType}`,
             {
                 from: isUnverifiedOnly ? 'pending' : 'all',
                 to: viewType
@@ -1033,7 +1039,7 @@ export default function UsersList() {
     }
 
     return (
-        <div className="container mx-auto py-10 px-5 h-lvh">
+        <div className="container mx-auto py-10 px-5">
             <div className="flex justify-between items-center mb-6">
                 <div className="flex flex-col">
                     <h1 className="sm:text-3xl text-xl font-bold">
@@ -1116,9 +1122,9 @@ export default function UsersList() {
                                             onCheckedChange={(value: boolean) => {
                                                 column.toggleVisibility(!!value);
                                                 logInfo(
-                                                    'ui', 
-                                                    'column_toggle', 
-                                                    `Column visibility toggled`, 
+                                                    'ui',
+                                                    'column_toggle',
+                                                    `Column visibility toggled`,
                                                     {
                                                         columnId: column.id,
                                                         columnName: columnDisplayNames[column.id] || column.id,
@@ -1200,24 +1206,135 @@ export default function UsersList() {
                         </TableBody>
                     </Table>
                 </div>
-                <div className="flex items-center justify-end space-x-2 py-4">
-                    <div className="space-x-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => table.previousPage()}
-                            disabled={!table.getCanPreviousPage()}
-                        >
-                            Previous
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => table.nextPage()}
-                            disabled={!table.getCanNextPage()}
-                        >
-                            Next
-                        </Button>
+                <div className="flex items-center justify-between py-4">
+                    <div className="text-sm text-gray-600">
+                        {users.length} user{users.length !== 1 ? 's' : ''} found
+                    </div>
+                    <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2">
+                            <span className="text-sm text-gray-600">Show</span>
+                            <select
+                                value={table.getState().pagination.pageSize}
+                                onChange={e => {
+                                    const newSize = Number(e.target.value);
+                                    table.setPageSize(newSize === -1 ? users.length : newSize);
+                                    logInfo(
+                                        'ui',
+                                        'page_size_changed',
+                                        `Page size changed to: ${newSize === -1 ? 'All' : newSize}`,
+                                        {
+                                            previousSize: table.getState().pagination.pageSize,
+                                            newSize: newSize === -1 ? users.length : newSize
+                                        },
+                                        profile?.id,
+                                        source
+                                    );
+                                }}
+                                className="border rounded px-2 py-1 text-sm"
+                            >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                                <option value={-1}>All</option>
+                            </select>
+                        </div>
+
+                        {table.getPageCount() > 1 && (
+                            <div className="flex items-center space-x-2">
+                                <div className="flex items-center space-x-1">
+                                    {/* Safe page number generation */}
+                                    {(() => {
+                                        const pageCount = table.getPageCount();
+                                        // Ensure pageCount is valid
+                                        if (isNaN(pageCount) || !isFinite(pageCount) || pageCount <= 0) {
+                                            return null;
+                                        }
+
+                                        // Show max 7 page buttons for better UX
+                                        const maxVisiblePages = 7;
+                                        const currentPage = table.getState().pagination.pageIndex;
+                                        const pageCountInt = Math.min(pageCount, maxVisiblePages);
+
+                                        return Array.from({ length: pageCountInt }, (_, i) => i).map(pageIndex => (
+                                            <Button
+                                                key={pageIndex}
+                                                variant={currentPage === pageIndex ? "default" : "outline"}
+                                                size="sm"
+                                                onClick={() => {
+                                                    table.setPageIndex(pageIndex);
+                                                    logInfo(
+                                                        'ui',
+                                                        'page_changed',
+                                                        `Page changed to: ${pageIndex + 1}`,
+                                                        {
+                                                            previousPage: currentPage + 1,
+                                                            newPage: pageIndex + 1
+                                                        },
+                                                        profile?.id,
+                                                        source
+                                                    );
+                                                }}
+                                                className="w-8 h-8 p-0"
+                                            >
+                                                {pageIndex + 1}
+                                            </Button>
+                                        ));
+                                    })()}
+                                </div>
+
+                                <div className="space-x-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                            const prevPage = table.getState().pagination.pageIndex;
+                                            table.previousPage();
+                                            if (prevPage > 0) {
+                                                logInfo(
+                                                    'ui',
+                                                    'previous_page',
+                                                    `Navigated to previous page`,
+                                                    {
+                                                        fromPage: prevPage + 1,
+                                                        toPage: table.getState().pagination.pageIndex + 1
+                                                    },
+                                                    profile?.id,
+                                                    source
+                                                );
+                                            }
+                                        }}
+                                        disabled={!table.getCanPreviousPage()}
+                                    >
+                                        Previous
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                            const prevPage = table.getState().pagination.pageIndex;
+                                            table.nextPage();
+                                            if (prevPage < table.getPageCount() - 1) {
+                                                logInfo(
+                                                    'ui',
+                                                    'next_page',
+                                                    `Navigated to next page`,
+                                                    {
+                                                        fromPage: prevPage + 1,
+                                                        toPage: table.getState().pagination.pageIndex + 1
+                                                    },
+                                                    profile?.id,
+                                                    source
+                                                );
+                                            }
+                                        }}
+                                        disabled={!table.getCanNextPage()}
+                                    >
+                                        Next
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -1273,9 +1390,9 @@ export default function UsersList() {
                         <Button variant="outline" onClick={() => {
                             setIsEditDialogOpen(false);
                             logInfo(
-                                'ui', 
-                                'edit_dialog_cancelled', 
-                                'Edit user dialog cancelled', 
+                                'ui',
+                                'edit_dialog_cancelled',
+                                'Edit user dialog cancelled',
                                 {
                                     userId: editUser?.id,
                                     email: editUser?.email
@@ -1327,9 +1444,9 @@ export default function UsersList() {
                         <Button variant="outline" onClick={() => {
                             setIsRoleDialogOpen(false);
                             logInfo(
-                                'ui', 
-                                'role_dialog_cancelled', 
-                                'Change role dialog cancelled', 
+                                'ui',
+                                'role_dialog_cancelled',
+                                'Change role dialog cancelled',
                                 {
                                     userId: changeRoleUser?.id,
                                     email: changeRoleUser?.email

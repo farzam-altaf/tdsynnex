@@ -785,7 +785,7 @@ export default function Page() {
                                 <ProductsGridSkeleton />
                             ) : filteredProducts.length > 0 ? (
                                 <>
-                                    {admin === profile?.role || shopManager === profile?.role && (
+                                    {(admin === profile?.role || shopManager === profile?.role) && (
                                         <div className="flex items-center justify-between sm:my-10 my-5">
                                             <div className="text-3xl font-semibold">Devices</div>
                                             <div className="">
