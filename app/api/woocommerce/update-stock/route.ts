@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   }
 
   const res = await fetch(
-    `${process.env.WC_URL}/wp-json/wc/v3/products/${wp_id}`,
+    `${process.env.WC_URL}/wp-json/wc/v3/products/19195`,
     {
       method: 'PUT',
       headers: {
