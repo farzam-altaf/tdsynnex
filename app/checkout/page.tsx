@@ -18,6 +18,9 @@ export default function Page() {
   const [authInitialized, setAuthInitialized] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [syncStatus, setSyncStatus] = useState<{
+    [key: string]: 'pending' | 'syncing' | 'success' | 'failed'
+  }>({});
 
   const {
     cartItems,
@@ -79,6 +82,48 @@ export default function Page() {
   // Get total quantity
   const getTotalQuantity = () => {
     return cartItems.reduce((total, item) => total + item.quantity, 0);
+  };
+
+  // Check if product is Global
+  const isGlobalProduct = (product: any) => {
+    return product?.inventory_type === 'Global';
+  };
+
+  // Sync stock to WordPress sites
+  const syncStockToWordPress = async (sku: string, quantity: number, orderId: string, productName: string) => {
+    try {
+      // Update sync status
+      setSyncStatus(prev => ({ ...prev, [sku]: 'syncing' }));
+
+      const response = await fetch('/api/stock/order', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-WGSS-Source': 'nextjs',
+          'X-WGSS-Site': window.location.origin
+        },
+        body: JSON.stringify({
+          sku,
+          quantity,
+          orderId,
+          productName,
+          source: 'nextjs_checkout'
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to sync stock');
+      }
+
+      setSyncStatus(prev => ({ ...prev, [sku]: 'success' }));
+      return true;
+    } catch (error: any) {
+      console.error(`Failed to sync ${sku} to WordPress:`, error);
+      setSyncStatus(prev => ({ ...prev, [sku]: 'failed' }));
+      
+      return false;
+    }
   };
 
   // Initialize form with profile data
@@ -400,7 +445,8 @@ export default function Page() {
         products: cartItems.map(item => ({
           productId: item.product_id,
           productName: item.product?.product_name,
-          quantity: item.quantity
+          quantity: item.quantity,
+          isGlobal: isGlobalProduct(item.product)
         }))
       }
     });
@@ -433,6 +479,9 @@ export default function Page() {
       // Prepare single order data with all products
       const orderData = prepareOrderData();
 
+      // Generate order ID
+      const orderId = `NEXTJS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
       // Check stock for all products before processing
       const stockChecks = cartItems.map(item => {
         const product = item.product;
@@ -448,18 +497,24 @@ export default function Page() {
         return {
           productId: product.id,
           productName: product.product_name,
+          sku: product.sku,
           stockQty,
           withCustomerQty: Number(product.withCustomer) + item.quantity,
           oldStock: product.stock_quantity,
           oldWithCustomer: product.withCustomer,
-          quantity: item.quantity
+          quantity: item.quantity,
+          isGlobal: isGlobalProduct(product)
         };
       });
 
       // Insert single order into database
       const { data: insertedOrder, error: orderError } = await supabase
         .from('orders')
-        .insert([orderData])
+        .insert([{
+          ...orderData,
+          order_no: orderId, // Add generated order ID
+          sync_status: 'pending' // Add sync status field
+        }])
         .select();
 
       if (orderError) {
@@ -473,10 +528,58 @@ export default function Page() {
           .update({
             stock_quantity: check.stockQty,
             withCustomer: check.withCustomerQty,
+            updated_at: new Date().toISOString()
           })
           .eq('id', check.productId);
 
         if (updateError) throw updateError;
+      }
+
+      // SYNC GLOBAL PRODUCTS TO WORDPRESS
+      const globalProducts = stockChecks.filter(check => check.isGlobal);
+      if (globalProducts.length > 0) {
+        toast.loading(`Syncing ${globalProducts.length} Global product(s) to WordPress...`, {
+          id: 'sync-toast',
+          style: { background: "#fef3c7", color: "#92400e" }
+        });
+
+        // Sync each global product to WordPress
+        const syncResults = await Promise.allSettled(
+          globalProducts.map(async (product) => {
+            return await syncStockToWordPress(
+              product.sku,
+              product.quantity,
+              orderId,
+              product.productName
+            );
+          })
+        );
+
+        // Check sync results
+        const successfulSyncs = syncResults.filter(r => r.status === 'fulfilled' && r.value).length;
+        const failedSyncs = syncResults.filter(r => r.status === 'rejected' || !r.value).length;
+
+        if (failedSyncs > 0) {
+          toast.warning(`Note: ${failedSyncs} product(s) failed to sync to WordPress`, {
+            id: 'sync-toast',
+            duration: 5000,
+            style: { background: "#fef3c7", color: "#92400e" }
+          });
+        }
+
+        // Update order sync status
+        await supabase
+          .from('orders')
+          .update({
+            sync_status: failedSyncs === 0 ? 'synced' : 'partially_synced',
+            sync_details: JSON.stringify({
+              totalGlobalProducts: globalProducts.length,
+              successfulSyncs,
+              failedSyncs,
+              syncTime: new Date().toISOString()
+            })
+          })
+          .eq('id', insertedOrder[0].id);
       }
 
       // Clear the entire cart after successful order
@@ -484,7 +587,12 @@ export default function Page() {
 
       // Dismiss loading toast and show success toast
       toast.dismiss(loadingToast);
-      toast.success(`Order Placed for ${cartItems.length} Product(s)!`, {
+      toast.dismiss('sync-toast');
+      
+      toast.success(`Order Placed Successfully!`, {
+        description: globalProducts.length > 0 ? 
+          `Stock updated on ${globalProducts.length} WordPress site(s)` : 
+          'Order processed successfully',
         style: { background: "black", color: "white" }
       });
 
@@ -508,8 +616,10 @@ export default function Page() {
         userId: profile?.id || null,
         details: {
           orderId: insertedOrder[0]?.id,
+          orderNumber: orderId,
           totalItems: getTotalQuantity(),
           totalProducts: cartItems.length,
+          globalProducts: globalProducts.length,
           executionTimeMs: Date.now() - startTime
         },
         status: 'completed'
@@ -518,6 +628,8 @@ export default function Page() {
     } catch (error: any) {
       // Error handling
       toast.dismiss(loadingToast);
+      toast.dismiss('sync-toast');
+      
       toast.error("Order Failed", {
         description: error.message || "Something went wrong. Please try again.",
         style: { background: "red", color: "white" }
@@ -551,10 +663,11 @@ export default function Page() {
       const orderData = orders[0]; // Single order object
 
       // Prepare product list from the order data
-      const products = orderData.products || cartItems.map(item => ({
+      const products = cartItems.map(item => ({
         name: item.product?.product_name || 'Unknown Product',
         quantity: item.quantity,
-        sku: item.product?.sku || ''
+        sku: item.product?.sku || '',
+        isGlobal: isGlobalProduct(item.product) ? '✓ Global' : 'Program'
       }));
 
       const template = emailTemplates.checkoutEmail({
@@ -593,7 +706,7 @@ export default function Page() {
         usingCopilot: formData.isCopilot,
         securityFactor: formData.isSecurity,
         deviceProtection: formData.current_protection,
-        note: formData.notes || "",
+        note: formData.notes || ""
       });
 
       await sendEmail({
@@ -616,10 +729,11 @@ export default function Page() {
       const orderData = orders[0]; // Single order object
 
       // Prepare product list from the order data
-      const products = orderData.products || cartItems.map(item => ({
+      const products = cartItems.map(item => ({
         name: item.product?.product_name || 'Unknown Product',
         quantity: item.quantity,
-        sku: item.product?.sku || ''
+        sku: item.product?.sku || '',
+        isGlobal: isGlobalProduct(item.product) ? 'Global' : 'Program'
       }));
 
       const template = emailTemplates.newOrderEmail({
@@ -653,7 +767,7 @@ export default function Page() {
         usingCopilot: formData.isCopilot,
         securityFactor: formData.isSecurity,
         deviceProtection: formData.current_protection,
-        note: formData.notes || "",
+        note: formData.notes || ""
       });
 
       const adminEmails = await getAdminEmails();
@@ -670,7 +784,6 @@ export default function Page() {
       toast.error("Failed to send new order email. Please try again.");
     }
   };
-
 
   // Add this function to fetch admin emails
   const getAdminEmails = async () => {
@@ -755,6 +868,27 @@ export default function Page() {
       : "border-gray-300 focus:ring-[#0A4647] focus:border-[#0A4647]";
   };
 
+  // Get sync status icon
+  const getSyncIcon = (sku: string) => {
+    const status = syncStatus[sku];
+    switch (status) {
+      case 'syncing':
+        return <span className="inline-flex items-center text-yellow-600">
+          <svg className="animate-spin h-4 w-4 mr-1" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          Syncing...
+        </span>;
+      case 'success':
+        return <span className="text-green-600">✓ Synced</span>;
+      case 'failed':
+        return <span className="text-red-600">✗ Sync Failed</span>;
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
       {cartCount < 1 ? (
@@ -783,6 +917,33 @@ export default function Page() {
         <>
           <div className="min-h-screen p-4 my-7 md:p-8">
             <div className="max-w-7xl mx-auto">
+              {/* Stock Sync Notification */}
+              {cartItems.some(item => isGlobalProduct(item.product)) && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    <h3 className="text-lg font-medium text-blue-800">Global Stock Sync</h3>
+                  </div>
+                  <p className="mt-2 text-sm text-blue-700">
+                    Your order contains Global products. Stock will be automatically synced with all connected WordPress sites.
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {cartItems.filter(item => isGlobalProduct(item.product)).map(item => (
+                      <div key={item.product_id} className="flex items-center justify-between text-sm">
+                        <span className="text-blue-800">
+                          {item.product?.product_name} (x{item.quantity})
+                        </span>
+                        <span className="font-medium">
+                          {getSyncIcon(item.product?.sku || '') || 
+                            (isGlobalProduct(item.product) ? 'Will sync' : 'Program')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Team Details Section */}
               <div className="bg-white mb-5 border">
@@ -1451,8 +1612,28 @@ export default function Page() {
                     {cartItems.map((item) => (
                       <div key={item.product_id} className="flex justify-between items-center border-b pb-4">
                         <div>
-                          <h4 className="font-medium text-gray-800">{item.product?.product_name} <b className="mx-2">x {item.quantity}</b></h4>
+                          <h4 className="font-medium text-gray-800">
+                            {item.product?.product_name} 
+                            <b className="mx-2">x {item.quantity}</b>
+                            {isGlobalProduct(item.product) && (
+                              <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 ml-2">
+                                Global
+                              </span>
+                            )}
+                          </h4>
                           <p className="text-sm text-gray-500">SKU: {item.product?.sku}</p>
+                          {isGlobalProduct(item.product) && (
+                            <p className="text-xs text-green-600 mt-1">
+                              ✓ Will sync with WordPress sites
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          {syncStatus[item.product?.sku || ''] && (
+                            <div className="text-sm mb-1">
+                              {getSyncIcon(item.product?.sku || '')}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
