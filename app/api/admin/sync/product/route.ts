@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (productError || !product) {
-      return NextResponse.json({ error: 'Product not found in global products' }, { status: 404 })
+      return NextResponse.json({ error: `Product not found in global products: ${productError}, ${product}` }, { status: 404 })
     }
 
     // WooCommerce client - with enhanced error handling
