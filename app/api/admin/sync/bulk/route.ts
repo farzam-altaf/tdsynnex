@@ -1,23 +1,17 @@
-import { NextApiRequest, NextApiResponse } from 'next'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase/client'
 import { wooMulti } from '@/lib/woocommerce-multi'
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  // Admin authentication
-  const adminKey = req.headers['x-admin-key']
-  if (adminKey !== process.env.ADMIN_API_KEY) {
-    return res.status(401).json({ error: 'Unauthorized' })
-  }
+export async function POST(req: NextRequest) {
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
+  // 🔐 Admin authentication
+  const adminKey = req.headers.get('x-admin-key')
+  if (adminKey !== process.env.ADMIN_API_KEY) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {
-    // Get all Global products from Supabase
+    // 1️⃣ Get all Global products
     const { data: products, error } = await supabase
       .from('products')
       .select('*')
@@ -25,55 +19,54 @@ export default async function handler(
       .order('created_at', { ascending: false })
 
     if (error) throw error
+    if (!products || products.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'No Global products found',
+        stats: { totalProducts: 0 }
+      })
+    }
 
+    // 2️⃣ Get Woo sites
     const sites = wooMulti.getAllSites()
-    
-    if (sites.length === 0) {
-      return res.status(400).json({ error: 'No WooCommerce sites configured' })
+    if (!sites.length) {
+      return NextResponse.json(
+        { error: 'No WooCommerce sites configured' },
+        { status: 400 }
+      )
     }
 
     let syncedCount = 0
     let failedCount = 0
-    const results = []
+    const results: any[] = []
 
-    // Process each product
+    // 3️⃣ Process each product
     for (const product of products) {
-      try {
-        // Save to global_products table
-        await supabase
-          .from('global_products')
-          .upsert({
-            sku: product.sku,
-            product_name: product.product_name,
-            stock_quantity: product.stock_quantity,
-            updated_at: new Date().toISOString()
-          })
 
-        // Sync to each WordPress site
-        const sitePromises = sites.map(async (site) => {
+      const siteResults = await Promise.all(
+        sites.map(async (site) => {
           try {
             const wooClient = wooMulti.getClient(site.site_url)
             if (!wooClient) {
               throw new Error(`No client for site: ${site.site_url}`)
             }
 
-            // Check if product exists on WordPress
+            // 🔍 Check existing product by SKU
             const { data: existingProducts } = await wooClient.get('products', {
               sku: product.sku,
               per_page: 1
             })
 
-            let wooProductId = null
+            let wooProductId: number
 
-            if (existingProducts && existingProducts.length > 0) {
-              // Update existing
+            if (existingProducts?.length) {
               wooProductId = existingProducts[0].id
+
               await wooClient.put(`products/${wooProductId}`, {
                 stock_quantity: product.stock_quantity,
                 manage_stock: true
               })
             } else {
-              // Create new
               const { data: newProduct } = await wooClient.post('products', {
                 name: product.product_name,
                 sku: product.sku,
@@ -83,16 +76,19 @@ export default async function handler(
                 stock_quantity: product.stock_quantity,
                 status: 'publish'
               })
+
               wooProductId = newProduct.id
             }
 
-            // Update mapping
-            await supabase.from('product_site_mapping').upsert({
-              product_sku: product.sku,
-              site_id: site.id,
-              woo_product_id: wooProductId,
-              last_synced: new Date().toISOString()
-            })
+            // 🧩 Save mapping
+            await supabase
+              .from('product_site_mapping')
+              .upsert({
+                product_sku: product.sku,
+                site_id: site.id,
+                woo_product_id: wooProductId,
+                last_synced: new Date().toISOString()
+              })
 
             syncedCount++
 
@@ -102,33 +98,39 @@ export default async function handler(
               success: true
             }
 
-          } catch (error: any) {
+          } catch (err: any) {
             failedCount++
             return {
               site: site.site_name,
               sku: product.sku,
               success: false,
-              error: error.message
+              error: err.message
             }
           }
         })
+      )
 
-        const siteResults = await Promise.all(sitePromises)
-        results.push({
-          product: product.product_name,
+      // 📦 Save global_products snapshot
+      await supabase
+        .from('global_products')
+        .upsert({
           sku: product.sku,
-          siteResults
+          product_name: product.product_name,
+          stock_quantity: product.stock_quantity,
+          updated_at: new Date().toISOString()
         })
 
-      } catch (error: any) {
-        console.error(`Failed to sync product ${product.sku}:`, error)
-        failedCount++
-      }
+      results.push({
+        product: product.product_name,
+        sku: product.sku,
+        siteResults
+      })
     }
 
-    res.status(200).json({
+    // ✅ Done
+    return NextResponse.json({
       success: true,
-      message: `Bulk sync completed`,
+      message: 'Bulk sync completed',
       stats: {
         totalProducts: products.length,
         totalSites: sites.length,
@@ -141,6 +143,9 @@ export default async function handler(
 
   } catch (error: any) {
     console.error('Bulk sync error:', error)
-    res.status(500).json({ error: error.message })
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    )
   }
 }
