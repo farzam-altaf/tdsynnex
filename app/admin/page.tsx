@@ -100,32 +100,6 @@ export default function MultiSiteDashboard() {
         }
     }
 
-    const testConnection = async (siteId: string) => {
-        try {
-            const site = sites.find(s => s.id === siteId)
-            if (!site) return
-
-            const response = await fetch('/api/admin/sites/test', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Admin-Key': process.env.NEXT_PUBLIC_ADMIN_API_KEY || 'your-admin-key'
-                },
-                body: JSON.stringify({ site_url: site.site_url })
-            })
-
-            const data = await response.json()
-
-            if (response.ok) {
-                toast.success(`Connection successful to ${site.site_name}`)
-            } else {
-                toast.error(`Connection failed: ${data.error}`)
-            }
-        } catch (error) {
-            toast.error('Connection test failed')
-        }
-    }
-
     const syncProductToSite = async (sku: string, siteId: string) => {
         try {
             const response = await fetch('/api/admin/sync/product', {
@@ -280,12 +254,6 @@ export default function MultiSiteDashboard() {
                                     Last Sync: {site.last_sync ? new Date(site.last_sync).toLocaleString() : 'Never'}
                                 </div>
                                 <div className="flex space-x-2 mt-4">
-                                    <button
-                                        onClick={() => testConnection(site.id)}
-                                        className="text-sm bg-gray-200 px-3 py-1 rounded hover:bg-gray-300"
-                                    >
-                                        Test Connection
-                                    </button>
                                     <button
                                         onClick={() => syncProductToSite('TEST', site.id)}
                                         className="text-sm bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600"
