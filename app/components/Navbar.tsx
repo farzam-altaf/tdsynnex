@@ -497,7 +497,15 @@ export default function Navbar() {
             <div className="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
               <div className="relative flex h-16 items-center justify-between">
                 <div className="shrink-0 flex items-center">
-                  <img src="/logo.png" alt="Logo" className="sm:h-9 h-6 w-auto" />
+                  <div className="shrink-0 flex items-center">
+                    <Link href="/">
+                      <img
+                        src="/logo.png"
+                        alt="Logo"
+                        className="sm:h-9 h-6 w-auto cursor-pointer"
+                      />
+                    </Link>
+                  </div>
                 </div>
 
                 <div className="hidden sm:flex flex-1 justify-center items-center">
