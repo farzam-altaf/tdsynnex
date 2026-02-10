@@ -14,8 +14,6 @@ import {
     logWarning,
     logDb
 } from "@/lib/logger";
-// Add this import at the top
-import { checkAndSyncGlobalProduct } from '@/lib/global-products'
 
 interface FormData {
     productName: string;
@@ -71,7 +69,6 @@ export default function AddDeviceClient() {
     const [additionalImages, setAdditionalImages] = useState<File[]>([]);
     const [additionalImagesPreview, setAdditionalImagesPreview] = useState<string[]>([]);
     const [removedExistingImages, setRemovedExistingImages] = useState<string[]>([]);
-    const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'failed'>('idle');
 
     // Helper function to get field section for logging
     const getFieldSection = (field: string): string => {
@@ -717,12 +714,10 @@ export default function AddDeviceClient() {
         }
     };
 
-    // Inside handleSubmit function, after successful product creation/update:
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const submitStartTime = Date.now();
         setIsFormLoading(true);
-        setSyncStatus('idle');
 
         try {
             await logActivity({
@@ -922,9 +917,6 @@ export default function AddDeviceClient() {
                 await fetchFilterOptions();
             }
 
-            // Check if product is Global
-            const isGlobalProduct = formData.inventoryType === 'Global';
-
             // Upload images
             const imageUrls = await uploadImagesToSupabase();
 
@@ -939,9 +931,6 @@ export default function AddDeviceClient() {
             };
 
             const toBool = (value?: string) => value === "Yes";
-
-            let productInsertError = null;
-            let createdProductId = null;
 
             if (isEditing && productId) {
 
@@ -1034,59 +1023,33 @@ export default function AddDeviceClient() {
                     .eq("id", productId);
 
                 if (error) {
-                    productInsertError = error;
-                } else {
-                    // ✅ PRODUCT UPDATED SUCCESSFULLY
-                    
-                    // If product is Global, sync with WordPress sites
-                    if (isGlobalProduct) {
-                        setSyncStatus('syncing');
-                        try {
-                            await checkAndSyncGlobalProduct(
-                                finalFormData.sku,
-                                finalFormData.stockQuantity || 0,
-                                finalFormData.productName,
-                                finalFormData.inventoryType,
-                                'update'
-                            );
-                            setSyncStatus('success');
-                            
-                            toast.success("Device updated and synced with WordPress sites!", {
-                                style: { background: "black", color: "white" }
-                            });
-                        } catch (syncError: any) {
-                            setSyncStatus('failed');
-                            toast.warning("Device updated but WordPress sync failed", {
-                                description: syncError.message,
-                                style: { background: "yellow", color: "black" }
-                            });
-                        }
-                    } else {
-                        toast.success("Device updated successfully!", {
-                            style: { background: "black", color: "white" }
-                        });
-                    }
-
-                    // Log activity
-                    await logActivity({
-                        type: 'product',
-                        level: 'success',
-                        action: 'product_updated',
-                        message: `Product "${finalFormData.productName}" updated successfully`,
-                        userId: profile?.userId || null,
-                        details: {
-                            sku: finalFormData.sku,
-                            inventoryType: finalFormData.inventoryType,
-                            isGlobal: isGlobalProduct,
-                            stockQuantity: finalFormData.stockQuantity,
-                            syncPerformed: isGlobalProduct,
-                            syncStatus: isGlobalProduct ? syncStatus : 'not_applicable'
-                        },
-                        status: 'completed'
+                    toast.error("Failed to update device. Please try again.", {
+                        style: { background: "red", color: "white" }
                     });
-
-                    router.push(`/product/${slug}`);
+                    setIsFormLoading(false);
+                    return;
                 }
+
+                toast.success("Device updated successfully!", {
+                    style: { background: "black", color: "white" }
+                });
+
+                // Log validation passed
+                await logActivity({
+                    type: 'validation',
+                    level: 'success',
+                    action: 'form_validation_passed',
+                    message: 'Product form validation passed',
+                    userId: profile?.userId || null,
+                    details: {
+                        validationTimeMs: Date.now() - submitStartTime,
+                        hasPrimaryImage: !isEditing ? !!primaryImage : true,
+                        additionalImagesCount: additionalImages.length
+                    },
+                    status: 'completed'
+                });
+
+                router.push(`/product/${slug}`);
 
             } else {
 
@@ -1134,75 +1097,24 @@ export default function AddDeviceClient() {
                     });
 
                 if (error) {
-                    productInsertError = error;
-                } else {
-                    // ✅ PRODUCT CREATED SUCCESSFULLY
-                    
-                    // If product is Global, sync with WordPress sites
-                    if (isGlobalProduct) {
-                        setSyncStatus('syncing');
-                        try {
-                            await checkAndSyncGlobalProduct(
-                                finalFormData.sku,
-                                finalFormData.stockQuantity || 0,
-                                finalFormData.productName,
-                                finalFormData.inventoryType,
-                                'create'
-                            );
-                            setSyncStatus('success');
-                            
-                            toast.success("Device added and synced with WordPress sites!", {
-                                style: { background: "black", color: "white" }
-                            });
-                        } catch (syncError: any) {
-                            setSyncStatus('failed');
-                            toast.warning("Device added but WordPress sync failed", {
-                                description: syncError.message,
-                                style: { background: "yellow", color: "black" }
-                            });
-                        }
-                    } else {
-                        toast.success("Device added successfully!", {
-                            style: { background: "black", color: "white" }
-                        });
-                    }
-
-                    // Log activity
-                    await logActivity({
-                        type: 'product',
-                        level: 'success',
-                        action: 'product_created',
-                        message: `Product "${finalFormData.productName}" created successfully`,
-                        userId: profile?.userId || null,
-                        details: {
-                            sku: finalFormData.sku,
-                            inventoryType: finalFormData.inventoryType,
-                            isGlobal: isGlobalProduct,
-                            stockQuantity: finalFormData.stockQuantity,
-                            syncPerformed: isGlobalProduct,
-                            syncStatus: isGlobalProduct ? syncStatus : 'not_applicable'
-                        },
-                        status: 'completed'
+                    toast.error("Failed to add device. Please try again.", {
+                        style: { background: "red", color: "white" }
                     });
-
-                    resetForm();
-                    router.push("/product-category/alldevices/");
+                    setIsFormLoading(false);
+                    return;
                 }
-            }
 
-            // Handle errors
-            if (productInsertError) {
-                toast.error("Failed to process device. Please try again.", {
-                    style: { background: "red", color: "white" }
+                toast.success("Device added successfully!", {
+                    style: { background: "black", color: "white" }
                 });
-                setIsFormLoading(false);
-                return;
+
+                resetForm();
+                router.push("/product-category/alldevices/");
             }
 
             setIsFormLoading(false);
 
-        } catch (error: any) {
-            console.log(error)
+        } catch (error) {
             toast.error("Failed to process device. Please try again.", {
                 style: { background: "red", color: "white" }
             });
@@ -1359,39 +1271,6 @@ export default function AddDeviceClient() {
                         </h1>
                     </div>
                 </div>
-
-                {/* Global Product Notification */}
-                {formData.inventoryType === 'Global' && (
-                    <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <div className="flex items-center">
-                            <svg className="w-5 h-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                            </svg>
-                            <h3 className="text-lg font-medium text-blue-800">Global Product</h3>
-                        </div>
-                        <p className="mt-2 text-sm text-blue-700">
-                            This product will be automatically synced with all connected WordPress sites.
-                            Stock updates will be reflected across all platforms in real-time.
-                        </p>
-                        {syncStatus === 'syncing' && (
-                            <div className="mt-3 flex items-center text-blue-600">
-                                <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                                Syncing with WordPress sites...
-                            </div>
-                        )}
-                        {syncStatus === 'success' && (
-                            <div className="mt-3 flex items-center text-green-600">
-                                <svg className="h-4 w-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                                Successfully synced with WordPress sites!
-                            </div>
-                        )}
-                    </div>
-                )}
 
                 <form onSubmit={handleSubmit} className="space-y-8">
                     {/* Product Images Section */}
@@ -1585,11 +1464,6 @@ export default function AddDeviceClient() {
                                         <option key={type} value={type}>{type}</option>
                                     ))}
                                 </select>
-                                {formData.inventoryType === 'Global' && (
-                                    <p className="text-xs text-green-600 mt-1">
-                                        ✓ This product will sync with WordPress sites
-                                    </p>
-                                )}
                             </div>
 
                             {/* Total Inventory */}
@@ -1711,12 +1585,7 @@ export default function AddDeviceClient() {
                   transition-colors 
                   ${isFormLoading ? 'cursor-not-allowed opacity-50' : 'hover:bg-[#41abd6] cursor-pointer'}`}
                             >
-                                {isFormLoading ? (
-                                    <div className="flex items-center">
-                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                        {syncStatus === 'syncing' ? 'Syncing...' : (isEditing ? 'Updating...' : 'Submitting...')}
-                                    </div>
-                                ) : (isEditing ? 'Update Device' : 'Submit')}
+                                {isFormLoading ? (isEditing ? 'Updating...' : 'Submitting...') : (isEditing ? 'Update Device' : 'Submit')}
                             </button>
                         </div>
                     </div>
