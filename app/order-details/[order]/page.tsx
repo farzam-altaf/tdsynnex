@@ -1401,12 +1401,10 @@ export default function Page() {
             const updateData: any = {
                 order_status: `${process.env.NEXT_PUBLIC_STATUS_REJECTED}`,
                 rejected_by: profile?.id,
-                action_date: currentDate
+                action_date: currentDate,
+                shipped_date: null,
+                returned_date: null
             };
-
-            // Clear shipped_date and returned_date when rejecting
-            updateData.shipped_date = null;
-            updateData.returned_date = null;
 
             const { error } = await supabase
                 .from('orders')
@@ -1432,6 +1430,25 @@ export default function Page() {
                 throw error;
             }
 
+            // ✅ Update local state immediately
+            setOrders(prev => prev.map(o =>
+                o.id === order.id ? {
+                    ...o,
+                    order_status: `${process.env.NEXT_PUBLIC_STATUS_REJECTED}`,
+                    rejected_by: profile?.id,
+                    rejectedBy: profile?.id,
+                    action_date: currentDate,
+                    shipped_date: null,
+                    returned_date: null,
+                    rejected_user: profile ? {
+                        id: profile.id,
+                        email: profile.email,
+                        firstName: profile.firstName,
+                        lastName: profile.lastName
+                    } : undefined
+                } : o
+            ));
+
             await logActivity({
                 type: 'order',
                 level: 'success',
@@ -1453,9 +1470,9 @@ export default function Page() {
                 status: 'completed'
             });
 
-            // Refresh data
-            fetchOrders();
-            sendRejectedOrderEmail(order);
+            // Send rejected email
+            sendRejectedOrderEmail({ ...order, ...updateData });
+
             await logActivity({
                 type: 'email',
                 level: 'info',
@@ -1470,6 +1487,9 @@ export default function Page() {
                 },
                 status: 'sent'
             });
+
+            toast.success("Order rejected successfully!");
+
         } catch (err) {
             await logActivity({
                 type: 'order',
@@ -1486,6 +1506,7 @@ export default function Page() {
                 },
                 status: 'failed'
             });
+            toast.error("Failed to reject order");
         }
     };
 
@@ -1496,6 +1517,7 @@ export default function Page() {
         setEditedValue(value || "");
         setEditingRowId(rowId);
     };
+
     const handleSaveEdit = async (field: string) => {
         if (!order || !isActionAuthorized || editingField !== field) return;
 
@@ -1524,6 +1546,33 @@ export default function Page() {
         try {
             const updateData: any = { [field]: editedValue };
 
+            // 🔴 FIX 1: SPECIAL HANDLING FOR REJECTED STATUS - USE handleReject FUNCTION
+            if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_REJECTED) {
+                console.log('Rejecting order via dropdown...');
+
+                // Call handleReject directly for consistent behavior
+                await handleReject();
+
+                // Reset editing state
+                setEditingField(null);
+                setEditingRowId(null);
+                setEditedValue("");
+                return; // Exit early since handleReject handles everything
+            }
+
+            // 🔴 FIX 2: Handle Processing status
+            if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
+
+                // Call handleReject directly for consistent behavior
+                await handleApprove();
+
+                // Reset editing state
+                setEditingField(null);
+                setEditingRowId(null);
+                setEditedValue("");
+                return; // Exit early since handleReject handles everything
+            }
+
             // Calculate revenue opportunity if device opportunity or budget is changed
             if (field === "dev_opportunity" || field === "dev_budget") {
                 const devOpportunity = field === "dev_opportunity" ? parseInt(editedValue) : order.dev_opportunity;
@@ -1550,6 +1599,7 @@ export default function Page() {
                 }
             }
 
+            // 🔴 FIX 3: Handle Shipped status with tracking validation
             if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED) {
                 // Check if tracking details are missing
                 if (!order.tracking || !order.tracking_link || !order.return_tracking || !order.return_tracking_link) {
@@ -1571,7 +1621,7 @@ export default function Page() {
                         },
                         status: 'pending'
                     });
-                    // Show toast notification
+
                     toast.error("Please fill Tracking & Return Tracking details before marking as Shipped", {
                         duration: 5000,
                     });
@@ -1590,206 +1640,74 @@ export default function Page() {
                 }
             }
 
-            // If status is being changed to Returned, handle via modal
+            // 🔴 FIX 4: Handle Returned status via modal
             if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
                 handleStatusChangeToReturned(field, editedValue);
                 return;
             }
 
-            // If status is being changed to Returned or Rejected, update product quantities
-            if (field === "order_status" && order.products && order.quantity) {
-                const currentStatus = order.order_status;
-                const newStatus = editedValue;
-                const allowedPreviousStatuses = [
-                    process.env.NEXT_PUBLIC_STATUS_AWAITING,
-                    process.env.NEXT_PUBLIC_STATUS_PROCESSING,
-                    process.env.NEXT_PUBLIC_STATUS_SHIPPED,
-                    process.env.NEXT_PUBLIC_STATUS_EXTENSION
-                ].filter(Boolean);
-                const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+            // 🔴 FIX 5: Update dates based on status changes
+            if (field === "order_status") {
+                const currentDate = new Date().toISOString().split('T')[0];
 
-                // Check if changing from allowed status to Rejected
-                if (
-                    allowedPreviousStatuses.includes(currentStatus) &&
-                    newStatus === process.env.NEXT_PUBLIC_STATUS_REJECTED
-                ) {
-                    const orderQuantity = parseInt(order.quantity) || 0;
-
-                    if (orderQuantity > 0) {
-                        // Parse current product quantities
-                        const currentStockQty = parseInt(order.products.stock_quantity) || 0;
-                        const currentWithCustomerQty = parseInt(order.products.withCustomer) || 0;
-
-                        // Calculate new quantities
-                        const newStockQty = currentStockQty + orderQuantity; // Increase stock
-                        const newWithCustomerQty = currentWithCustomerQty - orderQuantity; // Decrease withCustomer
-
-                        // Ensure quantities don't go negative
-                        const finalStockQty = Math.max(0, newStockQty).toString();
-                        const finalWithCustomerQty = Math.max(0, newWithCustomerQty).toString();
-
-                        // Update product quantities
-                        const { error: productUpdateError } = await supabase
-                            .from('products')
-                            .update({
-                                stock_quantity: finalStockQty,
-                                withCustomer: finalWithCustomerQty
-                            })
-                            .eq('id', order.products.id);
-
-                        if (productUpdateError) {
-                            await logActivity({
-                                type: 'product',
-                                level: 'error',
-                                action: 'product_quantity_update_failed',
-                                message: `Failed to update product quantities when changing order status to ${newStatus}`,
-                                userId: profile?.id || null,
-                                orderId: order.id,
-                                productId: order.products.id,
-                                details: {
-                                    orderNumber: order.order_no,
-                                    newStatus,
-                                    quantity: orderQuantity,
-                                    error: productUpdateError
-                                },
-                                status: 'failed'
-                            });
-                        } else {
-                            await logActivity({
-                                type: 'product',
-                                level: 'info',
-                                action: 'product_quantity_updated',
-                                message: `Updated product quantities when changing order status to ${newStatus}`,
-                                userId: profile?.id || null,
-                                orderId: order.id,
-                                productId: order.products.id,
-                                details: {
-                                    orderNumber: order.order_no,
-                                    newStatus,
-                                    quantity: orderQuantity,
-                                    oldStock: currentStockQty,
-                                    newStock: finalStockQty,
-                                    oldWithCustomer: currentWithCustomerQty,
-                                    newWithCustomer: finalWithCustomerQty
-                                },
-                                status: 'completed'
-                            });
-                        }
-                    }
-
-                    // If status is changing to Returned, update returned_date
-                    if (newStatus === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
-                        updateData.returned_date = currentDate;
-
-                        // Clear shipped_date if it exists (optional - depends on your business logic)
-                        updateData.shipped_date = null;
-                    }
-                }
-
-                // Also handle reverse scenario: if status is changing from Rejected back to something else
-                if (
-                    currentStatus === process.env.NEXT_PUBLIC_STATUS_REJECTED &&
-                    newStatus !== process.env.NEXT_PUBLIC_STATUS_REJECTED
-                ) {
-                    const orderQuantity = parseInt(order.quantity) || 0;
-
-                    if (orderQuantity > 0) {
-                        // Parse current product quantities
-                        const currentStockQty = parseInt(order.products.stock_quantity) || 0;
-                        const currentWithCustomerQty = parseInt(order.products.withCustomer) || 0;
-
-                        // Reverse the previous update: decrease stock, increase withCustomer
-                        const newStockQty = currentStockQty - orderQuantity;
-                        const newWithCustomerQty = currentWithCustomerQty + orderQuantity;
-
-                        // Ensure quantities don't go negative
-                        const finalStockQty = Math.max(0, newStockQty).toString();
-                        const finalWithCustomerQty = Math.max(0, newWithCustomerQty).toString();
-
-                        // Update product quantities
-                        const { error: productUpdateError } = await supabase
-                            .from('products')
-                            .update({
-                                stock_quantity: finalStockQty,
-                                withCustomer: finalWithCustomerQty
-                            })
-                            .eq('id', order.products.id);
-
-                        if (productUpdateError) {
-                            await logActivity({
-                                type: 'product',
-                                level: 'error',
-                                action: 'product_quantity_reverse_update_failed',
-                                message: `Failed to reverse product quantities when changing order status from ${currentStatus} to ${newStatus}`,
-                                userId: profile?.id || null,
-                                orderId: order.id,
-                                productId: order.products.id,
-                                details: {
-                                    orderNumber: order.order_no,
-                                    oldStatus: currentStatus,
-                                    newStatus,
-                                    quantity: orderQuantity,
-                                    error: productUpdateError
-                                },
-                                status: 'failed'
-                            });
-                        }
-                    }
-
-                    // If changing from Returned to another status, clear returned_date
-                    if (currentStatus === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
-                        updateData.returned_date = null;
-                    }
-                }
-
-                // Check if status is changing to Shipped or Shipped Extension
-                const shippedStatuses = [
-                    process.env.NEXT_PUBLIC_STATUS_SHIPPED,
-                    process.env.NEXT_PUBLIC_STATUS_EXTENSION
-                ].filter(Boolean);
-
-                const nonShippedStatuses = [
-                    process.env.NEXT_PUBLIC_STATUS_AWAITING,
-                    process.env.NEXT_PUBLIC_STATUS_PROCESSING,
-                    process.env.NEXT_PUBLIC_STATUS_RETURNED,
-                    process.env.NEXT_PUBLIC_STATUS_REJECTED
-                ].filter(Boolean);
-
-                // If changing to Shipped or Shipped Extension, update shipped_date
-                if (shippedStatuses.includes(newStatus) && !shippedStatuses.includes(currentStatus)) {
+                // If changing to Shipped/Extension, set shipped_date
+                if (editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED ||
+                    editedValue === process.env.NEXT_PUBLIC_STATUS_EXTENSION) {
                     updateData.shipped_date = currentDate;
-
-                    // Clear returned_date if it exists (since it's being shipped, not returned)
-                    if (currentStatus === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
-                        updateData.returned_date = null;
-                    }
+                    updateData.returned_date = null;
                 }
-                // If changing from Shipped/Extension to a non-shipped status, clear shipped_date
-                else if (shippedStatuses.includes(currentStatus) && nonShippedStatuses.includes(newStatus)) {
+
+                // If changing to other statuses, clear dates
+                if (editedValue === process.env.NEXT_PUBLIC_STATUS_REJECTED ||
+                    editedValue === process.env.NEXT_PUBLIC_STATUS_AWAITING ||
+                    editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
                     updateData.shipped_date = null;
+                    updateData.returned_date = null;
                 }
             }
 
-            // ✅ FIRST: Optimistically update local state
+            // 🔴 FIX 6: Clean optimistic update
             setOrders(prev => {
                 const updatedOrder = prev.map(o => {
                     if (o.id === order.id) {
                         const updated = { ...o, [field]: editedValue };
 
-                        // Special handling for product_id field
+                        // Update action_date and user fields
+                        if (field === "order_status") {
+                            if (editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
+                                updated.approvedBy = profile?.id;
+                                updated.action_date = new Date().toISOString().split('T')[0];
+                                updated.rejectedBy = null;
+                            }
+
+                            // Update dates
+                            if (editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED ||
+                                editedValue === process.env.NEXT_PUBLIC_STATUS_EXTENSION) {
+                                updated.shipped_date = new Date().toISOString().split('T')[0];
+                                updated.returned_date = null;
+                            } else if (editedValue === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
+                                updated.returned_date = new Date().toISOString().split('T')[0];
+                                updated.shipped_date = null;
+                            } else if (editedValue === process.env.NEXT_PUBLIC_STATUS_REJECTED ||
+                                editedValue === process.env.NEXT_PUBLIC_STATUS_AWAITING ||
+                                editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
+                                updated.shipped_date = null;
+                                updated.returned_date = null;
+                            }
+                        }
+
+                        // Handle product_id field
                         if (field === "product_id") {
-                            // Ensure product_id remains as array
                             if (typeof editedValue === 'string') {
                                 try {
                                     updated.product_id = JSON.parse(editedValue);
                                 } catch (error) {
-                                    // If parsing fails, keep as array with single value
                                     updated.product_id = [editedValue];
                                 }
                             } else if (Array.isArray(editedValue)) {
                                 updated.product_id = editedValue;
                             } else {
-                                updated.product_id = order.product_id; // Keep original if invalid
+                                updated.product_id = order.product_id;
                             }
                         }
 
@@ -1802,16 +1720,6 @@ export default function Page() {
                                 updated.rev_opportunity = devOpportunity * devBudget;
                             }
                         }
-                        // Update dates in local state
-                        if (field === "order_status") {
-                            if (editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED ||
-                                editedValue === process.env.NEXT_PUBLIC_STATUS_EXTENSION) {
-                                updated.shipped_date = new Date().toISOString().split('T')[0];
-                            }
-                            if (editedValue === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
-                                updated.returned_date = new Date().toISOString().split('T')[0];
-                            }
-                        }
                         return updated;
                     }
                     return o;
@@ -1819,33 +1727,17 @@ export default function Page() {
                 return updatedOrder;
             });
 
-            // ✅ SECOND: Now update the database
+            // 🔴 FIX 7: Clean database update
             const { error } = await supabase
                 .from('orders')
                 .update(updateData)
                 .eq('id', order.id);
 
             if (error) {
-                // ✅ If error, revert the optimistic update
-                setOrders(prev => {
-                    const revertedOrder = prev.map(o => {
-                        if (o.id === order.id) {
-                            const reverted = { ...o, [field]: oldValue };
-                            // Also revert revenue if needed
-                            if (field === "dev_opportunity" || field === "dev_budget") {
-                                const devOpportunity = field === "dev_opportunity" ? parseInt(oldValue as string) : order.dev_opportunity;
-                                const devBudget = field === "dev_budget" ? parseFloat(oldValue as string) : order.dev_budget;
-
-                                if (devOpportunity && devBudget) {
-                                    reverted.rev_opportunity = devOpportunity * devBudget;
-                                }
-                            }
-                            return reverted;
-                        }
-                        return o;
-                    });
-                    return revertedOrder;
-                });
+                // Revert optimistic update on error
+                setOrders(prev => prev.map(o =>
+                    o.id === order.id ? { ...o, [field]: oldValue } : o
+                ));
 
                 await logActivity({
                     type: 'order',
@@ -1866,7 +1758,7 @@ export default function Page() {
                 throw error;
             }
 
-            // Log edit success
+            // Log success
             await logActivity({
                 type: 'order',
                 level: 'success',
@@ -1885,100 +1777,24 @@ export default function Page() {
                 status: 'completed'
             });
 
-            // ✅ Check if status is being changed to "Processing" and send approved email
-            if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
-                // Get the updated order data
+            // Send emails for status changes
+            if (field === "order_status") {
                 const updatedOrder = { ...order, ...updateData };
-                sendApprovedOrderEmail(updatedOrder);
-                await logActivity({
-                    type: 'email',
-                    level: 'info',
-                    action: 'approved_order_email_sent_on_status_change',
-                    message: `Approved order email sent for order ${order.order_no}`,
-                    userId: profile?.id || null,
-                    orderId: order.id,
-                    details: {
-                        orderNumber: order.order_no,
-                        recipient: order.order_by_user?.email
-                    },
-                    status: 'sent'
-                });
-            }
-            if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_REJECTED) {
-                // Get the updated order data
-                const updatedOrder = { ...order, ...updateData };
-                sendRejectedOrderEmail(updatedOrder);
-                await logActivity({
-                    type: 'email',
-                    level: 'info',
-                    action: 'rejected_order_email_sent_on_status_change',
-                    message: `Rejected order email sent for order ${order.order_no}`,
-                    userId: profile?.id || null,
-                    orderId: order.id,
-                    details: {
-                        orderNumber: order.order_no,
-                        recipient: order.order_by_user?.email
-                    },
-                    status: 'sent'
-                });
+
+                if (editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
+                    sendApprovedOrderEmail(updatedOrder);
+                } else if (editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED) {
+                    sendShippedOrderEmail(updatedOrder);
+                }
+                // Rejected email already sent by handleReject function
             }
 
-            if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED) {
-                // Get the updated order data
-                const updatedOrder = { ...order, ...updateData };
-                sendShippedOrderEmail(updatedOrder);
-                await logActivity({
-                    type: 'email',
-                    level: 'info',
-                    action: 'shipped_order_email_sent_on_status_change',
-                    message: `Shipped order email sent for order ${order.order_no}`,
-                    userId: profile?.id || null,
-                    orderId: order.id,
-                    details: {
-                        orderNumber: order.order_no,
-                        recipient: order.order_by_user?.email
-                    },
-                    status: 'sent'
-                });
-            }
-
-            // ✅ Reset editing state immediately (UI will update from optimistic update)
+            // Reset editing state
             setEditingField(null);
             setEditingRowId(null);
             setEditedValue("");
 
-            // ✅ Optional: Background mein data refresh (agar zaroori ho)
-            // setTimeout se thoda delay dekar background mein refresh karein
-            setTimeout(async () => {
-                try {
-                    // Sirf specific order ko refresh karein, pure page ko nahi
-                    const { data: updatedData, error: refreshError } = await supabase
-                        .from('orders')
-                        .select(`
-                        *,
-                        approved_user:users!orders_approved_by_fkey(id, email, firstName, lastName),
-                        rejected_user:users!orders_rejected_by_fkey(id, email, firstName, lastName),
-                        order_by_user:users!orders_order_by_fkey(id, email, firstName, lastName),
-                        wins:wins(*) 
-                    `)
-                        .eq('id', order.id)
-                        .single();
-
-                    if (!refreshError && updatedData) {
-                        // Update only the specific order in state
-                        setOrders(prev => prev.map(o =>
-                            o.id === order.id ? {
-                                ...o,
-                                ...updatedData,
-                                // Additional processing if needed
-                            } : o
-                        ));
-                    }
-                } catch (err) {
-                    console.error('Background refresh failed:', err);
-                    // Ignore background refresh errors
-                }
-            }, 1000);
+            toast.success(`${field} updated successfully!`);
 
         } catch (err) {
             await logActivity({
@@ -1998,7 +1814,6 @@ export default function Page() {
                 status: 'failed'
             });
 
-            // Show error toast
             toast.error(`Failed to update ${field}`);
         }
     };
@@ -2938,7 +2753,7 @@ export default function Page() {
                         size="sm"
                         onClick={() => {
                             console.log('Save button clicked in status dropdown');
-                            // If it's Returned, we already handled it above
+                            // If it's Rejected, handleReject will be called via handleSaveEdit
                             if (editedValue !== process.env.NEXT_PUBLIC_STATUS_RETURNED) {
                                 console.log('Saving non-return status');
                                 handleSaveEdit(field);
@@ -3622,7 +3437,11 @@ export default function Page() {
                             <TableBody>
                                 <TableRow>
                                     <TableCell colSpan={2}>
-                                        {renderStatusDropdown("order_status", order.order_status, "status")}
+                                        {order.order_status == process.env.NEXT_PUBLIC_STATUS_AWAITING ? (
+                                            order.order_status
+                                        ) : (
+                                            renderStatusDropdown("order_status", order.order_status, "status")
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             </TableBody>
@@ -3638,56 +3457,60 @@ export default function Page() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }} colSpan={2}>
-                                            Shipment Status
+                                            Win Status
                                         </TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    <TableRow>
-                                        <TableCell className="font-semibold">Days Since Shipped</TableCell>
-                                        <TableCell className="border-l">
-                                            <div className="flex items-center">
-                                                {order.shipped_date ? (
-                                                    (() => {
-                                                        const daysShipped = calculateDaysShipped(order.shipped_date);
-                                                        const daysOverdue = calculateDaysOverdue(order.shipped_date);
-                                                        const isOverdue = daysOverdue > 0;
+                                    {order.wins && order.wins.length == 0 && (
+                                        <>
+                                            <TableRow>
+                                                <TableCell className="font-semibold">Days Since Shipped</TableCell>
+                                                <TableCell className="border-l">
+                                                    <div className="flex items-center">
+                                                        {order.shipped_date ? (
+                                                            (() => {
+                                                                const daysShipped = calculateDaysShipped(order.shipped_date);
+                                                                const daysOverdue = calculateDaysOverdue(order.shipped_date);
+                                                                const isOverdue = daysOverdue > 0;
 
-                                                        return (
-                                                            <span className={isOverdue ? "text-red-600 font-semibold" : ""}>
-                                                                {daysShipped} days
-                                                                {isOverdue && ` (${daysOverdue} days overdue)`}
-                                                            </span>
-                                                        );
-                                                    })()
-                                                ) : (
-                                                    <span className="text-gray-500">Not shipped yet</span>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                        <TableCell className="font-semibold">Estimated Return Date</TableCell>
-                                        <TableCell className="border-l">
-                                            <div className="flex items-center">
-                                                {order.shipped_date ? (
-                                                    (() => {
-                                                        const estimatedDate = calculateEstimatedReturnDate(order.shipped_date);
-                                                        const hasPassed = hasReturnDatePassed(order.shipped_date);
+                                                                return (
+                                                                    <span className={isOverdue ? "text-red-600 font-semibold" : ""}>
+                                                                        {daysShipped} days
+                                                                        {isOverdue && ` (${daysOverdue} days overdue)`}
+                                                                    </span>
+                                                                );
+                                                            })()
+                                                        ) : (
+                                                            <span className="text-gray-500">Not shipped yet</span>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                            <TableRow>
+                                                <TableCell className="font-semibold">Estimated Return Date</TableCell>
+                                                <TableCell className="border-l">
+                                                    <div className="flex items-center">
+                                                        {order.shipped_date ? (
+                                                            (() => {
+                                                                const estimatedDate = calculateEstimatedReturnDate(order.shipped_date);
+                                                                const hasPassed = hasReturnDatePassed(order.shipped_date);
 
-                                                        return (
-                                                            <span className={hasPassed ? "text-red-600 font-semibold" : ""}>
-                                                                {formatEstimatedReturnDate(order.shipped_date)}
-                                                                {hasPassed && " (Passed)"}
-                                                            </span>
-                                                        );
-                                                    })()
-                                                ) : (
-                                                    <span className="text-gray-500">Not shipped yet</span>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
+                                                                return (
+                                                                    <span className={hasPassed ? "text-red-600 font-semibold" : ""}>
+                                                                        {formatEstimatedReturnDate(order.shipped_date)}
+                                                                        {hasPassed && " (Passed)"}
+                                                                    </span>
+                                                                );
+                                                            })()
+                                                        ) : (
+                                                            <span className="text-gray-500">Not shipped yet</span>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        </>
+                                    )}
                                     <TableRow>
                                         <TableCell className="font-semibold">Win Status</TableCell>
                                         <TableCell className="border-l">
