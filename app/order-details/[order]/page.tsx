@@ -866,6 +866,35 @@ export default function Page() {
         }
     };
 
+    // Helper function to format action_date with AM/PM
+    const formatActionDate = (dateTimeString: string | null) => {
+        if (!dateTimeString) return "-";
+
+        try {
+            const date = new Date(dateTimeString);
+
+            // Extract date parts
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+
+            // Extract time parts
+            let hours = date.getHours();
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+
+            // Convert to 12-hour format with AM/PM
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; // 0 should be 12
+
+            // Format: MM/DD/YYYY hh:mm AM/PM
+            return `${month}/${day}/${year} (${hours}:${minutes} ${ampm})`;
+        } catch (error) {
+            console.error('Error formatting action_date:', error);
+            return dateTimeString; // Return original if parsing fails
+        }
+    };
+
     const renderReturnModal = () => {
         return (
             <Dialog
@@ -3167,7 +3196,7 @@ export default function Page() {
                                                     {order.rejected_user?.email || order.rejectedBy || "N/A"}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {order.action_date}
+                                                    {order.action_date ? formatActionDate(order.action_date) : "-"}
                                                 </TableCell>
                                             </TableRow>
                                         </TableBody>
@@ -3186,7 +3215,7 @@ export default function Page() {
                                                     {order.approved_user?.email || order.approvedBy || "-"}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {order.action_date || "-"}
+                                                    {order.action_date ? formatActionDate(order.action_date) : "-"}
                                                 </TableCell>
                                             </TableRow>
                                         </TableBody>
