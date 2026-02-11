@@ -481,7 +481,7 @@ export default function Navbar() {
       handleCancelEdit(editingProductId);
     }
   }, [editingProductId]);
-
+  const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
     return () => {
@@ -536,11 +536,25 @@ export default function Navbar() {
                 </div>
 
                 <div className="flex items-center space-x-2">
+                  {/* Desktop Notification Bell with Hover Dropdown */}
                   {(isLoggedIn && (profile?.role === admin || profile?.role === shopManager)) && (
-                    <div className="hidden lg:block relative" ref={notificationRef}>
+                    <div
+                      className="hidden lg:block relative"
+                      ref={notificationRef}
+                      onMouseEnter={() => {
+                        if (notificationTimeoutRef.current) {
+                          clearTimeout(notificationTimeoutRef.current)
+                        }
+                        setIsNotificationOpen(true)
+                      }}
+                      onMouseLeave={() => {
+                        notificationTimeoutRef.current = setTimeout(() => {
+                          setIsNotificationOpen(false)
+                        }, 200)
+                      }}
+                    >
                       <button
                         type="button"
-                        onClick={handleNotificationClick}
                         className="relative rounded-full p-1 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200"
                       >
                         <span className="sr-only">Notifications</span>
@@ -565,7 +579,20 @@ export default function Navbar() {
 
                       {/* Notification Dropdown */}
                       {isNotificationOpen && (
-                        <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                        <div
+                          className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
+                          onMouseEnter={() => {
+                            if (notificationTimeoutRef.current) {
+                              clearTimeout(notificationTimeoutRef.current)
+                            }
+                            setIsNotificationOpen(true)
+                          }}
+                          onMouseLeave={() => {
+                            notificationTimeoutRef.current = setTimeout(() => {
+                              setIsNotificationOpen(false)
+                            }, 200)
+                          }}
+                        >
                           <div className="p-2">
                             <h3 className="text-sm font-semibold text-gray-900 mb-3">Notifications</h3>
 
