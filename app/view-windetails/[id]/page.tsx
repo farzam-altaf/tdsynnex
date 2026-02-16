@@ -51,6 +51,25 @@ export default function WinDetailsPage() {
     const allowedRoles = [smRole, adminRole, sRole, ssRole].filter(Boolean);
     const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
 
+    // Format date to dd-MMM-yyyy
+    const formatDateToCustomFormat = (dateString: string | null) => {
+        if (!dateString) return 'N/A';
+
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return 'N/A';
+
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = date.toLocaleString('default', { month: 'short' });
+            const year = date.getFullYear();
+
+            return `${day}-${month}-${year}`;
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return 'N/A';
+        }
+    };
+
     // Fetch win details with related data - UPDATED
     const fetchWinDetails = async () => {
         try {
@@ -386,11 +405,7 @@ export default function WinDetailsPage() {
                         <TableRow>
                             <TableCell className="w-[65%] font-semibold">Date of Purchase</TableCell>
                             <TableCell className="w-[35%] border-l">
-                                {win.purchaseDate ? new Date(win.purchaseDate).toLocaleDateString('en-US', {
-                                    year: 'numeric',
-                                    month: '2-digit',
-                                    day: '2-digit'
-                                }) : "-"}
+                                {win.purchaseDate ? formatDateToCustomFormat(win.purchaseDate) : "-"}
                             </TableCell>
                         </TableRow>
 

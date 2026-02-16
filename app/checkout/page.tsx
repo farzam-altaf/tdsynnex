@@ -63,6 +63,15 @@ export default function Page() {
 
   const cartItem = cartItems[0]?.product;
 
+  // Format date to PostgreSQL timestamp with timezone
+  const formatToTimestamp = (dateString: string) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    // Set to noon UTC to avoid timezone issues
+    date.setUTCHours(12, 0, 0, 0);
+    return date.toISOString();
+  };
+
   const calculateTotals = () => {
     const subtotal = cartItems.reduce((sum, item) =>
       sum + ((item.product?.price || 0) * item.quantity), 0);
@@ -172,7 +181,57 @@ export default function Page() {
         router.replace('/cart');
       }
     }
-  }, [cartCount, cartLoading]);
+
+    // Check if any product has quantity > 1
+    const hasQuantityMoreThanOne = cartItems.some(item => item.quantity > 1);
+    if (cartCount >= 1 && hasQuantityMoreThanOne) {
+      if (!cartLoading) {
+        logActivity({
+          type: 'cart',
+          level: 'warning',
+          action: 'invalid_quantity',
+          message: `User attempted checkout with quantity > 1`,
+          userId: profile?.id || null,
+          details: {
+            cartCount,
+            itemsWithQuantity: cartItems.map(item => ({
+              productId: item.product_id,
+              productName: item.product?.product_name,
+              quantity: item.quantity
+            }))
+          },
+          status: 'failed'
+        });
+
+        // Show toast message
+        toast.error("Only 1 quantity allowed per product", {
+          description: "Please reduce quantity to 1 before checkout",
+          style: { background: "red", color: "white" }
+        });
+
+        router.replace('/cart');
+      }
+    }
+
+    if (cartCount > 1) {
+      if (!cartLoading) {
+        logActivity({
+          type: 'cart',
+          level: 'warning',
+          action: 'invalid_cart_count',
+          message: `User attempted checkout with ${cartCount} items (expected 1)`,
+          userId: profile?.id || null,
+          details: {
+            cartCount,
+            expectedCount: 1,
+            cartItems: cartItems.length
+          },
+          status: 'failed'
+        });
+        router.replace('/cart');
+      }
+    }
+  }, [cartCount, cartLoading, cartItems]);
 
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -231,8 +290,24 @@ export default function Page() {
   const validateField = (name: string, value: any): string => {
     const fieldName = name.replace(/_/g, ' ');
 
+    if (name === 'sales_executive' && (value <= 0 || value === "")) {
+      return `Sales Executive is required`;
+    }
+
+    if (name === 'se_email' && (value <= 0 || value === "")) {
+      return `Sales Executive email is required`;
+    }
+
+    if (name === 'sm_email' && (value <= 0 || value === "")) {
+      return `Sales Manager email is required`;
+    }
+
+    if (name === 'currently_running' && (value <= 0 || value === "")) {
+      return `This field is required`;
+    }
+
     if (name === 'dev_opportunity' && (value <= 0 || value === "")) {
-      return `${fieldName} must be greater than 0`;
+      return `Device Opportunity must be greater than 0`;
     }
 
     if (name === 'dev_budget' && (value <= 0 || value === "")) {
@@ -330,10 +405,17 @@ export default function Page() {
     return true;
   };
 
+
   // Prepare data for submission - Updated for arrays in product_id and quantity
   const prepareOrderData = () => {
     const now = new Date();
     const orderDate = new Date(formData.desired_date);
+
+    // Format dates as timestamps with timezone
+    const desiredDateTimestamp = formatToTimestamp(formData.desired_date);
+    const orderDateTimestamp = formatToTimestamp(formData.desired_date);
+    const createdAtTimestamp = now.toISOString();
+    const updatedAtTimestamp = now.toISOString();
 
     // Prepare arrays for product_ids and quantities
     const productIdsArray = cartItems.map(item => item.product_id);
@@ -341,8 +423,8 @@ export default function Page() {
 
     return {
       // Arrays for multiple products
-      product_id: JSON.stringify(productIdsArray), // Convert to JSON string
-      quantity: JSON.stringify(quantitiesArray), // Convert to JSON string
+      product_id: productIdsArray[0],
+      quantity: quantitiesArray[0],
 
       order_by: profile?.id || "",
       sales_executive: formData.sales_executive,
@@ -371,15 +453,15 @@ export default function Page() {
       order_status: process.env.NEXT_PUBLIC_STATUS_AWAITING,
       city: formData.city,
       zip: formData.zip,
-      desired_date: formData.desired_date,
+      desired_date: desiredDateTimestamp, // Now as timestamp
       notes: formData.notes || null,
       isTerms: formData.isTerms,
-      order_date: formData.desired_date,
+      order_date: orderDateTimestamp, // Now as timestamp
       order_month: orderDate.toLocaleString('default', { month: 'long' }),
       order_year: orderDate.getFullYear(),
       order_quarter: getQuarter(formData.desired_date),
-      created_at: now.toISOString(),
-      updated_at: now.toISOString(),
+      created_at: createdAtTimestamp, // Already timestamp
+      updated_at: updatedAtTimestamp, // Already timestamp
     };
   };
 
@@ -489,7 +571,7 @@ export default function Page() {
       });
 
       // Send emails with multiple products
-      if (insertedOrder && insertedOrder.length > 0) {
+      if (insertedOrder) {
         sendCheckoutEmail(insertedOrder);
         sendNewOrderEmail(insertedOrder);
       }
@@ -658,8 +740,11 @@ export default function Page() {
 
       const adminEmails = await getAdminEmails();
 
+      console.log(adminEmails)
+
       await sendEmail({
-        to: adminEmails.length > 0 ? adminEmails : "farzamaltaf888@gmail.com",
+        to: "farzamaltaf888@gmail.com",
+        // to: adminEmails.length > 0 ? adminEmails : "farzamaltaf888@gmail.com",
         subject: template.subject,
         text: template.text,
         html: template.html,
@@ -779,6 +864,111 @@ export default function Page() {
             </div>
           </div>
         </div>
+      ) : cartItems.length > 1 || cartItems.some(item => item.quantity > 1) ? (
+        // New div that shows when multiple products or quantity > 1
+        <div className="min-h-screen p-4 my-7 md:p-8">
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-lg overflow-hidden">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  Demo Unit Limitation
+                </h2>
+              </div>
+
+              {/* Content */}
+              <div className="p-8">
+                <div className="flex flex-col items-center text-center">
+                  {/* Icon */}
+                  <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-6">
+                    <svg className="w-12 h-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 12H4M12 4v16" />
+                    </svg>
+                  </div>
+
+                  {/* Main Message */}
+                  <h3 className="text-2xl font-bold text-gray-800 mb-3">
+                    Only One Demo Unit Allowed
+                  </h3>
+
+                  <p className="text-gray-600 text-lg mb-6 max-w-lg">
+                    You can only request <span className="font-semibold text-red-600">one demo unit at a time</span> with quantity of 1.
+                  </p>
+
+                  {/* Cart Summary */}
+                  <div className="bg-gray-50 rounded-lg p-6 w-full max-w-md mb-8">
+                    <h4 className="font-semibold text-gray-700 mb-4 text-left">Your Current Cart:</h4>
+                    <div className="space-y-3">
+                      {cartItems.map((item, index) => (
+                        <div key={item.product_id} className="flex justify-between items-center text-sm border-b border-gray-200 pb-2 last:border-0">
+                          <span className="text-gray-600">{item.product?.product_name || 'Product'}</span>
+                          <span className={`font-medium ${item.quantity > 1 ? 'text-red-600' : 'text-gray-800'}`}>
+                            Qty: {item.quantity}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between items-center pt-2 font-semibold">
+                        <span className="text-gray-800">Total Items:</span>
+                        <span className="text-gray-800">{cartItems.length}</span>
+                      </div>
+                      <div className="flex justify-between items-center font-semibold">
+                        <span className="text-gray-800">Total Quantity:</span>
+                        <span className="text-gray-800">{getTotalQuantity()}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <Link
+                      href="/cart"
+                      className="px-8 py-3 bg-[#0A4647] text-white font-semibold rounded-lg hover:bg-[#0a5c5e] transition-colors duration-200 flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                      </svg>
+                      Go to Cart
+                    </Link>
+
+                    <Link
+                      href="/product-category/alldevices"
+                      className="px-8 py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors duration-200 flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      Continue Shopping
+                    </Link>
+                  </div>
+
+                  {/* Help Text */}
+                  <p className="text-sm text-gray-500 mt-8">
+                    Please adjust your cart to contain only one product with quantity 1 before proceeding to checkout.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Additional Info Card */}
+            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <h5 className="font-semibold text-blue-800">Why this limitation?</h5>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Demo units are limited to one per customer to ensure fair access for all customers.
+                    If you need multiple units for evaluation, please contact our sales team.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : (
         <>
           <div className="min-h-screen p-4 my-7 md:p-8">
@@ -804,7 +994,10 @@ export default function Page() {
                         required
                       />
                       {errors.sales_executive && (
-                        <p className="mt-1 text-sm text-red-600">{errors.sales_executive}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.sales_executive.split(' is')[0]}</span>
+                          {errors.sales_executive.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
                     <div>
@@ -820,7 +1013,10 @@ export default function Page() {
                         required
                       />
                       {errors.se_email && (
-                        <p className="mt-1 text-sm text-red-600">{errors.se_email}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.se_email.split(' is')[0]}</span>
+                          {errors.se_email.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -839,7 +1035,10 @@ export default function Page() {
                         required
                       />
                       {errors.sales_manager && (
-                        <p className="mt-1 text-sm text-red-600">{errors.sales_manager}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.sales_manager.split(' is')[0]}</span>
+                          {errors.sales_manager.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
                     <div>
@@ -855,7 +1054,10 @@ export default function Page() {
                         required
                       />
                       {errors.sm_email && (
-                        <p className="mt-1 text-sm text-red-600">{errors.sm_email}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.sm_email.split(' is')[0]}</span>
+                          {errors.sm_email.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -874,7 +1076,10 @@ export default function Page() {
                         required
                       />
                       {errors.reseller && (
-                        <p className="mt-1 text-sm text-red-600">{errors.reseller}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.reseller.split(' is')[0]}</span>
+                          {errors.reseller.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -902,7 +1107,10 @@ export default function Page() {
                         required
                       />
                       {errors.dev_opportunity && (
-                        <p className="mt-1 text-sm text-red-600">{errors.dev_opportunity}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.dev_opportunity.split(' is')[0]}</span>
+                          {errors.dev_opportunity.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
 
@@ -927,7 +1135,10 @@ export default function Page() {
                         />
                       </div>
                       {errors.dev_budget && (
-                        <p className="mt-1 text-sm text-red-600">{errors.dev_budget}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.dev_budget.split(' is')[0]}</span>
+                          {errors.dev_budget.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -967,7 +1178,9 @@ export default function Page() {
                         required
                       />
                       {errors.crm_account && (
-                        <p className="mt-1 text-sm text-red-600">{errors.crm_account}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          CRM Account is required
+                        </p>
                       )}
                     </div>
                   </div>
@@ -992,7 +1205,10 @@ export default function Page() {
                         <option value="State & Local">State & Local</option>
                       </select>
                       {errors.segment && (
-                        <p className="mt-1 text-sm text-red-600">{errors.segment}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.segment.split(' is')[0]}</span>
+                          {errors.segment.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
 
@@ -1015,7 +1231,10 @@ export default function Page() {
                         <option value="Federal">Federal</option>
                       </select>
                       {errors.vertical && (
-                        <p className="mt-1 text-sm text-red-600">{errors.vertical}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.vertical.split(' is')[0]}</span>
+                          {errors.vertical.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1045,7 +1264,9 @@ export default function Page() {
                         <option value="Other">Other</option>
                       </select>
                       {errors.current_manufacturer && (
-                        <p className="mt-1 text-sm text-red-600">{errors.current_manufacturer}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          This field is required
+                        </p>
                       )}
                     </div>
                     <div>
@@ -1065,7 +1286,9 @@ export default function Page() {
                         <option value="Reseller looking to use it for one of their events">Reseller looking to use it for one of their events</option>
                       </select>
                       {errors.use_case && (
-                        <p className="mt-1 text-sm text-red-600">{errors.use_case}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          This field is required
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1088,7 +1311,9 @@ export default function Page() {
                         <option value="MacOS">MacOS</option>
                       </select>
                       {errors.currently_running && (
-                        <p className="mt-1 text-sm text-red-600">{errors.currently_running}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          This field is required
+                        </p>
                       )}
                     </div>
 
@@ -1109,7 +1334,9 @@ export default function Page() {
                         <option value="100+">100+</option>
                       </select>
                       {errors.licenses && (
-                        <p className="mt-1 text-sm text-red-600">{errors.licenses}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          This field is required
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1131,7 +1358,9 @@ export default function Page() {
                         <option value="No">No</option>
                       </select>
                       {errors.isCopilot && (
-                        <p className="mt-1 text-sm text-red-600">{errors.isCopilot}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          This field is required
+                        </p>
                       )}
                     </div>
 
@@ -1151,7 +1380,9 @@ export default function Page() {
                         <option value="No">No</option>
                       </select>
                       {errors.isSecurity && (
-                        <p className="mt-1 text-sm text-red-600">{errors.isSecurity}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          This field is required
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1169,7 +1400,9 @@ export default function Page() {
                         required
                       />
                       {errors.current_protection && (
-                        <p className="mt-1 text-sm text-red-600">{errors.current_protection}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          This field is required
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1197,8 +1430,12 @@ export default function Page() {
                         required
                       />
                       {errors.company_name && (
-                        <p className="mt-1 text-sm text-red-600">{errors.company_name}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.company_name.split(' is')[0]}</span>
+                          {errors.company_name.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
+
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1213,7 +1450,10 @@ export default function Page() {
                         required
                       />
                       {errors.contact_name && (
-                        <p className="mt-1 text-sm text-red-600">{errors.contact_name}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.contact_name.split(' is')[0]}</span>
+                          {errors.contact_name.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1232,7 +1472,10 @@ export default function Page() {
                         required
                       />
                       {errors.email && (
-                        <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.email.split(' is')[0]}</span>
+                          {errors.email.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
 
@@ -1249,7 +1492,10 @@ export default function Page() {
                         required
                       />
                       {errors.address && (
-                        <p className="mt-1 text-sm text-red-600">{errors.address}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.address.split(' is')[0]}</span>
+                          {errors.address.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1338,7 +1584,10 @@ export default function Page() {
                         <option value="Yukon">Yukon</option>
                       </select>
                       {errors.state && (
-                        <p className="mt-1 text-sm text-red-600">{errors.state}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.state.split(' is')[0]}</span>
+                          {errors.state.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
                     <div>
@@ -1354,7 +1603,10 @@ export default function Page() {
                         required
                       />
                       {errors.city && (
-                        <p className="mt-1 text-sm text-red-600">{errors.city}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.city.split(' is')[0]}</span>
+                          {errors.city.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1373,7 +1625,10 @@ export default function Page() {
                         required
                       />
                       {errors.zip && (
-                        <p className="mt-1 text-sm text-red-600">{errors.zip}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.zip.split(' is')[0]}</span>
+                          {errors.zip.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
 
@@ -1391,7 +1646,10 @@ export default function Page() {
                         min={new Date().toISOString().split('T')[0]}
                       />
                       {errors.desired_date && (
-                        <p className="mt-1 text-sm text-red-600">{errors.desired_date}</p>
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.desired_date.split(' is')[0]}</span>
+                          {errors.desired_date.includes(' is') ? ' is required' : ''}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1426,16 +1684,19 @@ export default function Page() {
                       <Link
                         href="/Terms-and-conditions.pdf"
                         target="_blank"
-                        className="text-[#0A4647] hover:text-[#093c3d] hover:underline font-medium"
+                        className="text-[#0A4647] hover:text-[#093c3d] hover:underline font-medium underline"
                         onClick={(e) => e.stopPropagation()}
-                      >
+                      > 
                         Terms & Conditions
                       </Link>{' '}
                       <span className="text-red-600">*</span>
                     </label>
                   </div>
                   {errors.isTerms && (
-                    <p className="mt-1 text-sm text-red-600">{errors.isTerms}</p>
+                    <p className="mt-1 text-sm text-red-600">
+                      <span className="capitalize">{errors.isTerms.split(' is')[0]}</span>
+                      {errors.isTerms.includes(' is') ? ' is required' : ''}
+                    </p>
                   )}
                 </div>
               </div>

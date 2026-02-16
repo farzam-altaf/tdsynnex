@@ -395,7 +395,6 @@ export default function Page() {
                 <label className="font-semibold text-gray-700 text-sm">Email (Username)</label>
                 <input
                   type="text"
-                  placeholder="Enter work email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className={`my-2 w-full rounded-md border px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray ring-gray-200 transition ${submitted && errors.email ? "border-red-500" : "border-gray-300"

@@ -22,8 +22,8 @@ export default function Page() {
     const [isLoading, setIsLoading] = useState(true);
     const [formData, setFormData] = useState({
         orderNumber: "",
-        deviceType: "product", // Default to "product" instead of empty
-        selectedProducts: [] as string[],
+        deviceType: "product", // Default to "product"
+        selectedProducts: [] as string[], // Will only contain 0 or 1 product
         otherPartNumber: "",
         resellerName: "",
         synnexOrderNumber: "",
@@ -191,9 +191,34 @@ export default function Page() {
         }
     };
 
+    // Format date for display in dd-MMM-yyyy
+    const formatDateForDisplay = (dateString: string) => {
+        if (!dateString) return '';
+        try {
+            const date = new Date(dateString);
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = date.toLocaleString('default', { month: 'short' });
+            const year = date.getFullYear();
+            return `${day}-${month}-${year}`;
+        } catch {
+            return dateString;
+        }
+    };
+
+    // Format date for input (YYYY-MM-DD) - yeh hidden input ke liye
+    const formatDateForInput = (dateString: string) => {
+        if (!dateString) return '';
+        try {
+            const date = new Date(dateString);
+            return date.toISOString().split('T')[0];
+        } catch {
+            return dateString;
+        }
+    };
+
     // Fetch products when order is selected AND deviceType is "product"
     useEffect(() => {
-        if (formData.orderNumber && formData.deviceType === "product") {
+        if (formData.orderNumber) {
             const orderNumber = parseInt(formData.orderNumber);
             const selectedOrder = orders.find(order => order.order_no === orderNumber);
 
@@ -205,7 +230,7 @@ export default function Page() {
                     if (productIds.length > 0) {
                         const { data: products, error } = await supabase
                             .from('products')
-                            .select('id, product_name, slug, sku')
+                            .select('id, product_name, sku, slug')
                             .in('id', productIds);
 
                         if (!error && products) {
@@ -216,18 +241,29 @@ export default function Page() {
                                 quantity: 1
                             }));
 
+                            console.log("Fetched products:", orderProducts);
                             setProducts(orderProducts);
 
-                            // Auto-select all products by default
-                            setFormData(prev => ({
-                                ...prev,
-                                customerName: selectedOrder.company_name || "",
-                                selectedProducts: orderProducts.map(p => p.id),
-                                resellerName: selectedOrder.reseller || prev.resellerName,
-                                resellerAccountNumber: selectedOrder.crm_account || prev.resellerAccountNumber,
-                                numberOfUnits: selectedOrder.dev_opportunity?.toString() || prev.numberOfUnits,
-                                totalDealRevenue: selectedOrder.rev_opportunity?.toString() || prev.totalDealRevenue,
-                            }));
+                            // Auto-select the product radio button
+                            if (orderProducts.length > 0) {
+                                setFormData(prev => ({
+                                    ...prev,
+                                    deviceType: "product", // Auto-select product radio
+                                    customerName: selectedOrder.company_name || "",
+                                    selectedProducts: [orderProducts[0].id],
+                                    resellerName: selectedOrder.reseller || prev.resellerName,
+                                    resellerAccountNumber: selectedOrder.crm_account || prev.resellerAccountNumber,
+                                    numberOfUnits: selectedOrder.dev_opportunity?.toString() || prev.numberOfUnits,
+                                    totalDealRevenue: selectedOrder.rev_opportunity !== null && selectedOrder.rev_opportunity !== undefined
+                                        ? Math.round(Number(selectedOrder.rev_opportunity)).toString()
+                                        : prev.totalDealRevenue,
+                                    // Reset these fields when new order is selected
+                                    synnexOrderNumber: "", // Add this
+                                    purchaseType: "", // Add this
+                                    purchaseDate: "",
+                                    howHelped: "",
+                                }));
+                            }
                         } else {
                             console.error("Error fetching products:", error);
                             setProducts([]);
@@ -238,61 +274,53 @@ export default function Page() {
                         setFormData(prev => ({
                             ...prev,
                             deviceType: "other",
-                            selectedProducts: []
+                            selectedProducts: [],
+                            // Reset these fields when new order is selected
+                            synnexOrderNumber: "", // Add this
+                            purchaseType: "", // Add this
+                            purchaseDate: "",
+                            howHelped: "",
                         }));
-                        setShowOtherInput(true);
                     }
                     setLoadingProducts(false);
                 };
 
                 fetchProductsForOrder();
-
-                logInfo(
-                    'ui',
-                    'order_selected',
-                    `Order #${orderNumber} selected`,
-                    {
-                        orderId: selectedOrder.id,
-                        orderNo: orderNumber,
-                        customerName: selectedOrder.company_name,
-                        productCount: selectedOrder._product_ids?.length || 0
-                    },
-                    profile?.id,
-                    source
-                );
             } else {
-                setProducts([]);
+                // Clear all fields when no order is selected
                 setFormData(prev => ({
                     ...prev,
                     customerName: "",
-                    selectedProducts: []
-                }));
-            }
-        } else if (formData.orderNumber && formData.deviceType === "other") {
-            // If deviceType is "other", just set customer name
-            const orderNumber = parseInt(formData.orderNumber);
-            const selectedOrder = orders.find(order => order.order_no === orderNumber);
-
-            if (selectedOrder) {
-                setFormData(prev => ({
-                    ...prev,
-                    customerName: selectedOrder.company_name || "",
                     selectedProducts: [],
-                    resellerName: selectedOrder.reseller || prev.resellerName,
-                    resellerAccountNumber: selectedOrder.crm_account || prev.resellerAccountNumber,
-                    numberOfUnits: selectedOrder.dev_opportunity?.toString() || prev.numberOfUnits,
-                    totalDealRevenue: selectedOrder.rev_opportunity?.toString() || prev.totalDealRevenue,
+                    resellerName: "",
+                    resellerAccountNumber: "",
+                    numberOfUnits: "",
+                    totalDealRevenue: "",
+                    synnexOrderNumber: "", // Add this
+                    purchaseType: "", // Add this
+                    purchaseDate: "", // Add this
+                    howHelped: "",    // Add this
                 }));
+                setProducts([]);
             }
         } else {
-            setProducts([]);
+            // Clear all fields when order number is empty
             setFormData(prev => ({
                 ...prev,
                 customerName: "",
-                selectedProducts: []
+                selectedProducts: [],
+                resellerName: "",
+                resellerAccountNumber: "",
+                numberOfUnits: "",
+                totalDealRevenue: "",
+                synnexOrderNumber: "", // Add this
+                purchaseType: "", // Add this
+                purchaseDate: "", // Add this
+                howHelped: "",    // Add this
             }));
+            setProducts([]);
         }
-    }, [formData.orderNumber, formData.deviceType, orders]);
+    }, [formData.orderNumber, orders]);
 
     // Check if user has access to this page
     useEffect(() => {
@@ -378,7 +406,6 @@ export default function Page() {
                 break;
             case "howHelped":
                 if (!value.trim()) error = "This field is required";
-                else if (value.trim().length < 10) error = "Please provide more details";
                 break;
         }
 
@@ -386,22 +413,26 @@ export default function Page() {
     };
 
     const handleProductSelection = (productId: string) => {
-        setFormData(prev => {
-            const isSelected = prev.selectedProducts.includes(productId);
-            let newSelectedProducts;
+        setFormData(prev => ({
+            ...prev,
+            selectedProducts: productId ? [productId] : [] // Only set if productId is not empty
+        }));
 
-            if (isSelected) {
-                newSelectedProducts = prev.selectedProducts.filter(id => id !== productId);
-            } else {
-                newSelectedProducts = [...prev.selectedProducts, productId];
-            }
+        // Clear error for selectedProducts
+        if (productId) {
+            setErrors(prev => ({ ...prev, selectedProducts: "" }));
+        }
 
-            if (newSelectedProducts.length > 0) {
-                setErrors(prev => ({ ...prev, selectedProducts: "" }));
-            }
-
-            return { ...prev, selectedProducts: newSelectedProducts };
-        });
+        logInfo(
+            'ui',
+            'product_selected',
+            `Product selected: ${productId || 'none'}`,
+            {
+                productId: productId || 'none'
+            },
+            profile?.id,
+            source
+        );
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -417,17 +448,10 @@ export default function Page() {
                 otherPartNumber: ""
             };
 
-            // If switching to "product", fetch products if order is selected
-            if (newDeviceType === "product" && formData.orderNumber) {
-                // Products will be fetched by the useEffect
-            }
-
             setFormData(prev => ({
                 ...prev,
                 ...resetData
             }));
-
-            setShowOtherInput(newDeviceType === "other");
 
             // Clear errors
             setErrors(prev => ({
@@ -441,12 +465,25 @@ export default function Page() {
                 'device_type_changed',
                 `Device type changed to: ${newDeviceType}`,
                 {
-                    deviceType: newDeviceType,
-                    productCount: newDeviceType === "product" ? formData.selectedProducts.length : 0
+                    deviceType: newDeviceType
                 },
                 profile?.id,
                 source
             );
+        } else if (name === "totalDealRevenue") {
+            // Allow only whole numbers (no decimals)
+            const numValue = parseInt(value);
+            if (!isNaN(numValue)) {
+                setFormData(prev => ({
+                    ...prev,
+                    [name]: numValue.toString()
+                }));
+            } else {
+                setFormData(prev => ({
+                    ...prev,
+                    [name]: value === "" ? "" : value
+                }));
+            }
         } else {
             setFormData(prev => ({
                 ...prev,
@@ -631,7 +668,7 @@ export default function Page() {
                         resellerAccount: formData.resellerAccountNumber,
                         customerName: formData.customerName,
                         units: parseInt(formData.numberOfUnits),
-                        deal_rev: parseFloat(formData.totalDealRevenue),
+                        deal_rev: parseInt(formData.totalDealRevenue),
                         purchaseType: formData.purchaseType,
                         purchaseDate: formData.purchaseDate,
                         notes: formData.howHelped,
@@ -990,10 +1027,10 @@ export default function Page() {
                             type="email"
                             name="submittedBy"
                             value={formData.submittedBy}
-                            onChange={handleChange}
-                            className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.submittedBy
+                            disabled // Add this line
+                            className={`w-full rounded-lg border px-4 py-3 text-gray-500 bg-gray-100 cursor-not-allowed text-sm ${errors.submittedBy
                                 ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                : "border-gray-300"
                                 }`}
                             placeholder="Enter your email address"
                         />
@@ -1003,6 +1040,7 @@ export default function Page() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        {/* Left Column - Select Order # */}
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
                                 Select Order # <span className="text-red-600">*</span>
@@ -1031,36 +1069,85 @@ export default function Page() {
                             {errors.orderNumber && (
                                 <p className="mt-1 text-sm text-red-600">{errors.orderNumber}</p>
                             )}
+
+                            {/* Other Product Input - Yeh ab Order # ke neeche aayega */}
+                            {formData.deviceType === "other" && (
+                                <div className="mt-6">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Please specify Part# <span className="text-red-600">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="otherPartNumber"
+                                        value={formData.otherPartNumber}
+                                        onChange={handleChange}
+                                        className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.otherPartNumber
+                                            ? "border-red-500 focus:ring-2 focus:ring-red-300"
+                                            : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                            }`}
+                                        placeholder="Enter part number"
+                                    />
+                                    {errors.otherPartNumber && (
+                                        <p className="mt-1 text-sm text-red-600">{errors.otherPartNumber}</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
+                        {/* Right Column - Product Type Selection */}
                         {formData.orderNumber && (
                             <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-3">
-                                        Choose Product Type <span className="text-red-600">*</span>
-                                    </label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                                    Choose Product Type <span className="text-red-600">*</span>
+                                </label>
 
+                                {loadingProducts ? (
+                                    <div className="flex justify-center items-center p-4 border border-gray-200 rounded-lg">
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#3ba1da]"></div>
+                                        <span className="ml-2 text-sm text-gray-600">Loading product...</span>
+                                    </div>
+                                ) : (
                                     <div className="space-y-3">
-                                        <label className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-300 rounded-lg hover:bg-gray-50 h-full">
-                                            <input
-                                                type="radio"
-                                                name="deviceType"
-                                                value="product"
-                                                checked={formData.deviceType === "product"}
-                                                onChange={handleChange}
-                                                className="h-4 w-4 text-[#3ba1da] focus:ring-[#3ba1da] mt-1 shrink-0"
-                                            />
-                                            <div className="flex-1 min-w-0">
-                                                <span className="font-medium text-gray-700 text-sm">
-                                                    Products from this order
-                                                </span>
-                                                <p className="text-xs text-gray-500 mt-1">
-                                                    Select one or more products from the order
-                                                </p>
-                                            </div>
-                                        </label>
+                                        {/* Product Radio Button - with product details */}
+                                        {products.length > 0 && (
+                                            <label className={`flex items-start space-x-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition ${formData.deviceType === "product"
+                                                ? "border-[#3ba1da] bg-blue-50"
+                                                : "border-gray-300"
+                                                }`}>
+                                                <input
+                                                    type="radio"
+                                                    name="deviceType"
+                                                    value="product"
+                                                    checked={formData.deviceType === "product"}
+                                                    onChange={handleChange}
+                                                    className="h-4 w-4 text-[#3ba1da] focus:ring-[#3ba1da] mt-1 shrink-0"
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <span className="font-medium text-gray-700 text-sm block">
+                                                        {products[0].name}
+                                                    </span>
+                                                    {products[0].sku && (
+                                                        <p className="text-xs text-gray-500 mt-1">
+                                                            SKU: {products[0].sku}
+                                                        </p>
+                                                    )}
+                                                    {/* Hidden input to store product ID when selected */}
+                                                    {formData.deviceType === "product" && (
+                                                        <input
+                                                            type="hidden"
+                                                            name="selectedProducts"
+                                                            value={products[0].id}
+                                                        />
+                                                    )}
+                                                </div>
+                                            </label>
+                                        )}
 
-                                        <label className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-300 rounded-lg hover:bg-gray-50 h-full">
+                                        {/* Other Product Radio Button */}
+                                        <label className={`flex items-start space-x-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition ${formData.deviceType === "other"
+                                            ? "border-[#3ba1da] bg-blue-50"
+                                            : "border-gray-300"
+                                            }`}>
                                             <input
                                                 type="radio"
                                                 name="deviceType"
@@ -1074,95 +1161,6 @@ export default function Page() {
                                                 <p className="text-xs text-gray-500 mt-1">Select if you have a different part</p>
                                             </div>
                                         </label>
-                                    </div>
-                                </div>
-
-                                {/* Show products only when "Products from this order" is selected */}
-                                {formData.deviceType === "product" && (
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-3">
-                                            Select Products <span className="text-red-600">*</span>
-                                            <span className="text-xs text-gray-500 font-normal ml-2">
-                                                (Select one or more)
-                                            </span>
-                                        </label>
-
-                                        {loadingProducts ? (
-                                            <div className="flex justify-center items-center p-4 border border-gray-200 rounded-lg">
-                                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#3ba1da]"></div>
-                                                <span className="ml-2 text-sm text-gray-600">Loading products...</span>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-gray-200 rounded-lg">
-                                                    {products.length > 0 ? (
-                                                        products.map((product, index) => (
-                                                            <label
-                                                                key={product.id || index}
-                                                                className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                                                            >
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={formData.selectedProducts.includes(product.id)}
-                                                                    onChange={() => handleProductSelection(product.id)}
-                                                                    className="h-4 w-4 text-[#3ba1da] focus:ring-[#3ba1da] mt-1 shrink-0"
-                                                                />
-                                                                <div className="flex-1 min-w-0">
-                                                                    <span className="font-medium text-gray-700 text-sm">
-                                                                        {product.name}
-                                                                    </span>
-                                                                    {product.sku && (
-                                                                        <p className="text-xs text-gray-500 mt-1">
-                                                                            SKU: {product.sku}
-                                                                        </p>
-                                                                    )}
-                                                                    <p className="text-xs text-gray-500">
-                                                                        Quantity: {product.quantity}
-                                                                    </p>
-                                                                </div>
-                                                            </label>
-                                                        ))
-                                                    ) : (
-                                                        <p className="text-sm text-gray-500 p-2">
-                                                            No products found for this order
-                                                        </p>
-                                                    )}
-                                                </div>
-
-                                                {errors.selectedProducts && (
-                                                    <p className="mt-1 text-sm text-red-600">{errors.selectedProducts}</p>
-                                                )}
-
-                                                {formData.selectedProducts.length > 0 && (
-                                                    <p className="mt-2 text-sm text-gray-600">
-                                                        Selected: {formData.selectedProducts.length} product{formData.selectedProducts.length > 1 ? 's' : ''}
-                                                    </p>
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Show other input only when "Other Product" is selected */}
-                                {showOtherInput && (
-                                    <div className="mt-3">
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Please specify Part# <span className="text-red-600">*</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            name="otherPartNumber"
-                                            value={formData.otherPartNumber}
-                                            onChange={handleChange}
-                                            className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.otherPartNumber
-                                                ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                                : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
-                                                }`}
-                                            placeholder="Enter part number"
-                                        />
-                                        {errors.otherPartNumber && (
-                                            <p className="mt-1 text-sm text-red-600">{errors.otherPartNumber}</p>
-                                        )}
                                     </div>
                                 )}
                             </div>
@@ -1286,12 +1284,11 @@ export default function Page() {
                                 value={formData.totalDealRevenue}
                                 onChange={handleChange}
                                 min="0"
-                                step="0.01"
                                 className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.totalDealRevenue
                                     ? "border-red-500 focus:ring-2 focus:ring-red-300"
                                     : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
                                     }`}
-                                placeholder="0.00"
+                                placeholder="0"
                             />
                             {errors.totalDealRevenue && (
                                 <p className="mt-1 text-sm text-red-600">{errors.totalDealRevenue}</p>
@@ -1326,16 +1323,23 @@ export default function Page() {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
                                 Date of Purchase <span className="text-red-600">*</span>
                             </label>
-                            <input
-                                type="date"
-                                name="purchaseDate"
-                                value={formData.purchaseDate}
-                                onChange={handleChange}
-                                className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.purchaseDate
-                                    ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                    : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
-                                    }`}
-                            />
+                            <div className="relative">
+                                <input
+                                    type="date"
+                                    name="purchaseDate"
+                                    value={formData.purchaseDate}
+                                    onChange={handleChange}
+                                    className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.purchaseDate
+                                        ? "border-red-500 focus:ring-2 focus:ring-red-300"
+                                        : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                        }`}
+                                />
+                            </div>
+                            {formData.purchaseDate && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Selected: {formatDateForDisplay(formData.purchaseDate)}
+                                </p>
+                            )}
                             {errors.purchaseDate && (
                                 <p className="mt-1 text-sm text-red-600">{errors.purchaseDate}</p>
                             )}
@@ -1351,12 +1355,18 @@ export default function Page() {
                             value={formData.howHelped}
                             onChange={handleChange}
                             rows={4}
+                            maxLength={500}
                             className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition resize-none text-sm ${errors.howHelped
                                 ? "border-red-500 focus:ring-2 focus:ring-red-300"
                                 : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
                                 }`}
-                            placeholder="Describe how TD SYNNEX SURFACE contributed to closing this deal..."
+                            placeholder="Describe how TD SYNNEX SURFACE contributed to closing this deal... (10-500 characters)"
                         />
+                        <div className="flex justify-between items-center mt-1">
+                            <p className="text-xs text-gray-500">
+                                {formData.howHelped.length}/500 characters
+                            </p>
+                        </div>
                         {errors.howHelped && (
                             <p className="mt-1 text-sm text-red-600">{errors.howHelped}</p>
                         )}

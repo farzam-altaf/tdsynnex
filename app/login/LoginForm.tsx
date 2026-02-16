@@ -161,11 +161,6 @@ export default function LoginForm() {
                   style={{ width: `${progress}%` }}>
                 </div>
               </div>
-
-              {/* Loading text */}
-              <div className="text-center">
-                <p className="text-gray-600">Loading...</p>
-              </div>
             </div>
           </div>
         </div>
@@ -595,7 +590,6 @@ export default function LoginForm() {
                 </label>
                 <input
                   type="text"
-                  placeholder="Enter work email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className={`my-2 w-full rounded-md border px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray ring-gray-200 transition ${submitted && errors.email ? "border-red-500" : "border-gray-300"
@@ -627,15 +621,6 @@ export default function LoginForm() {
               </div>
               <div className="flex w-full gap-4 mt-6">
                 <div className="flex-1">
-                  <Link
-                    href={"/account-registration"}
-                    className="flex items-center justify-center w-full rounded-md bg-white px-6 py-3 font-semibold text-gray-700 transition-all hover:bg-gray-50 hover:shadow-md border border-gray-300"
-                  >
-                    Register
-                  </Link>
-                </div>
-
-                <div className="flex-1">
                   <button
                     type="submit"
                     disabled={isloading}
@@ -643,6 +628,15 @@ export default function LoginForm() {
                   >
                     {isloading ? "Please wait..." : "Login"}
                   </button>
+                </div>
+
+                <div className="flex-1">
+                  <Link
+                    href={"/account-registration"}
+                    className="flex items-center justify-center w-full rounded-md bg-white px-6 py-3 font-semibold text-gray-700 transition-all hover:bg-gray-50 hover:shadow-md border border-gray-300"
+                  >
+                    Register
+                  </Link>
                 </div>
               </div>
 

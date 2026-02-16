@@ -14,6 +14,7 @@ import { Bell, Search, ShoppingCart, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext' // Add this import
 import { PiBellLight, PiShoppingCartThin } from "react-icons/pi";
+import { FaCaretDown } from 'react-icons/fa6'
 
 // Add at the top with other role constants
 const shopManager = process.env.NEXT_PUBLIC_SHOPMANAGER;
@@ -97,7 +98,7 @@ export default function Navbar() {
   const handleLogout = async () => {
     await supabase.auth.signOut()
     setIsUserMenuOpen(false)
-    router.replace('/login')
+    window.location.href = '/login'
   }
 
   const fetchNotificationCounts = useCallback(async () => {
@@ -555,7 +556,7 @@ export default function Navbar() {
                     >
                       <button
                         type="button"
-                        className="relative rounded-full p-1 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200"
+                        className="relative rounded-full p-1 text-black cursor-pointer hover:bg-gray-100 mt-1 mx-2 transition-colors duration-200"
                       >
                         <span className="sr-only">Notifications</span>
                         <Badge
@@ -573,7 +574,7 @@ export default function Navbar() {
                             right: '1px'
                           }}
                         >
-                          <PiBellLight size={22} />
+                          <PiBellLight size={23} />
                         </Badge>
                       </button>
 
@@ -680,7 +681,7 @@ export default function Navbar() {
                         onClick={() => setIsSearchOpen(!isSearchOpen)}
                       >
                         <span className="sr-only">Search</span>
-                        <CiSearch size={22} />
+                        <CiSearch size={25} />
                       </button>
 
                       {isSearchOpen && (
@@ -800,9 +801,9 @@ export default function Navbar() {
                       onMouseLeave={handleUserMenuMouseLeave}
                       onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                     >
-                      <CiUser size={24} />
-                      <CiCircleChevDown
-                        size={16}
+                      <CiUser size={27} />
+                      <FaCaretDown
+                        size={13}
                         className={classNames(
                           isUserMenuOpen ? 'rotate-180' : 'rotate-0',
                           'transition-transform duration-200'
@@ -876,33 +877,37 @@ export default function Navbar() {
                   </div>
 
                   {/* Cart Button */}
-                  <button
-                    type="button"
-                    onClick={handleCartClick}
-                    disabled={cartUpdating || cartLoading}
-                    className="relative rounded-full p-1 sm:mt-1 mt-2 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span className="sr-only">Cart</span>
-                    <Badge
-                      count={cartCount}
-                      size="small"
-                      overflowCount={99}
-                      showZero={true}
-                      style={{
-                        backgroundColor: '#ef4444',
-                        fontSize: '10px',
-                        height: '18px',
-                        minWidth: '18px',
-                        lineHeight: '18px',
-                        top: '1px',
-                        right: '1px'
-                      }}
-                    >
-                      <div className="relative">
-                        <PiShoppingCartThin size={26} />
-                      </div>
-                    </Badge>
-                  </button>
+                  {isLoggedIn && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleCartClick}
+                        disabled={cartUpdating || cartLoading}
+                        className="relative rounded-full p-1 mt-2 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="sr-only">Cart</span>
+                        <Badge
+                          count={cartCount}
+                          size="small"
+                          overflowCount={99}
+                          showZero={true}
+                          style={{
+                            backgroundColor: '#ef4444',
+                            fontSize: '10px',
+                            height: '18px',
+                            minWidth: '18px',
+                            lineHeight: '18px',
+                            top: '1px',
+                            right: '1px'
+                          }}
+                        >
+                          <div className="relative">
+                            <PiShoppingCartThin size={26} />
+                          </div>
+                        </Badge>
+                      </button>
+                    </>
+                  )}
 
                   {/* Mobile Search Button */}
                   <div className="sm:hidden">
@@ -1123,94 +1128,6 @@ export default function Navbar() {
                         </h4>
                         <p className="text-xs text-gray-500">SKU: {sku}</p>
 
-                        {/* Quantity Controls */}
-                        <div className="flex items-center space-x-2 mt-3">
-                          {/* Minus Button - Always show */}
-                          <button
-                            onClick={() => handleUpdateQuantity(item.product_id, item.quantity - 1)}
-                            disabled={cartUpdating || item.quantity <= 1}
-                            className={`w-7 h-7 flex items-center justify-center border border-gray-300 rounded-md transition-colors
-      ${cartUpdating || item.quantity <= 1
-                                ? 'opacity-50 cursor-not-allowed text-gray-400'
-                                : 'hover:bg-gray-100 hover:border-gray-400 text-gray-700'
-                              }`}
-                          >
-                            −
-                          </button>
-
-                          {/* Quantity Input Field with Save/Cancel buttons */}
-                          <div className="relative">
-                            <div className="flex items-center space-x-2">
-                              <input
-                                type="number"
-                                min="1"
-                                max={stockQuantity}
-                                value={quantityInputValues[item.product_id] !== undefined
-                                  ? quantityInputValues[item.product_id]
-                                  : item.quantity.toString()}
-                                onChange={(e) => handleQuantityInputChange(item.product_id, e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    handleSaveQuantity(item.product_id);
-                                  }
-                                }}
-                                disabled={cartUpdating}
-                                className="w-16 text-center border border-gray-300 rounded-md py-1.5 px-2 text-sm 
-          focus:outline-none focus:ring-1 focus:ring-[#35c8dc] focus:border-[#35c8dc]
-          disabled:opacity-50 disabled:cursor-not-allowed
-          [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
-          transition-all duration-200"
-                              />
-
-                              {/* Save Button - Only show when editing this product */}
-                              {editingProductId === item.product_id && (
-                                <div className="flex items-center space-x-1">
-                                  <button
-                                    onClick={() => handleSaveQuantity(item.product_id)}
-                                    disabled={cartUpdating}
-                                    className="w-7 h-7 flex items-center justify-center bg-[#35c8dc] text-white rounded-md hover:bg-[#2db4c8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Save quantity"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  </button>
-                                  <button
-                                    onClick={() => handleCancelEdit(item.product_id)}
-                                    disabled={cartUpdating}
-                                    className="w-7 h-7 flex items-center justify-center bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Cancel"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Stock limit warning */}
-                            {stockQuantity > 0 &&
-                              parseInt(quantityInputValues[item.product_id] || item.quantity.toString()) > stockQuantity && (
-                                <div className="absolute -bottom-5 left-0 right-0 text-xs text-red-500 font-medium text-center">
-                                  Max: {stockQuantity}
-                                </div>
-                              )}
-                          </div>
-
-                          {/* Plus Button - Always show */}
-                          <button
-                            onClick={() => handleUpdateQuantity(item.product_id, item.quantity + 1)}
-                            disabled={cartUpdating || item.quantity >= stockQuantity}
-                            className={`w-7 h-7 flex items-center justify-center border border-gray-300 rounded-md transition-colors
-      ${cartUpdating || item.quantity >= stockQuantity
-                                ? 'opacity-50 cursor-not-allowed text-gray-400'
-                                : 'hover:bg-gray-100 hover:border-gray-400 text-gray-700'
-                              }`}
-                          >
-                            +
-                          </button>
-                        </div>
                       </div>
 
                       {/* Price and Remove Button */}
@@ -1229,34 +1146,6 @@ export default function Navbar() {
                           </p>
                         )}
                       </div>
-                    </div>
-
-                    {/* Stock Status Messages */}
-                    <div className="mt-2 space-y-1">
-                      {stockQuantity === 0 && (
-                        <div className="flex items-center space-x-1 text-xs">
-                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                          <span className="text-red-600 font-medium">Out of stock</span>
-                        </div>
-                      )}
-
-                      {stockQuantity > 0 && item.quantity >= stockQuantity && (
-                        <div className="flex items-center space-x-1 text-xs">
-                          <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                          <span className="text-amber-600 font-medium">
-                            Only {stockQuantity} {stockQuantity === 1 ? 'item' : 'items'} in stock
-                          </span>
-                        </div>
-                      )}
-
-                      {stockQuantity > 0 && item.quantity < stockQuantity && stockQuantity < 10 && (
-                        <div className="flex items-center space-x-1 text-xs">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="text-green-600">
-                            {stockQuantity} {stockQuantity === 1 ? 'item' : 'items'} left in stock
-                          </span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 );

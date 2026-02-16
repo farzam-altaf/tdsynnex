@@ -7,7 +7,7 @@ import { useAuth } from "@/app/context/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, ArrowLeft } from "lucide-react";
 import {
-    logActivity,
+    logActivity, 
     logError,
     logSuccess,
     logInfo,
@@ -48,14 +48,6 @@ interface FilterOptions {
     memory: string[];
     storage: string[];
     screenSizesize: string[];
-}
-
-interface FilterIds {
-    formFactorId: string;
-    processorId: string;
-    memoryId: string;
-    storageId: string;
-    screenSizeId: string;
 }
 
 export default function AddDeviceClient() {
@@ -125,22 +117,13 @@ export default function AddDeviceClient() {
         screenSize: "",
     });
 
-    // Filter options from database
+    // Filter options from existing products
     const [filterOptions, setFilterOptions] = useState<FilterOptions>({
         formfactor: [],
         processor: [],
         memory: [],
         storage: [],
         screenSizesize: [],
-    });
-
-    // Filter IDs state
-    const [filterIds, setFilterIds] = useState<FilterIds>({
-        formFactorId: "",
-        processorId: "",
-        memoryId: "",
-        storageId: "",
-        screenSizeId: "",
     });
 
     // Loading states
@@ -161,6 +144,7 @@ export default function AddDeviceClient() {
     const adminRole = process.env.NEXT_PUBLIC_ADMINISTRATOR;
     const superSubscriberRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
     const subscriberRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
+    
     // Role options for select
     const roleOptions = [
         { label: "Admin", value: adminRole || "Administrator" },
@@ -222,13 +206,6 @@ export default function AddDeviceClient() {
         }
 
     }, [loading, isLoggedIn, profile, router, isAuthorized]);
-
-    // Fetch data only after auth is confirmed AND initialized
-    useEffect(() => {
-        if (!authChecked || !authInitialized) {
-            return; // Don't fetch data until auth is fully checked AND initialized
-        }
-    }, [authChecked, authInitialized]);
 
     // Check if we're in edit mode
     useEffect(() => {
@@ -319,42 +296,15 @@ export default function AddDeviceClient() {
                 setAdditionalImagesPreview(galleryArray);
             }
 
-            // Fetch filter titles for display
-            const filterTypes = ["form_factor", "processor", "memory", "storage", "screen_size"];
-            const filterPromises = filterTypes.map(async (type) => {
-                const { data } = await supabase
-                    .from("filters")
-                    .select("id, title")
-                    .eq("type", type);
-
-                return { type, data: data || [] };
-            });
-
-            const filterResults = await Promise.all(filterPromises);
-
-            // Create mapping object
-            const filterMappings: Record<string, Record<string, string>> = {};
-            filterResults.forEach(result => {
-                const key = result.type === "form_factor" ? "formFactor" :
-                    result.type === "screen_size" ? "screenSize" : result.type;
-
-                const mapping: Record<string, string> = {};
-                result.data.forEach(item => {
-                    mapping[item.id] = item.title;
-                });
-
-                filterMappings[key] = mapping;
-            });
-
-            // Set form data with product values
+            // Set form data with product values - directly using text values
             setFormData({
                 productName: product.product_name || "",
                 sku: product.sku || "",
-                formFactor: filterMappings.formFactor?.[product.form_factor] || product.form_factor || "",
-                processor: filterMappings.processor?.[product.processor] || product.processor || "",
-                memory: filterMappings.memory?.[product.memory] || product.memory || "",
-                storage: filterMappings.storage?.[product.storage] || product.storage || "",
-                screenSize: filterMappings.screenSize?.[product.screen_size] || product.screen_size || "",
+                formFactor: product.form_factor || "",
+                processor: product.processor || "",
+                memory: product.memory || "",
+                storage: product.storage || "",
+                screenSize: product.screen_size || "",
                 technologies: product.technologies || "",
                 totalInventory: product.total_inventory?.toString() || "",
                 stockQuantity: product.stock_quantity?.toString() || "",
@@ -364,15 +314,6 @@ export default function AddDeviceClient() {
                 copilotPC: product.copilot ? "Yes" : "No",
                 fiveGEnabled: product.five_g_Enabled ? "Yes" : "No",
                 postStatus: product.post_status || "Publish",
-            });
-
-            // Set filter IDs
-            setFilterIds({
-                formFactorId: product.form_factor || "",
-                processorId: product.processor || "",
-                memoryId: product.memory || "",
-                storageId: product.storage || "",
-                screenSizeId: product.screen_size || "",
             });
 
             // Fetch filter options after setting form data
@@ -388,42 +329,57 @@ export default function AddDeviceClient() {
         }
     };
 
+    // Fetch unique filter options from existing products
     const fetchFilterOptions = async () => {
         try {
             setIsLoading(true);
-            const types = ["form_factor", "processor", "memory", "storage", "screen_size"];
+            
+            // Fetch distinct values for each filter column from products table
+            const { data: formFactorData } = await supabase
+                .from("products")
+                .select("form_factor")
+                .not("form_factor", "is", null)
+                .not("form_factor", "eq", "");
 
-            const promises = types.map(async (type) => {
-                const { data, error } = await supabase
-                    .from("filters")
-                    .select("id, title")
-                    .eq("type", type)
-                    .order("title");
+            const { data: processorData } = await supabase
+                .from("products")
+                .select("processor")
+                .not("processor", "is", null)
+                .not("processor", "eq", "");
 
-                if (error) {
-                    return { type, items: [] };
-                }
+            const { data: memoryData } = await supabase
+                .from("products")
+                .select("memory")
+                .not("memory", "is", null)
+                .not("memory", "eq", "");
 
-                const items = data?.map(item => ({ id: item.id, title: item.title })) || [];
-                return { type, items };
+            const { data: storageData } = await supabase
+                .from("products")
+                .select("storage")
+                .not("storage", "is", null)
+                .not("storage", "eq", "");
+
+            const { data: screenSizeData } = await supabase
+                .from("products")
+                .select("screen_size")
+                .not("screen_size", "is", null)
+                .not("screen_size", "eq", "");
+
+            // Extract unique values
+            const formFactorOptions = [...new Set(formFactorData?.map(item => item.form_factor) || [])].sort();
+            const processorOptions = [...new Set(processorData?.map(item => item.processor) || [])].sort();
+            const memoryOptions = [...new Set(memoryData?.map(item => item.memory) || [])].sort();
+            const storageOptions = [...new Set(storageData?.map(item => item.storage) || [])].sort();
+            const screenSizeOptions = [...new Set(screenSizeData?.map(item => item.screen_size) || [])].sort();
+
+            setFilterOptions({
+                formfactor: [...formFactorOptions, "Custom"],
+                processor: [...processorOptions, "Custom"],
+                memory: [...memoryOptions, "Custom"],
+                storage: [...storageOptions, "Custom"],
+                screenSizesize: [...screenSizeOptions, "Custom"],
             });
 
-            const results = await Promise.all(promises);
-
-            const newOptions: FilterOptions = {
-                formfactor: [],
-                processor: [],
-                memory: [],
-                storage: [],
-                screenSizesize: [],
-            };
-
-            results.forEach(result => {
-                const key = result.type.replace("_", "").replace("screen", "screenSize") as keyof FilterOptions;
-                newOptions[key] = [...result.items.map(item => item.title), "Custom"];
-            });
-
-            setFilterOptions(newOptions);
         } catch (error) {
             toast.error("Failed to load filter options", {
                 style: { background: "black", color: "white" }
@@ -512,55 +468,7 @@ export default function AddDeviceClient() {
         return `${cleanBaseSlug}-${randomString}`;
     };
 
-    const insertCustomFilter = async (title: string, type: string) => {
-        try {
-            const slug = createSlug(title);
-
-            const { data: existingFilter, error: checkError } = await supabase
-                .from("filters")
-                .select("id, title")
-                .eq("slug", slug)
-                .eq("type", type)
-                .maybeSingle();
-
-            if (checkError) {
-                toast.error("Something went wrong while checking filter", {
-                    style: { background: "black", color: "white" }
-                });
-                return null;
-            }
-
-            if (existingFilter) {
-                return { id: existingFilter.id, title: existingFilter.title };
-            }
-
-            const { data, error } = await supabase
-                .from("filters")
-                .insert({
-                    title,
-                    slug,
-                    type,
-                    user_id: user?.id,
-                })
-                .select("id, title")
-                .single();
-
-            if (error) {
-                toast.error("Failed to save custom filter. Please try again.", {
-                    style: { background: "black", color: "white" }
-                });
-                return null;
-            }
-            return { id: data.id, title: data.title };
-        } catch (err) {
-            toast.error("Unexpected error occurred", {
-                style: { background: "black", color: "white" }
-            });
-            return null;
-        }
-    };
-
-    const handleInputChange = async (field: keyof FormData, value: string) => {
+    const handleInputChange = (field: keyof FormData, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
 
         const fieldMap: Record<string, keyof CustomInputs> = {
@@ -573,29 +481,6 @@ export default function AddDeviceClient() {
 
         if (fieldMap[field] && value !== "Custom") {
             setCustomInputs(prev => ({ ...prev, [fieldMap[field]]: "" }));
-
-            if (value) {
-                const typeMap: Record<string, string> = {
-                    formFactor: "form_factor",
-                    processor: "processor",
-                    memory: "memory",
-                    storage: "storage",
-                    screenSize: "screen_size",
-                };
-
-                const type = typeMap[field];
-                const { data } = await supabase
-                    .from("filters")
-                    .select("id")
-                    .eq("type", type)
-                    .eq("title", value)
-                    .single();
-
-                if (data) {
-                    const idField = `${field}Id` as keyof FilterIds;
-                    setFilterIds(prev => ({ ...prev, [idField]: data.id }));
-                }
-            }
         }
     };
 
@@ -605,45 +490,6 @@ export default function AddDeviceClient() {
 
     const handleCustomInputChange = (field: keyof CustomInputs, value: string) => {
         setCustomInputs(prev => ({ ...prev, [field]: value }));
-    };
-
-    const handleAddAndSelectFilter = async (
-        field: keyof CustomInputs,
-        type: string
-    ) => {
-        const customValue = customInputs[field];
-        if (!customValue.trim()) {
-            toast.error("Please enter a value", {
-                style: { background: "black", color: "white" }
-            });
-            return;
-        }
-
-        const result = await insertCustomFilter(customValue.trim(), type);
-        if (result) {
-            const formFieldMap: Record<string, keyof FormData> = {
-                formFactor: "formFactor",
-                processor: "processor",
-                memory: "memory",
-                storage: "storage",
-                screenSize: "screenSize",
-            };
-
-            const formField = formFieldMap[field];
-            if (formField) {
-                setFormData(prev => ({ ...prev, [formField]: result.title }));
-
-                const idField = `${formField}Id` as keyof FilterIds;
-                setFilterIds(prev => ({ ...prev, [idField]: result.id }));
-            }
-
-            setCustomInputs(prev => ({ ...prev, [field]: "" }));
-            await fetchFilterOptions();
-
-            toast.success(`${type} "${result.title}" added and selected!`, {
-                style: { background: "black", color: "white" }
-            });
-        }
     };
 
     const uploadImagesToSupabase = async () => {
@@ -739,11 +585,11 @@ export default function AddDeviceClient() {
             const requiredFields = [
                 { field: 'productName', label: 'Product Name', value: formData.productName },
                 { field: 'sku', label: 'SKU', value: formData.sku },
-                { field: 'formFactor', label: 'Form Factor', value: formData.formFactor },
-                { field: 'processor', label: 'Processor', value: formData.processor },
-                { field: 'memory', label: 'Memory', value: formData.memory },
-                { field: 'storage', label: 'Storage', value: formData.storage },
-                { field: 'screenSize', label: 'Screen Size', value: formData.screenSize },
+                // { field: 'formFactor', label: 'Form Factor', value: formData.formFactor },
+                // { field: 'processor', label: 'Processor', value: formData.processor },
+                // { field: 'memory', label: 'Memory', value: formData.memory },
+                // { field: 'storage', label: 'Storage', value: formData.storage },
+                // { field: 'screenSize', label: 'Screen Size', value: formData.screenSize },
                 { field: 'inventoryType', label: 'Inventory Type', value: formData.inventoryType },
                 { field: 'totalInventory', label: 'Total Inventory', value: formData.totalInventory },
                 { field: 'stockQuantity', label: 'Stock Quantity', value: formData.stockQuantity },
@@ -786,16 +632,16 @@ export default function AddDeviceClient() {
 
             // Check if "Custom" is selected but custom input is empty
             const customFieldsToCheck = [
-                { field: 'formFactor', customField: 'formFactor' },
-                { field: 'processor', customField: 'processor' },
-                { field: 'memory', customField: 'memory' },
-                { field: 'storage', customField: 'storage' },
-                { field: 'screenSize', customField: 'screenSize' },
+                { field: 'formFactor' as const, customField: 'formFactor' as const },
+                { field: 'processor' as const, customField: 'processor' as const },
+                { field: 'memory' as const, customField: 'memory' as const },
+                { field: 'storage' as const, customField: 'storage' as const },
+                { field: 'screenSize' as const, customField: 'screenSize' as const },
             ];
 
             const missingCustomInputs = customFieldsToCheck.filter(({ field, customField }) => {
-                const formValue = formData[field as keyof FormData];
-                const customValue = customInputs[customField as keyof CustomInputs];
+                const formValue = formData[field];
+                const customValue = customInputs[customField];
                 return formValue === "Custom" && (!customValue || customValue.trim() === '');
             });
 
@@ -881,53 +727,38 @@ export default function AddDeviceClient() {
                 }
             }
 
-            // Process custom filters
-            const fieldMap: Record<string, { formField: keyof FormData, dbField: string }> = {
-                formFactor: { formField: "formFactor", dbField: "form_factor" },
-                processor: { formField: "processor", dbField: "processor" },
-                memory: { formField: "memory", dbField: "memory" },
-                storage: { formField: "storage", dbField: "storage" },
-                screenSize: { formField: "screenSize", dbField: "screen_size" },
-            };
-
-            const customPromises = Object.entries(fieldMap)
-                .filter(([customField]) => {
-                    const formField = fieldMap[customField as keyof typeof fieldMap].formField;
-                    return formData[formField] === "Custom" && customInputs[customField as keyof CustomInputs]?.trim();
-                })
-                .map(async ([customField, { dbField }]) => {
-                    const value = customInputs[customField as keyof CustomInputs];
-                    if (value?.trim()) {
-                        const result = await insertCustomFilter(value.trim(), dbField);
-                        if (result) {
-                            const formField = fieldMap[customField as keyof typeof fieldMap].formField;
-                            setFormData(prev => ({ ...prev, [formField]: result.title }));
-
-                            const idField = `${formField}Id` as keyof FilterIds;
-                            setFilterIds(prev => ({ ...prev, [idField]: result.id }));
-
-                            return { field: customField, id: result.id, value: result.title };
-                        }
-                    }
-                    return null;
-                });
-
-            const results = await Promise.all(customPromises);
-            if (results.some(result => result !== null)) {
-                await fetchFilterOptions();
-            }
-
             // Upload images
             const imageUrls = await uploadImagesToSupabase();
 
             // Create slug
             const slug = createSlug(formData.productName);
 
-            // Prepare final data
+            // Prepare final data with direct text values
+            // For custom fields, use the custom input value if "Custom" is selected
+            const getFieldValue = (field: keyof FormData, customField: keyof CustomInputs): string => {
+                if (formData[field] === "Custom") {
+                    return customInputs[customField] || formData[field];
+                }
+                return formData[field];
+            };
+
             const finalFormData = {
-                ...formData,
+                productName: formData.productName,
+                sku: formData.sku,
+                formFactor: getFieldValue('formFactor', 'formFactor'),
+                processor: getFieldValue('processor', 'processor'),
+                memory: getFieldValue('memory', 'memory'),
+                storage: getFieldValue('storage', 'storage'),
+                screenSize: getFieldValue('screenSize', 'screenSize'),
+                technologies: formData.technologies,
+                inventoryType: formData.inventoryType,
                 totalInventory: formData.totalInventory ? parseInt(formData.totalInventory) : null,
                 stockQuantity: formData.stockQuantity ? parseInt(formData.stockQuantity) : null,
+                currentDate: formData.currentDate,
+                copilotPC: formData.copilotPC,
+                fiveGEnabled: formData.fiveGEnabled,
+                postStatus: formData.postStatus,
+                description: formData.description,
             };
 
             const toBool = (value?: string) => value === "Yes";
@@ -995,18 +826,18 @@ export default function AddDeviceClient() {
                     });
                 }
 
-                // Update device
+                // Update device - directly store text values
                 const { error } = await supabase
                     .from("products")
                     .update({
                         product_name: finalFormData.productName,
                         slug: slug,
                         sku: finalFormData.sku,
-                        form_factor: filterIds.formFactorId,
-                        processor: filterIds.processorId,
-                        memory: filterIds.memoryId,
-                        storage: filterIds.storageId,
-                        screen_size: filterIds.screenSizeId,
+                        form_factor: finalFormData.formFactor,
+                        processor: finalFormData.processor,
+                        memory: finalFormData.memory,
+                        storage: finalFormData.storage,
+                        screen_size: finalFormData.screenSize,
                         technologies: finalFormData.technologies,
                         inventory_type: finalFormData.inventoryType,
                         total_inventory: finalFormData.totalInventory,
@@ -1067,18 +898,18 @@ export default function AddDeviceClient() {
                     return;
                 }
 
-                // Insert new device
+                // Insert new device - directly store text values
                 const { error } = await supabase
                     .from("products")
                     .insert({
                         product_name: finalFormData.productName,
                         slug: slug,
                         sku: finalFormData.sku,
-                        form_factor: filterIds.formFactorId,
-                        processor: filterIds.processorId,
-                        memory: filterIds.memoryId,
-                        storage: filterIds.storageId,
-                        screen_size: filterIds.screenSizeId,
+                        form_factor: finalFormData.formFactor,
+                        processor: finalFormData.processor,
+                        memory: finalFormData.memory,
+                        storage: finalFormData.storage,
+                        screen_size: finalFormData.screenSize,
                         technologies: finalFormData.technologies,
                         inventory_type: finalFormData.inventoryType,
                         total_inventory: finalFormData.totalInventory,
@@ -1150,14 +981,6 @@ export default function AddDeviceClient() {
             screenSize: "",
         });
 
-        setFilterIds({
-            formFactorId: "",
-            processorId: "",
-            memoryId: "",
-            storageId: "",
-            screenSizeId: "",
-        });
-
         setPrimaryImage(null);
         setPrimaryImagePreview(null);
         setAdditionalImages([]);
@@ -1211,7 +1034,7 @@ export default function AddDeviceClient() {
                 )}
 
                 {showCustomInput && (
-                    <div className="flex gap-2 mt-2">
+                    <div className="mt-2">
                         <input
                             type="text"
                             placeholder={`Enter custom ${label.toLowerCase()}`}
@@ -1219,17 +1042,12 @@ export default function AddDeviceClient() {
                             onChange={(e) =>
                                 handleCustomInputChange(customField, e.target.value)
                             }
-                            className="flex-1 px-4 py-2 border border-gray-300 rounded-md
+                            className="w-full px-4 py-2 border border-gray-300 rounded-md
                 focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
                         />
-                        <button
-                            type="button"
-                            onClick={() => handleAddAndSelectFilter(customField, type)}
-                            className="px-4 py-2 bg-[#3ba1da] text-white font-medium rounded-md
-                hover:bg-[#41abd6] focus:outline-none focus:ring-2 focus:ring-[#41abd6]"
-                        >
-                            Add
-                        </button>
+                        <p className="text-xs text-gray-500 mt-1">
+                            Custom value will be saved when you submit the form
+                        </p>
                     </div>
                 )}
             </div>

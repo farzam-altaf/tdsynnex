@@ -100,10 +100,12 @@ export type Order = {
     zip: string | null
     desired_date: string | null
     notes: string | null
-    product_id: string[] | null
-    quantity: number[] | null
+    product_id: string | null
+    quantity: number | null
     products?: Product
-    products_array?: Product[] // یہ add کریں
+    product_ids_array?: string[]
+    quantities_array?: number[]
+    products_array?: Product[]
     tracking: string | null
     return_tracking: string | null
     tracking_link: string | null
@@ -267,7 +269,10 @@ export default function Page() {
 
             let query = supabase
                 .from('orders')
-                .select('*')
+                .select(`
+                *,
+                products:product_id (*)
+            `)
                 .order('order_no', { ascending: false });
 
             // Apply user-specific filter if not action authorized
@@ -282,8 +287,20 @@ export default function Page() {
             }
 
             if (data) {
-                // Process data to combine multiple products into single order entries
-                const processedOrders = await processOrdersWithMultipleProducts(data);
+                // Process data to handle single products
+                const processedOrders = data.map(order => {
+                    const processedOrder: Order = {
+                        ...order,
+                        product_id: order.product_id, // Already a single UUID
+                        quantity: order.quantity, // Already a single number
+                        product_ids_array: order.product_id ? [order.product_id] : [],
+                        quantities_array: order.quantity ? [order.quantity] : [],
+                        products_array: order.products ? [order.products] : [],
+                        total_quantity: order.quantity || 0,
+                        product_count: order.product_id ? 1 : 0
+                    };
+                    return processedOrder;
+                });
 
                 const executionTime = Date.now() - startTime;
                 logSuccess(
@@ -329,90 +346,6 @@ export default function Page() {
         }
     };
 
-    const processOrdersWithMultipleProducts = async (ordersData: any[]): Promise<Order[]> => {
-        const orderMap = new Map<string, Order>();
-        const allProductIds: string[] = [];
-
-        // پہلے تمام unique product IDs collect کریں
-        ordersData.forEach(order => {
-            let productIds: string[] = [];
-            let quantities: number[] = [];
-
-            try {
-                if (order.product_id) {
-                    if (typeof order.product_id === 'string') {
-                        productIds = JSON.parse(order.product_id);
-                    } else if (Array.isArray(order.product_id)) {
-                        productIds = order.product_id;
-                    }
-                }
-                if (order.quantity) {
-                    if (typeof order.quantity === 'string') {
-                        quantities = JSON.parse(order.quantity);
-                    } else if (Array.isArray(order.quantity)) {
-                        quantities = order.quantity;
-                    }
-                }
-            } catch (error) {
-                console.error('Error parsing arrays:', error);
-            }
-
-            // Calculate total quantity
-            const totalQuantity = quantities.reduce((sum: number, qty: number) => sum + (qty || 0), 0);
-
-            // تمام product IDs جمع کریں
-            productIds.forEach(id => {
-                if (!allProductIds.includes(id)) {
-                    allProductIds.push(id);
-                }
-            });
-
-            // Create or update order entry
-            if (!orderMap.has(order.order_no)) {
-                const processedOrder: Order = {
-                    ...order,
-                    product_id: productIds,
-                    quantity: quantities,
-                    total_quantity: totalQuantity,
-                    product_count: productIds.length,
-                    products: undefined
-                };
-                orderMap.set(order.order_no, processedOrder);
-            }
-        });
-
-        // تمام products کے details fetch کریں
-        let productDetailsMap = new Map<string, Product>();
-        if (allProductIds.length > 0) {
-            const products = await fetchProductDetails(allProductIds);
-            products.forEach(product => {
-                productDetailsMap.set(product.id, product);
-            });
-        }
-
-        // اب ہر order کے لئے products array کو populate کریں
-        const processedOrders: Order[] = [];
-
-        orderMap.forEach((order, orderNo) => {
-            // اس order کے products کے details جمع کریں
-            const orderProducts: Product[] = [];
-            if (order.product_id) {
-                order.product_id.forEach((productId, index) => {
-                    const product = productDetailsMap.get(productId);
-                    if (product) {
-                        orderProducts.push(product);
-                    }
-                });
-            }
-
-            processedOrders.push({
-                ...order,
-                products_array: orderProducts // products array شامل کریں
-            });
-        });
-
-        return processedOrders;
-    };
 
     // Fetch data when authorized
     useEffect(() => {
@@ -438,10 +371,23 @@ export default function Page() {
         return new Date(dateString).toISOString().split('T')[0];
     };
 
-    // Format date for display
+    // Format date for display in dd-MMM-yyyy format
     const formatDate = (dateString: string | null) => {
         if (!dateString) return '-';
-        return new Date(dateString).toLocaleDateString();
+
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return '-';
+
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = date.toLocaleString('default', { month: 'short' });
+            const year = date.getFullYear();
+
+            return `${day}-${month}-${year}`;
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return '-';
+        }
     };
 
     // Handle edit order click
@@ -612,6 +558,7 @@ export default function Page() {
         return isValid;
     };
 
+    // DELETE THIS IF NOT USED ELSEWHERE
     const fetchProductDetails = async (productIds: string[]): Promise<Product[]> => {
         if (!productIds || productIds.length === 0) return [];
 
@@ -662,7 +609,9 @@ export default function Page() {
                 product_count,
                 products,
                 products_array,
-                product_id, quantity, total_quantity,
+                product_ids_array,
+                quantities_array,
+                total_quantity,
                 ...orderData
             } = selectedOrder;
 
@@ -670,7 +619,6 @@ export default function Page() {
                 ...orderData,
                 updated_at: new Date().toISOString()
             };
-
 
             const { error } = await supabase
                 .from('orders')
@@ -702,8 +650,8 @@ export default function Page() {
                     updatedBy: profile?.email,
                     fieldsUpdated: Object.keys(selectedOrder).length,
                     arraysPreserved: {
-                        product_id_length: selectedOrder.product_id?.length || 0,
-                        quantity_length: selectedOrder.quantity?.length || 0
+                        product_id: selectedOrder.product_id ? 1 : 0,
+                        quantity: selectedOrder.quantity || 0
                     }
                 },
                 profile?.id,
@@ -802,11 +750,15 @@ export default function Page() {
                 )
             },
             cell: ({ row }) => {
-                const order_status = row.getValue("order_status") as string;
-                return <div className="text-left ps-2 capitalize">{order_status}</div>
+                let order_status = row.getValue("order_status") as string;
+
+                if (order_status === "Shipped Extension") {
+                    order_status = "Shipped (Order Extension)";
+                }
+
+                return <div className="text-left ps-2 capitalize">{order_status}</div>;
             },
-        },
-        // Update wala product_name column rakhein (sirf ek hi)
+        },  
         {
             id: "product_info",
             header: ({ column }) => {
@@ -823,63 +775,23 @@ export default function Page() {
             },
             cell: ({ row }) => {
                 const order = row.original;
-                const productCount = order.product_count || 0;
-                const products = order.products_array || [];
-                const quantities = order.quantity || [];
+                const product = order.products;
+                const quantity = order.quantity || 0;
 
-                if (productCount === 0) {
+                if (!product) {
                     return <div className="text-left ps-2">-</div>;
                 }
 
-                if (productCount === 1) {
-                    // Single product - show name and SKU
-                    const product = products[0];
-                    const quantity = quantities[0] || 0;
-
-                    return (
-                        <div className="text-left ps-2">
-                            <div className="font-medium truncate max-w-xs">
-                                {product?.product_name || 'Product'}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                                SKU: {product?.sku || 'N/A'}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                                Qty: {quantity}
-                            </div>
-                        </div>
-                    );
-                }
-
-                // Multiple products - show all SKUs
                 return (
                     <div className="text-left ps-2">
-                        <div className="font-medium">Multiple Products</div>
-                        <div className="text-xs space-y-1 mt-1">
-                            {products.map((product, index) => {
-                                const quantity = quantities[index] || 0;
-                                return (
-                                    <div key={product?.id || index} className="flex justify-between items-center">
-                                        <span className="text-gray-600 truncate max-w-[200px]">
-                                            {product?.product_name || `Product ${index + 1}`}
-                                        </span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-gray-500 text-xs">
-                                                SKU: {product?.sku || 'N/A'}
-                                            </span>
-                                            <span className="text-gray-700 font-medium text-xs">
-                                                (x{quantity})
-                                            </span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                        <div className="font-medium truncate max-w-xs">
+                            {product?.product_name || 'Product'}
                         </div>
-                        <div className="text-xs text-gray-500 mt-2">
-                            <div className="flex justify-between">
-                                <span>Total Products: {productCount}</span>
-                                <span>Total Units: {order.total_quantity}</span>
-                            </div>
+                        <div className="text-xs text-gray-500">
+                            SKU: {product?.sku || 'N/A'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                            Qty: {quantity}
                         </div>
                     </div>
                 );
@@ -969,12 +881,7 @@ export default function Page() {
                 const order = row.original;
                 return (
                     <div className="text-left ps-2">
-                        <div className="font-medium">{order.total_quantity || 0}</div>
-                        {order.product_count && order.product_count > 1 && (
-                            <div className="text-xs text-gray-500">
-                                ({order.product_count} products)
-                            </div>
-                        )}
+                        <div className="font-medium">{order.quantity || 0}</div>
                     </div>
                 )
             },
@@ -995,7 +902,8 @@ export default function Page() {
                 )
             },
             cell: ({ row }) => {
-                const productCount = row.original.product_count || 0;
+                const order = row.original;
+                const productCount = order.product_id ? 1 : 0;
                 return <div className="text-left ps-2">{productCount}</div>
             },
         },
@@ -1362,23 +1270,18 @@ export default function Page() {
 
         try {
             const data = orders.map(order => {
-                // Products string بنائیں
-                let productsString = '';
-                if (order.products_array && order.products_array.length > 0) {
-                    const productDetails = order.products_array.map((product, index) => {
-                        const quantity = order.quantity?.[index] || 0;
-                        return `${product.product_name} (SKU: ${product.sku || 'N/A'}) x${quantity}`;
-                    });
-                    productsString = productDetails.join('; ');
+                // Product string بنائیں
+                let productString = '';
+                if (order.products) {
+                    productString = `${order.products.product_name} (SKU: ${order.products.sku || 'N/A'}) x${order.quantity || 0}`;
                 }
 
                 return {
                     'Order #': order.order_no || '',
                     'Order Date': formatDate(order.order_date),
                     'Shipping Status': order.order_status || '',
-                    'Products': productsString,
-                    '# of Products': order.product_count || 0,
-                    'Total Quantity': order.total_quantity || 0,
+                    'Product': productString,
+                    'Total Quantity': order.quantity || 0,
                     'Pipeline Opportunity': order.rev_opportunity || 0,
                     'Budget Per Device': order.dev_budget || 0,
                     'Device Opportunity Size': order.dev_opportunity || 0,

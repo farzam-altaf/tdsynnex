@@ -13,9 +13,6 @@ import { useCart } from "@/app/context/CartContext";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/logger";
 
-// Filter types to fetch from database
-const FILTER_TYPES = ["form_factor", "processor", "screen_size", "memory", "storage"];
-
 // Hardcoded filters (not from database)
 const HARDCODED_FILTERS = {
     copilotPC: ["Yes"],
@@ -31,11 +28,11 @@ interface Product {
     product_name: string;
     slug: string;
     sku: string;
-    form_factor: string; // This is the ID, not the title
-    processor: string; // This is the ID, not the title
-    memory: string; // This is the ID, not the title
-    storage: string; // This is the ID, not the title
-    screen_size: string; // This is the ID, not the title
+    form_factor: string; // Now this is the actual text value, not ID
+    processor: string; // Now this is the actual text value, not ID
+    memory: string; // Now this is the actual text value, not ID
+    storage: string; // Now this is the actual text value, not ID
+    screen_size: string; // Now this is the actual text value, not ID
     technologies: string;
     inventory_type: string;
     total_inventory: number;
@@ -50,12 +47,6 @@ interface Product {
     gallery: string[];
     user_id: string;
     created_at: string;
-    // We'll map these to titles from filters
-    formFactorTitle?: string;
-    processorTitle?: string;
-    memoryTitle?: string;
-    storageTitle?: string;
-    screenSizeTitle?: string;
 }
 
 // Skeleton component for products grid
@@ -139,10 +130,36 @@ export default function Page() {
         removeFromCart,
         isUpdating,
         addingProductId,
-        isInCart, // Add this
+        isInCart,
         cartItems
     } = useCart()
 
+    // Extract the last part of the path
+    const slug = pathname.split('/').pop() || '';
+
+    // State for filter options from products table
+    const [filterOptions, setFilterOptions] = useState<Record<string, string[]>>({});
+    // State for products
+    const [products, setProducts] = useState<Product[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const searchParams = useSearchParams();
+    const q = searchParams.get("q");
+    // Combined filters state
+    const [filters, setFilters] = useState<Record<string, string[]>>({
+        formFactor: [],
+        processor: [],
+        screenSize: [],
+        memory: [],
+        storage: [],
+        copilotPC: [],
+        fiveGEnabled: [],
+    });
+
+    const [showFilters, setShowFilters] = useState(false);
+    // Set all filters to be open by default
+    const [openFilters, setOpenFilters] = useState<string[]>([]);
+    const [authChecked, setAuthChecked] = useState(false);
+    const [authInitialized, setAuthInitialized] = useState(false);
 
     const handleAddToCart = async (productId: string) => {
         try {
@@ -282,36 +299,6 @@ export default function Page() {
         return isInCart(productId)
     }
 
-    // Extract the last part of the path
-    const slug = pathname.split('/').pop() || '';
-
-    // State for database filters
-    const [databaseFilters, setDatabaseFilters] = useState<Record<string, string[]>>({});
-    // State for filter mappings (ID to Title)
-    const [filterMappings, setFilterMappings] = useState<Record<string, Record<string, string>>>({});
-    // State for products
-    const [products, setProducts] = useState<Product[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const searchParams = useSearchParams();
-    const q = searchParams.get("q");
-    // Combined filters state
-    const [filters, setFilters] = useState<Record<string, string[]>>({
-        formFactor: [],
-        processor: [],
-        screenSize: [],
-        memory: [],
-        storage: [],
-        copilotPC: [],
-        fiveGEnabled: [],
-    });
-
-    const [showFilters, setShowFilters] = useState(false);
-    // Set all filters to be open by default
-    const [openFilters, setOpenFilters] = useState<string[]>([]);
-    const [authChecked, setAuthChecked] = useState(false);
-    const [authInitialized, setAuthInitialized] = useState(false);
-
-
     // Handle auth check - IMPROVED VERSION
     useEffect(() => {
         // Only run auth check after auth is fully initialized
@@ -338,9 +325,8 @@ export default function Page() {
         fetchDataFromDatabase();
     }, [authChecked, authInitialized]);
 
-
     // Function to fetch products based on slug
-    const fetchProductsBySlug = async (categorySlug: string, mappings: Record<string, Record<string, string>>) => {
+    const fetchProductsBySlug = async (categorySlug: string) => {
         const startTime = Date.now();
 
         // Log fetch attempt
@@ -360,43 +346,14 @@ export default function Page() {
         try {
             // Decode URL slug if it contains special characters
             const decodedSlug = decodeURIComponent(categorySlug).toLowerCase();
-            // First, try to find if this slug matches any filter
-            let filterId = null;
-            let filterType = null;
-
-            // Check all filter types to see if slug matches any filter title
-            for (const type of FILTER_TYPES) {
-                const { data: filterData, error: filterError } = await supabase
-                    .from("filters")
-                    .select("id, title")
-                    .eq("type", type)
-                    .ilike("title", `%${decodedSlug}%`); // Case-insensitive search
-
-                if (filterError) {
-                    continue;
-                }
-
-                if (filterData && filterData.length > 0) {
-                    filterId = filterData[0].id;
-                    filterType = type;
-                    break;
-                }
-            }
 
             let productsQuery = supabase
                 .from("products")
                 .select("*")
                 .order("date", { ascending: false });
 
-            // If we found a matching filter, query products by that filter
-            if (filterId && filterType) {
-                const filterColumn = filterType === "form_factor" ? "form_factor" :
-                    filterType === "screen_size" ? "screen_size" : filterType;
-
-                productsQuery = productsQuery.eq(filterColumn, filterId);
-            } else {
-                productsQuery = productsQuery.or(`product_name.ilike.%${decodedSlug}%,sku.ilike.%${decodedSlug}%`);
-            }
+            // Search by product name or SKU
+            productsQuery = productsQuery.or(`product_name.ilike.%${decodedSlug}%,sku.ilike.%${decodedSlug}%`);
 
             const { data: productsData, error: productsError } = await productsQuery;
 
@@ -410,27 +367,14 @@ export default function Page() {
                     details: {
                         categorySlug: categorySlug,
                         error: productsError,
-                        executionTimeMs: Date.now() - startTime,
-                        filterId: filterId,
-                        filterType: filterType
+                        executionTimeMs: Date.now() - startTime
                     },
                     status: 'failed'
                 });
                 setProducts([]);
+                return [];
             } else {
                 if (productsData && productsData.length > 0) {
-                    // Use the mappings passed as parameter
-                    const productsWithTitles = productsData.map(product => ({
-                        ...product,
-                        formFactorTitle: mappings.formFactor?.[product.form_factor] || product.form_factor,
-                        processorTitle: mappings.processor?.[product.processor] || product.processor,
-                        memoryTitle: mappings.memory?.[product.memory] || product.memory,
-                        storageTitle: mappings.storage?.[product.storage] || product.storage,
-                        screenSizeTitle: mappings.screenSize?.[product.screen_size] || product.screen_size,
-                    }));
-
-                    setProducts(productsWithTitles);
-
                     await logActivity({
                         type: 'product',
                         level: 'success',
@@ -442,15 +386,13 @@ export default function Page() {
                             totalProducts: productsData.length,
                             publishedProducts: productsData.filter(p => p.post_status === 'Publish').length,
                             outOfStockProducts: productsData.filter(p => p.stock_quantity === 0).length,
-                            executionTimeMs: Date.now() - startTime,
-                            filterId: filterId,
-                            filterType: filterType
+                            executionTimeMs: Date.now() - startTime
                         },
                         status: 'completed'
                     });
+                    
+                    return productsData;
                 } else {
-                    setProducts([]);
-
                     // Log no products found
                     await logActivity({
                         type: 'product',
@@ -460,12 +402,12 @@ export default function Page() {
                         userId: user?.id || null,
                         details: {
                             categorySlug: categorySlug,
-                            executionTimeMs: Date.now() - startTime,
-                            filterId: filterId,
-                            filterType: filterType
+                            executionTimeMs: Date.now() - startTime
                         },
                         status: 'completed'
                     });
+                    
+                    return [];
                 }
             }
 
@@ -484,8 +426,36 @@ export default function Page() {
                 status: 'failed'
             });
 
-            setProducts([]);
+            return [];
         }
+    };
+
+    // Extract unique filter options from products data
+    const extractUniqueValues = (key: keyof Product, productsData: Product[]): string[] => {
+        const values = productsData
+            .map(product => product[key])
+            .filter(value => 
+                value !== null && 
+                value !== undefined && 
+                value !== '' &&
+                (typeof value === 'string' ? value.trim() !== '' : true)
+            );
+        
+        // Convert to strings and remove duplicates
+        return [...new Set(values.map(v => v.toString()))].sort();
+    };
+
+    // Update filter options based on products
+    const updateFilterOptions = (productsData: Product[]) => {
+        const filterOptionsMap = {
+            formFactor: extractUniqueValues('form_factor', productsData),
+            processor: extractUniqueValues('processor', productsData),
+            memory: extractUniqueValues('memory', productsData),
+            storage: extractUniqueValues('storage', productsData),
+            screenSize: extractUniqueValues('screen_size', productsData),
+        };
+        
+        setFilterOptions(filterOptionsMap);
     };
 
     // Fetch all data from database
@@ -509,51 +479,17 @@ export default function Page() {
         try {
             setIsLoading(true);
 
-            // 1. Fetch filters from database
-            const allFilters: Record<string, string[]> = {};
-            const mappings: Record<string, Record<string, string>> = {};
+            let productsData: Product[] = [];
 
-            // Fetch each filter type
-            for (const type of FILTER_TYPES) {
-                const { data, error } = await supabase
-                    .from("filters")
-                    .select("id, title")
-                    .eq("type", type)
-                    .order("title");
-
-                if (error) {
-                    allFilters[type] = [];
-                    mappings[type] = {};
-                } else {
-                    // Map database type names to frontend names
-                    const frontendKey = type === "form_factor" ? "formFactor" :
-                        type === "screen_size" ? "screenSize" : type;
-
-                    // Store titles for display
-                    allFilters[frontendKey] = data?.map(item => item.title) || [];
-
-                    // Create ID to title mapping for this filter type
-                    const idToTitle: Record<string, string> = {};
-                    data?.forEach(item => {
-                        idToTitle[item.id] = item.title;
-                    });
-
-                    mappings[frontendKey] = idToTitle;
-                }
-            }
-
-            setDatabaseFilters(allFilters);
-            setFilterMappings(mappings);
-
-            if (slug) {
-                await fetchProductsBySlug(slug, mappings);
+            if (slug && slug !== "alldevices") {
+                productsData = await fetchProductsBySlug(slug) as Product[];
             } else {
-                const { data: productsData, error: productsError } = await supabase
+                const { data, error } = await supabase
                     .from("products")
                     .select("*")
                     .order("date", { ascending: false });
 
-                if (productsError) {
+                if (error) {
                     await logActivity({
                         type: 'product',
                         level: 'error',
@@ -561,44 +497,46 @@ export default function Page() {
                         message: 'Failed to fetch all products from database',
                         userId: user?.id || null,
                         details: {
-                            error: productsError,
+                            error: error,
                             executionTimeMs: Date.now() - startTime
                         },
                         status: 'failed'
                     });
-                    setProducts([]);
-                } else if (productsData) {
-                    const productsWithTitles = productsData.map(product => ({
-                        ...product,
-                        formFactorTitle: mappings.formFactor?.[product.form_factor] || product.form_factor,
-                        processorTitle: mappings.processor?.[product.processor] || product.processor,
-                        memoryTitle: mappings.memory?.[product.memory] || product.memory,
-                        storageTitle: mappings.storage?.[product.storage] || product.storage,
-                        screenSizeTitle: mappings.screenSize?.[product.screen_size] || product.screen_size,
-                    }));
-
-                    setProducts(productsWithTitles);
-
+                    productsData = [];
+                } else if (data) {
+                    productsData = data;
+                    
                     await logActivity({
                         type: 'product',
                         level: 'success',
                         action: 'products_fetch_success',
-                        message: `Successfully fetched ${productsData.length} products from database`,
+                        message: `Successfully fetched ${data.length} products from database`,
                         userId: user?.id || null,
                         details: {
-                            totalProducts: productsData.length,
-                            publishedProducts: productsData.filter(p => p.post_status === 'Publish').length,
-                            outOfStockProducts: productsData.filter(p => p.stock_quantity === 0).length,
+                            totalProducts: data.length,
+                            publishedProducts: data.filter(p => p.post_status === 'Publish').length,
+                            outOfStockProducts: data.filter(p => p.stock_quantity === 0).length,
                             executionTimeMs: Date.now() - startTime
                         },
                         status: 'completed'
                     });
-
                 }
             }
 
+            setProducts(productsData);
+            
+            // Update filter options based on fetched products
+            updateFilterOptions(productsData);
+
             // Initialize open filters with all available keys
-            const allFilterKeys = [...Object.keys(allFilters), ...HARDCODED_FILTER_KEYS];
+            const allFilterKeys = [
+                'formFactor', 
+                'processor', 
+                'memory', 
+                'storage', 
+                'screenSize', 
+                ...HARDCODED_FILTER_KEYS
+            ];
             setOpenFilters(allFilterKeys);
 
         } catch (error) {
@@ -635,13 +573,13 @@ export default function Page() {
 
             // Map filter keys to product property names
             const keyMapping: Record<string, keyof Product> = {
-                formFactor: "formFactorTitle",
+                formFactor: "form_factor",
                 fiveGEnabled: "five_g_Enabled",
                 copilotPC: "copilot",
-                processor: "processorTitle",
-                screenSize: "screenSizeTitle",
-                memory: "memoryTitle",
-                storage: "storageTitle"
+                processor: "processor",
+                screenSize: "screen_size",
+                memory: "memory",
+                storage: "storage"
             };
 
             const productKey = keyMapping[key] || key as keyof Product;
@@ -657,7 +595,7 @@ export default function Page() {
                 return values.includes("Yes") ? productValue === true : true;
             }
 
-            // Handle string values (for filter titles)
+            // Handle string values
             return values.includes(productValue.toString());
         });
     });
@@ -687,12 +625,18 @@ export default function Page() {
 
     const handleFilterChange = (filterType: string, value: string) => {
         setFilters(prev => {
-            const currentValues = prev[filterType] || [];
-            const newValues = currentValues.includes(value)
-                ? currentValues.filter(v => v !== value)
-                : [...currentValues, value];
+            // Ensure prev[filterType] exists and is an array
+            const currentValues = Array.isArray(prev[filterType]) ? prev[filterType] : [];
 
-            return { ...prev, [filterType]: newValues };
+            // Check if value exists
+            const newValues = currentValues.includes(value)
+                ? currentValues.filter(v => v !== value)  // Remove if exists
+                : [...currentValues, value];               // Add if doesn't exist
+
+            return {
+                ...prev,
+                [filterType]: newValues
+            };
         });
     };
 
@@ -714,47 +658,14 @@ export default function Page() {
 
     // Helper component for database filter section
     const DatabaseFilterSection = ({ filterKey, title }: { filterKey: string, title: string }) => {
-        const filterOptions = databaseFilters[filterKey] || [];
+        const filterOptionsList = filterOptions[filterKey] || [];
+        const currentFilterValues = filters[filterKey] || [];
 
-        if (filterOptions.length === 0) return null;
+        const handleCheckboxChange = (item: string) => {
+            handleFilterChange(filterKey, item);
+        };
 
-        return (
-            <div className="border-b pb-4">
-                <button
-                    onClick={() => toggleFilter(filterKey)}
-                    className="flex items-center justify-between w-full text-left font-semibold text-gray-800 hover:text-[#3ba1da]"
-                >
-                    {title}
-                    {openFilters.includes(filterKey) ? (
-                        <ChevronUp className="h-4 w-4" />
-                    ) : (
-                        <ChevronDown className="h-4 w-4" />
-                    )}
-                </button>
-                {openFilters.includes(filterKey) && (
-                    <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
-                        {filterOptions.map(item => (
-                            <label key={item} className="flex items-center space-x-3 cursor-pointer py-1">
-                                <input
-                                    type="checkbox"
-                                    checked={filters[filterKey]?.includes(item) || false}
-                                    onChange={() => handleFilterChange(filterKey, item)}
-                                    className="h-4 w-4 text-[#3ba1da] rounded border-gray-300 focus:ring-[#3ba1da]"
-                                />
-                                <span className="text-gray-700 text-sm">{item}</span>
-                            </label>
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    // Helper component for hardcoded filter section
-    const HardcodedFilterSection = ({ filterKey, title }: { filterKey: string, title: string }) => {
-        const filterOptions = HARDCODED_FILTERS[filterKey as keyof typeof HARDCODED_FILTERS] || [];
-
-        if (filterOptions.length === 0) return null;
+        if (filterOptionsList.length === 0) return null;
 
         return (
             <div className="border-b pb-4">
@@ -771,25 +682,87 @@ export default function Page() {
                 </button>
                 {openFilters.includes(filterKey) && (
                     <div className="mt-3 space-y-2">
-                        {filterOptions.map(item => (
-                            <label key={item} className="flex items-center space-x-3 cursor-pointer py-1">
-                                <input
-                                    type="checkbox"
-                                    checked={filters[filterKey]?.includes(item) || false}
-                                    onChange={() => handleFilterChange(filterKey, item)}
-                                    className="h-4 w-4 text-[#3ba1da] rounded border-gray-300 focus:ring-[#3ba1da]"
-                                />
-                                <span className="text-gray-700 text-sm">{item}</span>
-                            </label>
-                        ))}
+                        {filterOptionsList.map(item => {
+                            const checkboxId = `${filterKey}-${item}`;
+
+                            return (
+                                <div key={checkboxId} className="flex items-center space-x-3 py-1">
+                                    <input
+                                        type="checkbox"
+                                        id={checkboxId}
+                                        checked={currentFilterValues.includes(item)}
+                                        onChange={() => handleCheckboxChange(item)}
+                                        className="h-4 w-4 text-[#3ba1da] rounded border-gray-300 focus:ring-[#3ba1da]"
+                                    />
+                                    <label
+                                        htmlFor={checkboxId}
+                                        className="text-gray-700 text-sm cursor-pointer flex-1 select-none"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        {item}
+                                    </label>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>
         );
     };
 
-    // Get all filter keys for rendering
-    const allFilterKeys = [...Object.keys(databaseFilters), ...HARDCODED_FILTER_KEYS];
+    // Helper component for hardcoded filter section
+    const HardcodedFilterSection = ({ filterKey, title }: { filterKey: string, title: string }) => {
+        const filterOptionsList = HARDCODED_FILTERS[filterKey as keyof typeof HARDCODED_FILTERS] || [];
+        const currentFilterValues = filters[filterKey] || [];
+
+        const handleCheckboxChange = (item: string) => {
+            handleFilterChange(filterKey, item);
+        };
+
+        if (filterOptionsList.length === 0) return null;
+
+        return (
+            <div className="border-b pb-4">
+                <button
+                    onClick={() => toggleFilter(filterKey)}
+                    className="flex items-center justify-between w-full text-left font-semibold text-gray-800 hover:text-[#3ba1da]"
+                >
+                    {title}
+                    {openFilters.includes(filterKey) ? (
+                        <ChevronUp className="h-4 w-4" />
+                    ) : (
+                        <ChevronDown className="h-4 w-4" />
+                    )}
+                </button>
+                {openFilters.includes(filterKey) && (
+                    <div className="mt-3 space-y-2">
+                        {filterOptionsList.map(item => {
+                            const checkboxId = `${filterKey}-hardcoded-${item}`;
+
+                            return (
+                                <div key={checkboxId} className="flex items-center space-x-3 py-1">
+                                    <input
+                                        type="checkbox"
+                                        id={checkboxId}
+                                        checked={currentFilterValues.includes(item)}
+                                        onChange={() => handleCheckboxChange(item)}
+                                        className="h-4 w-4 text-[#3ba1da] rounded border-gray-300 focus:ring-[#3ba1da]"
+                                    />
+                                    <label
+                                        htmlFor={checkboxId}
+                                        className="text-gray-700 text-sm cursor-pointer flex-1 select-none"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        {item}
+                                    </label>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     // Optional: prevent UI flicker - MUST BE AFTER ALL HOOKS
     if (isLoggedIn === null) {
@@ -825,24 +798,12 @@ export default function Page() {
                             <FiltersSidebarSkeleton />
                         ) : (
                             <div className="space-y-4">
-                                {/* Database Filters */}
-                                {Object.keys(databaseFilters).map(key => {
-                                    const titleMap: Record<string, string> = {
-                                        formFactor: "Form Factor",
-                                        processor: "Processor",
-                                        screenSize: "Screen Size",
-                                        memory: "Memory",
-                                        storage: "Storage"
-                                    };
-
-                                    return (
-                                        <DatabaseFilterSection
-                                            key={key}
-                                            filterKey={key}
-                                            title={titleMap[key] || key}
-                                        />
-                                    );
-                                })}
+                                {/* Database Filters from products table */}
+                                <DatabaseFilterSection filterKey="formFactor" title="Form Factor" />
+                                <DatabaseFilterSection filterKey="processor" title="Processor" />
+                                <DatabaseFilterSection filterKey="screenSize" title="Screen Size" />
+                                <DatabaseFilterSection filterKey="memory" title="Memory" />
+                                <DatabaseFilterSection filterKey="storage" title="Storage" />
 
                                 {/* Hardcoded Filters */}
                                 <HardcodedFilterSection filterKey="copilotPC" title="Copilot + PC" />
@@ -909,6 +870,19 @@ export default function Page() {
                                 <>
                                     <div className="flex items-center justify-between sm:my-10 my-5">
                                         <div className="text-3xl font-semibold"><span className="capitalize">{slug == "notebooks" ? "Laptops" : slug}</span> {q !== "search" && "Devices"}</div>
+                                        {(admin === profile?.role || shopManager === profile?.role) && (
+                                            <div className="">
+                                                <div className="flex justify-center md:justify-start">
+                                                    <Link
+                                                        href="/add-device"
+                                                        className="inline-flex items-center justify-center rounded bg-[#41abd6] px-5 py-2 text-sm font-semibold text-white transition-all duration-300 hover:bg-[#3791b4] hover:shadow-lg hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#3791b4]/50 sm:px-4 sm:py-2 sm:text-sm md:px-4 md:py-2 md:text-sm"
+                                                    >
+                                                        <FaPlus className="me-3" />
+                                                        Add New Device
+                                                    </Link>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-10">
                                         {filteredProducts.map(product => {
@@ -1032,7 +1006,7 @@ export default function Page() {
                             ) : (
                                 <div className="text-center py-12">
                                     <p className="text-gray-600 text-lg">
-                                        No products found matching "{slug}".
+                                        {products.length === 0 ? "No products found." : "No products found matching your filters."}
                                     </p>
                                     {products.length > 0 && (
                                         <button
@@ -1071,24 +1045,12 @@ export default function Page() {
                 className="filter-drawer"
             >
                 <div className="space-y-6">
-                    {/* Database Filters */}
-                    {Object.keys(databaseFilters).map(key => {
-                        const titleMap: Record<string, string> = {
-                            formFactor: "Form Factor",
-                            processor: "Processor",
-                            screenSize: "Screen Size",
-                            memory: "Memory",
-                            storage: "Storage"
-                        };
-
-                        return (
-                            <DatabaseFilterSection
-                                key={key}
-                                filterKey={key}
-                                title={titleMap[key] || key}
-                            />
-                        );
-                    })}
+                    {/* Database Filters from products table */}
+                    <DatabaseFilterSection filterKey="formFactor" title="Form Factor" />
+                    <DatabaseFilterSection filterKey="processor" title="Processor" />
+                    <DatabaseFilterSection filterKey="screenSize" title="Screen Size" />
+                    <DatabaseFilterSection filterKey="memory" title="Memory" />
+                    <DatabaseFilterSection filterKey="storage" title="Storage" />
 
                     {/* Hardcoded Filters */}
                     <HardcodedFilterSection filterKey="copilotPC" title="Copilot + PC" />

@@ -44,12 +44,7 @@ export type Product = {
     withCustomer: string;
     processor?: string | null;
     form_factor?: string | null;
-    processor_filter?: {
-        title?: string;
-    };
-    form_factor_filter?: {
-        title?: string;
-    };
+    slug?: string | null; // Add slug property
 }
 
 export type Order = {
@@ -66,8 +61,7 @@ export type Order = {
     shipped_date: string | null
     returned_date: string | null
     vertical: string | null
-    quantity: string | null // This is total quantity as string for backward compatibility
-    quantity_array?: number[] | null // Add this for array support
+    quantity: number | null // Now directly a number, not string
     segment: string | null
     order_month: string | null
     order_quarter: string | null
@@ -102,28 +96,31 @@ export type Order = {
     zip: string | null
     desired_date: string | null
     notes: string | null
-    product_id: string[] | null // Change this to string array
-    products?: Product
-    products_array?: Product[] // Add this for multiple products
-    approved_user?: { // Add this for the join
+    product_id: string | null // Now a single UUID, not array
+    products?: Product // Single product from join
+    // For backward compatibility (optional)
+    product_ids_array?: string[]
+    quantities_array?: number[]
+    products_array?: Product[]
+    approved_user?: {
         id: string
         email: string
-        firstName?: string  // Change to camelCase
-        lastName?: string   // Change to camelCase
+        firstName?: string
+        lastName?: string
     }
-    rejected_user?: { // Add this for the join
+    rejected_user?: {
         id: string
         email: string
-        firstName?: string  // Change to camelCase
-        lastName?: string   // Change to camelCase
+        firstName?: string
+        lastName?: string
     }
-    order_by_user?: { // Add this for the join
+    order_by_user?: {
         id: string
         email: string
-        firstName?: string  // Change to camelCase
-        lastName?: string   // Change to camelCase
+        firstName?: string
+        lastName?: string
     }
-    wins?: { // Add this for the join
+    wins?: {
         id: string;
         order_id: string;
         created_at: string;
@@ -166,6 +163,8 @@ export default function Page() {
         isDamaged: boolean;
     }[]>([]);
 
+
+
     // Helper function to handle status change to Returned
     const handleStatusChangeToReturned = (field: string, value: string, rowId: string = "order") => {
         console.log('handleStatusChangeToReturned called:', { field, value, rowId });
@@ -181,24 +180,23 @@ export default function Page() {
         }
 
         // Check if order has shipped products
-        if (!order.shipped_date || !order.products_array || order.products_array.length === 0) {
+        if (!order.shipped_date || !order.products) {
             console.log('Order not shipped or no products:', {
                 hasShippedDate: !!order.shipped_date,
-                hasProductsArray: !!order.products_array,
-                productsCount: order.products_array?.length || 0
+                hasProducts: !!order.products
             });
             toast.error("Order is not shipped or has no products");
             return;
         }
 
-        // Prepare returned products data
-        const productsData = order.products_array.map((product, index) => ({
-            productId: product.id,
-            productName: product.product_name,
-            shippedQuantity: order.quantity_array?.[index] || 0,
-            returnedQuantity: order.quantity_array?.[index] || 0, // Initially all returned
-            isDamaged: false // Initially all items are NOT damaged (will be returned to stock)
-        }));
+        // Prepare returned products data (single product now)
+        const productsData = [{
+            productId: order.products.id,
+            productName: order.products.product_name,
+            shippedQuantity: order.quantity || 0,
+            returnedQuantity: order.quantity || 0, // Initially all returned
+            isDamaged: false
+        }];
 
         console.log('Setting returned products:', productsData);
         setReturnedProducts(productsData);
@@ -222,7 +220,9 @@ export default function Page() {
         { value: `${process.env.NEXT_PUBLIC_STATUS_AWAITING}`, label: "Awaiting Approval" },
         { value: `${process.env.NEXT_PUBLIC_STATUS_PROCESSING}`, label: "Processing" },
         { value: `${process.env.NEXT_PUBLIC_STATUS_SHIPPED}`, label: "Shipped" },
-        { value: `${process.env.NEXT_PUBLIC_STATUS_EXTENSION}`, label: "Shipped Extension" },
+        { value: `${process.env.NEXT_PUBLIC_STATUS_EXTENSION}`, label: "Shipped (Order Extension)" },
+        { value: `${process.env.NEXT_PUBLIC_IN_TRANSIT}`, label: "Return In transit" },
+        { value: `${process.env.NEXT_PUBLIC_FEDEX_DELIVERED}`, label: "Delivered to warehouse" },
         { value: `${process.env.NEXT_PUBLIC_STATUS_RETURNED}`, label: "Returned" },
         { value: `${process.env.NEXT_PUBLIC_STATUS_REJECTED}`, label: "Rejected" }
     ];
@@ -296,16 +296,17 @@ export default function Page() {
 
             console.log('🔍 Fetching order details...');
 
-            // First, fetch the order without the product join
+            // Fetch order with product details using join
             let query = supabase
                 .from('orders')
                 .select(`
-            *,
-            approved_user:users!orders_approved_by_fkey(id, email, firstName, lastName),
-            rejected_user:users!orders_rejected_by_fkey(id, email, firstName, lastName),
-            order_by_user:users!orders_order_by_fkey(id, email, firstName, lastName),
-            wins:wins(*) 
-        `)
+                *,
+                approved_user:users!orders_approved_by_fkey(id, email, firstName, lastName),
+                rejected_user:users!orders_rejected_by_fkey(id, email, firstName, lastName),
+                order_by_user:users!orders_order_by_fkey(id, email, firstName, lastName),
+                wins:wins(*),
+                products:product_id (*)
+            `)
                 .eq('order_no', orderHash);
 
             const { data, error: supabaseError } = await query;
@@ -315,9 +316,8 @@ export default function Page() {
                 throw supabaseError;
             }
 
-            if (data) {
-                console.log("📦 Fetched raw data:", data);
-                console.log("📊 Number of orders:", data.length);
+            if (data && data.length > 0) {
+                console.log("📦 Fetched raw data:", data[0]);
 
                 // Check if user is authorized to view this order
                 if (sRole === profile?.role && data[0].order_by !== profile?.id) {
@@ -326,168 +326,51 @@ export default function Page() {
                     return;
                 }
 
-                // Parse the product_id array and quantity array
-                const processedOrders = await Promise.all(data.map(async (order: any) => {
-                    try {
-                        // Parse product_id and quantity arrays
-                        let productIds: string[] = [];
-                        let quantities: number[] = [];
+                // Process the order - product_id is now a UUID reference
+                const processedOrder: Order = {
+                    ...data[0],
+                    // product_id is already a UUID string from the join
+                    product_id: data[0].product_id,
+                    // quantity is now a simple number
+                    quantity: data[0].quantity,
+                    // For backward compatibility, create arrays if needed
+                    product_ids_array: [data[0].product_id],
+                    quantities_array: [data[0].quantity],
+                    // Products array for multiple products (if needed in future)
+                    products_array: data[0].products ? [data[0].products] : [],
+                    approved_user: data[0].approved_user ? {
+                        id: data[0].approved_user.id,
+                        email: data[0].approved_user.email,
+                        firstName: data[0].approved_user.firstName,
+                        lastName: data[0].approved_user.lastName
+                    } : undefined,
+                    rejected_user: data[0].rejected_user ? {
+                        id: data[0].rejected_user.id,
+                        email: data[0].rejected_user.email,
+                        firstName: data[0].rejected_user.firstName,
+                        lastName: data[0].rejected_user.lastName
+                    } : undefined,
+                    order_by_user: data[0].order_by_user ? {
+                        id: data[0].order_by_user.id,
+                        email: data[0].order_by_user.email,
+                        firstName: data[0].order_by_user.firstName,
+                        lastName: data[0].order_by_user.lastName
+                    } : undefined
+                };
 
-                        console.log("📋 Original product_id:", order.product_id);
-                        console.log("📋 Original quantity:", order.quantity);
-                        console.log("📋 Order status:", order.order_status);
-
-                        // Handle product_id parsing
-                        if (order.product_id) {
-                            if (typeof order.product_id === 'string') {
-                                try {
-                                    productIds = JSON.parse(order.product_id);
-                                    console.log("✅ Parsed productIds:", productIds);
-                                } catch (parseError) {
-                                    console.error('❌ Error parsing product_id JSON:', parseError);
-                                    if (order.product_id.trim().startsWith('[') === false) {
-                                        productIds = [order.product_id.trim()];
-                                    }
-                                }
-                            } else if (Array.isArray(order.product_id)) {
-                                productIds = order.product_id;
-                            }
-                        }
-
-                        // Handle quantity parsing
-                        if (order.quantity) {
-                            if (typeof order.quantity === 'string') {
-                                try {
-                                    quantities = JSON.parse(order.quantity);
-                                    console.log("✅ Parsed quantities:", quantities);
-                                } catch (parseError) {
-                                    console.error('❌ Error parsing quantity JSON:', parseError);
-                                    const parsed = parseInt(order.quantity);
-                                    if (!isNaN(parsed)) {
-                                        quantities = [parsed];
-                                    }
-                                }
-                            } else if (Array.isArray(order.quantity)) {
-                                quantities = order.quantity;
-                            } else if (typeof order.quantity === 'number') {
-                                quantities = [order.quantity];
-                            }
-                        }
-
-                        console.log("🎯 Final productIds:", productIds);
-                        console.log("🎯 Final quantities:", quantities);
-
-                        // Fetch all products for this order
-                        let productsDetails: Product[] = [];
-                        if (productIds.length > 0) {
-                            const { data: productsData, error: productsError } = await supabase
-                                .from('products')
-                                .select(`
-                            *,
-                            processor_filter:processor(title),
-                            form_factor_filter:form_factor(title)
-                        `)
-                                .in('id', productIds);
-
-                            if (!productsError && productsData) {
-                                productsDetails = productsData as Product[];
-                                console.log(`✅ Fetched ${productsDetails.length} products`);
-                            } else {
-                                console.error('❌ Error fetching products:', productsError);
-                            }
-                        }
-
-                        // Calculate total quantity
-                        const totalQuantity = quantities.reduce((sum, qty) => sum + qty, 0);
-
-                        // Create the order object
-                        const processedOrder: Order = {
-                            ...order,
-                            product_id: productIds,
-                            quantity: totalQuantity.toString(),
-                            quantity_array: quantities,
-                            products: productIds.length > 0 ? productsDetails[0] : undefined,
-                            products_array: productsDetails,
-                            approved_user: order.approved_user ? {
-                                id: order.approved_user.id,
-                                email: order.approved_user.email,
-                                firstName: order.approved_user.firstName,
-                                lastName: order.approved_user.lastName
-                            } : undefined,
-                            rejected_user: order.rejected_user ? {
-                                id: order.rejected_user.id,
-                                email: order.rejected_user.email,
-                                firstName: order.rejected_user.firstName,
-                                lastName: order.rejected_user.lastName
-                            } : undefined,
-                            order_by_user: order.order_by_user ? {
-                                id: order.order_by_user.id,
-                                email: order.order_by_user.email,
-                                firstName: order.order_by_user.firstName,
-                                lastName: order.order_by_user.lastName
-                            } : undefined
-                        };
-
-                        console.log("✅ Processed order:", {
-                            id: processedOrder.id,
-                            order_no: processedOrder.order_no,
-                            order_status: processedOrder.order_status,
-                            returned_date: processedOrder.returned_date,
-                            product_count: processedOrder.product_id?.length || 0
-                        });
-
-                        return processedOrder;
-                    } catch (parseError) {
-                        console.error('❌ Error parsing order data:', parseError);
-                        return {
-                            ...order,
-                            product_id: [],
-                            quantity: null,
-                            products: undefined,
-                            products_array: [],
-                            approved_user: order.approved_user ? {
-                                id: order.approved_user.id,
-                                email: order.approved_user.email,
-                                firstName: order.approved_user.firstName,
-                                lastName: order.approved_user.lastName
-                            } : undefined,
-                            rejected_user: order.rejected_user ? {
-                                id: order.rejected_user.id,
-                                email: order.rejected_user.email,
-                                firstName: order.rejected_user.firstName,
-                                lastName: order.rejected_user.lastName
-                            } : undefined,
-                            order_by_user: order.order_by_user ? {
-                                id: order.order_by_user.id,
-                                email: order.order_by_user.email,
-                                firstName: order.order_by_user.firstName,
-                                lastName: order.order_by_user.lastName
-                            } : undefined
-                        } as Order;
-                    }
-                }));
-
-                console.log("🎉 Setting processed orders to state:", processedOrders.length);
-                setOrders(processedOrders);
+                console.log("✅ Processed order:", processedOrder);
+                setOrders([processedOrder]);
 
                 // Initialize tracking data
-                if (processedOrders.length > 0) {
-                    const order = processedOrders[0];
-                    console.log("📦 First order details:", {
-                        order_no: order.order_no,
-                        order_status: order.order_status,
-                        returned_date: order.returned_date
-                    });
-                    setTrackingData({
-                        tracking: order.tracking || "",
-                        return_tracking: order.return_tracking || "",
-                        tracking_link: order.tracking_link || "",
-                        return_tracking_link: order.return_tracking_link || "",
-                        username: order.username || "",
-                        case_type: order.case_type || "",
-                        password: order.password || ""
-                    });
-                }
+                setTrackingData({
+                    tracking: processedOrder.tracking || "",
+                    return_tracking: processedOrder.return_tracking || "",
+                    tracking_link: processedOrder.tracking_link || "",
+                    return_tracking_link: processedOrder.return_tracking_link || "",
+                    username: processedOrder.username || "",
+                    case_type: processedOrder.case_type || "",
+                    password: processedOrder.password || ""
+                });
 
                 await logActivity({
                     type: 'order',
@@ -501,12 +384,10 @@ export default function Page() {
                         orderNumber: data[0]?.order_no,
                         orderStatus: data[0]?.order_status,
                         executionTimeMs: Date.now() - startTime,
-                        userRole: profile?.role,
-                        productCount: processedOrders[0]?.product_id?.length || 0
+                        userRole: profile?.role
                     },
                     status: 'completed'
                 });
-
             }
 
         } catch (err: unknown) {
@@ -524,65 +405,43 @@ export default function Page() {
 
 
     const renderAllProducts = () => {
-        // Safely handle product_id - it could be string or array
-        let productIds: string[] = [];
-
-        if (order.product_id) {
-            if (Array.isArray(order.product_id)) {
-                productIds = order.product_id;
-            } else if (typeof order.product_id === 'string') {
-                try {
-                    // Try to parse JSON string
-                    const parsed = JSON.parse(order.product_id);
-                    if (Array.isArray(parsed)) {
-                        productIds = parsed;
-                    } else {
-                        // If not an array, treat as single ID
-                        productIds = [order.product_id];
-                    }
-                } catch (error) {
-                    // If parsing fails, treat as single ID
-                    productIds = [order.product_id];
-                }
-            }
-        }
-
-        // Also handle products_array safely
-        const productsArray = order.products_array || [];
-        const quantityArray = order.quantity_array || [];
-
-        if (productIds.length === 0 || productsArray.length === 0) {
+        if (!order.products) {
             return (
                 <TableRow>
                     <TableCell colSpan={2} className="text-center">
-                        <span className="text-gray-500">No products found</span>
+                        <span className="text-gray-500">No product found</span>
                     </TableCell>
                 </TableRow>
             );
         }
 
-        return productIds.map((productId, index) => {
-            // Find the product details for this productId
-            const product = productsArray.find(p => p.id === productId);
-            const quantity = quantityArray[index] || 0;
-
-            return (
-                <TableRow key={`${productId}-${index}`}>
+        return (
+            <>
+                <TableRow>
                     <TableCell className="w-[85%]">
-                        {product ? (
-                            <div className="flex items-center gap-2">
-                                <span>{product.product_name}</span>
-                            </div>
-                        ) : (
-                            <span className="text-gray-500">Product not found (ID: {productId})</span>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {order.products?.slug ? (
+                                <Link
+                                    href={`/product/${order.products.slug}`}
+                                    target="_blank"
+                                    className="text-blue-600 hover:underline cursor-pointer"
+                                >
+                                    {order.products?.product_name}
+                                </Link>
+                            ) : (
+                                <span>{order.products?.product_name}</span>
+                            )}
+                            {order.products?.sku && (
+                                <span className="text-xs text-gray-500">(SKU: {order.products.sku})</span>
+                            )}
+                        </div>
                     </TableCell>
-                    <TableCell className="w-[8%] border-l text-center">
-                        {quantity}
+                    <TableCell className="w-[15%] border-l text-center">
+                        {order.quantity || 0}
                     </TableCell>
                 </TableRow>
-            );
-        });
+            </>
+        );
     };
 
     // Helper function to render product selector for editing
@@ -626,11 +485,10 @@ export default function Page() {
             );
         }
 
-        // Display product count
-        const productCount = order.product_id?.length || 0;
+        // Display product name
         let displayText = "-";
-        if (productCount > 0) {
-            displayText = `${productCount} product(s)`;
+        if (order.products) {
+            displayText = order.products.product_name;
         }
 
         return (
@@ -643,11 +501,7 @@ export default function Page() {
                         className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 cursor-pointer"
                         onClick={() => {
                             setEditingField(field);
-                            // Set the first product ID as the value to edit
-                            const firstProductId = order.product_id && order.product_id.length > 0
-                                ? order.product_id[0]
-                                : "";
-                            setEditedValue(firstProductId);
+                            setEditedValue(order.product_id || "");
                             setEditingRowId(rowId);
                         }}
                     >
@@ -690,12 +544,6 @@ export default function Page() {
             return;
         }
 
-        // Check if we have selected products
-        const hasSelectedProducts = returnedProducts.some(p => p.returnedQuantity > 0);
-        if (!hasSelectedProducts) {
-            toast.error("Please select products to return");
-            return;
-        }
 
         const startTime = Date.now();
 
@@ -719,16 +567,16 @@ export default function Page() {
             // ✅ Loading toast
             toast.loading("Processing return...");
 
-            // ✅ DIRECT SUPA-BASE CALL (API ki jagah)
+            // ✅ DIRECT SUPA-BASE CALL
             const currentDate = new Date().toISOString().split('T')[0];
 
-            // Step 1: Pehle product quantities update karein
+            // Step 1: Update product quantities
             for (const returnedProduct of returnedProducts) {
                 if (returnedProduct.returnedQuantity > 0) {
-                    // Find the product in order.products_array
-                    const product = order.products_array?.find(p => p.id === returnedProduct.productId);
+                    // Find the product in order.products (single product now)
+                    const product = order.products;
 
-                    if (product) {
+                    if (product && product.id === returnedProduct.productId) {
                         // Calculate new quantities
                         const currentStock = parseInt(product.stock_quantity) || 0;
                         const currentWithCustomer = parseInt(product.withCustomer) || 0;
@@ -766,7 +614,7 @@ export default function Page() {
                 }
             }
 
-            // Step 2: Order status update karein
+            // Step 2: Order status update
             const returnStatus = process.env.NEXT_PUBLIC_STATUS_RETURNED || "Returned";
 
             const { error: orderError } = await supabase
@@ -783,7 +631,7 @@ export default function Page() {
 
             console.log('✅ Order status updated to Returned');
 
-            // Step 3: Email bhejein (agar chahiye) - FIXED: Now passing returnedProducts as second argument
+            // Step 3: Send email
             if (order.order_by_user?.email) {
                 try {
                     await sendReturnedOrderEmail({
@@ -794,17 +642,16 @@ export default function Page() {
                     console.log('✅ Return email sent');
                 } catch (emailError) {
                     console.error('Email sending failed:', emailError);
-                    // Email fail hua to bhi process continue rahe
                 }
             }
 
-            // ✅ Loading toast dismiss karein
+            // ✅ Loading toast dismiss
             toast.dismiss();
 
-            // ✅ Success toast show karein
+            // ✅ Success toast
             toast.success("Return processed successfully!");
 
-            // ✅ Modal close karein
+            // ✅ Close modal
             setIsReturnModalOpen(false);
 
             // ✅ Reset state
@@ -832,7 +679,7 @@ export default function Page() {
                 status: 'completed'
             });
 
-            // ✅ IMMEDIATELY refresh data (timeout ke bina)
+            // ✅ Refresh data
             console.log('✅ Refreshing data immediately...');
             await fetchOrders();
             await fetchAllProducts();
@@ -841,10 +688,10 @@ export default function Page() {
             console.error('Error in handleReturnSubmit:', err);
             console.error('Error stack:', err.stack);
 
-            // ✅ Loading toast dismiss karein
+            // ✅ Dismiss loading toast
             toast.dismiss();
 
-            // ✅ Error toast show karein
+            // ✅ Show error toast
             toast.error(err.message || "Failed to process return");
 
             // Log error
@@ -866,17 +713,18 @@ export default function Page() {
         }
     };
 
-    // Helper function to format action_date with AM/PM
+    // Helper function to format action_date with dd-MMM-yyyy format
     const formatActionDate = (dateTimeString: string | null) => {
         if (!dateTimeString) return "-";
 
         try {
             const date = new Date(dateTimeString);
+            if (isNaN(date.getTime())) return "-";
 
-            // Extract date parts
+            // Format: dd-MMM-yyyy (HH:MM AM/PM)
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = date.toLocaleString('default', { month: 'short' });
             const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
 
             // Extract time parts
             let hours = date.getHours();
@@ -885,13 +733,13 @@ export default function Page() {
             // Convert to 12-hour format with AM/PM
             const ampm = hours >= 12 ? 'PM' : 'AM';
             hours = hours % 12;
-            hours = hours ? hours : 12; // 0 should be 12
+            hours = hours ? hours : 12;
 
-            // Format: MM/DD/YYYY hh:mm AM/PM
-            return `${month}/${day}/${year} (${hours}:${minutes} ${ampm})`;
+            // Format: dd-MMM-yyyy (hh:mm AM/PM)
+            return `${day}-${month}-${year} (${hours}:${minutes} ${ampm})`;
         } catch (error) {
             console.error('Error formatting action_date:', error);
-            return dateTimeString; // Return original if parsing fails
+            return dateTimeString;
         }
     };
 
@@ -927,18 +775,15 @@ export default function Page() {
                     <DialogHeader>
                         <DialogTitle>Process Return for Order #{order?.order_no}</DialogTitle>
                         <p className="text-sm text-gray-600 mt-1">
-                            Select products and specify quantity to return to inventory
+                            Specify quantity to return to inventory
                         </p>
                     </DialogHeader>
 
                     <div className="space-y-4 py-4 overflow-x-hidden">
-
-
                         <div className="overflow-x-auto">
                             <Table className="td-table w-full min-w-162.5">
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead className="w-12.5 text-center td-th"></TableHead>
                                         <TableHead className="w-25 td-th">Shipped</TableHead>
                                         <TableHead className="w-37.5 td-th">Return to Stock</TableHead>
                                         <TableHead className=" td-th">Product</TableHead>
@@ -947,28 +792,6 @@ export default function Page() {
                                 <TableBody>
                                     {returnedProducts.map((product, index) => (
                                         <TableRow key={product.productId} className="hover:bg-gray-50">
-                                            <TableCell className="text-center td-td">
-                                                <div className="flex justify-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={product.returnedQuantity > 0}
-                                                        onChange={(e) => {
-                                                            const isChecked = e.target.checked;
-                                                            setReturnedProducts(prev => prev.map((p, i) => {
-                                                                if (i === index) {
-                                                                    return {
-                                                                        ...p,
-                                                                        returnedQuantity: isChecked ? p.shippedQuantity : 0,
-                                                                        isDamaged: !isChecked
-                                                                    };
-                                                                }
-                                                                return p;
-                                                            }));
-                                                        }}
-                                                        className="h-5 w-5 cursor-pointer"
-                                                    />
-                                                </div>
-                                            </TableCell>
                                             <TableCell className="font-medium text-center td-td">
                                                 {product.shippedQuantity}
                                             </TableCell>
@@ -996,7 +819,6 @@ export default function Page() {
                                                             }));
                                                         }}
                                                         className="w-24 text-center"
-                                                        disabled={product.returnedQuantity === 0}
                                                     />
                                                     <span className="text-sm text-gray-500">
                                                         / {product.shippedQuantity}
@@ -1027,15 +849,15 @@ export default function Page() {
                                     </span>
                                 </div>
                                 <div className="bg-white p-3 rounded border">
-                                    <span className="text-gray-600">Selected Products:</span>
-                                    <span className="font-medium ml-2 text-lg">
-                                        {returnedProducts.filter(p => p.returnedQuantity > 0).length}
-                                    </span>
-                                </div>
-                                <div className="bg-white p-3 rounded border">
                                     <span className="text-gray-600">Returning to Stock:</span>
                                     <span className="font-medium ml-2 text-lg text-green-600">
                                         {returnedProducts.reduce((sum, p) => sum + p.returnedQuantity, 0)}
+                                    </span>
+                                </div>
+                                <div className="bg-white p-3 rounded border">
+                                    <span className="text-gray-600">Remaining with Customer:</span>
+                                    <span className="font-medium ml-2 text-lg text-orange-600">
+                                        {returnedProducts.reduce((sum, p) => sum + (p.shippedQuantity - p.returnedQuantity), 0)}
                                     </span>
                                 </div>
                             </div>
@@ -1046,7 +868,7 @@ export default function Page() {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => {
-                                        // Select all and set to maximum
+                                        // Return all
                                         setReturnedProducts(prev => prev.map(p => ({
                                             ...p,
                                             returnedQuantity: p.shippedQuantity,
@@ -1055,13 +877,13 @@ export default function Page() {
                                     }}
                                     className="text-xs"
                                 >
-                                    Select All & Return Full Quantity
+                                    Return All
                                 </Button>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     onClick={() => {
-                                        // Unselect all
+                                        // Return none
                                         setReturnedProducts(prev => prev.map(p => ({
                                             ...p,
                                             returnedQuantity: 0,
@@ -1070,25 +892,24 @@ export default function Page() {
                                     }}
                                     className="text-xs"
                                 >
-                                    Unselect All
+                                    Return None
                                 </Button>
                             </div>
 
                             {returnedProducts.some(p => p.returnedQuantity === 0) && (
-                                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+                                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded">
                                     <div className="flex items-start">
-                                        <span className="text-red-600 mr-2">⚠️</span>
+                                        <span className="text-amber-600 mr-2">⚠️</span>
                                         <div>
-                                            <strong className="text-red-700">Note:</strong>
-                                            <p className="text-red-600 text-sm mt-1">
-                                                {returnedProducts.filter(p => p.returnedQuantity === 0).length} item(s) are not selected and will not be added back to stock inventory.
+                                            <strong className="text-amber-700">Note:</strong>
+                                            <p className="text-amber-600 text-sm mt-1">
+                                                Products with quantity 0 will not be added back to stock inventory.
                                             </p>
                                         </div>
                                     </div>
                                 </div>
                             )}
                         </div>
-
                     </div>
 
                     <div className="flex justify-end space-x-3 pt-4 border-t">
@@ -1098,7 +919,6 @@ export default function Page() {
                                 console.log('Cancel button clicked - explicit cancel');
                                 setIsReturnModalOpen(false);
                                 setReturnedProducts([]);
-                                // Don't reset pendingStatusChange here - let the submit button handle it
                                 toast.info("Return process cancelled");
                             }}
                             className="cursor-pointer"
@@ -1125,14 +945,6 @@ export default function Page() {
                                 if (!isActionAuthorized) {
                                     console.error('❌ Not authorized');
                                     toast.error("You are not authorized");
-                                    return;
-                                }
-
-                                // Check if we have selected products
-                                const hasSelectedProducts = returnedProducts.some(p => p.returnedQuantity > 0);
-                                if (!hasSelectedProducts) {
-                                    console.error('❌ No products selected for return');
-                                    toast.error("Please select products to return");
                                     return;
                                 }
 
@@ -1298,7 +1110,12 @@ export default function Page() {
         const date = calculateEstimatedReturnDate(shippedDate);
         if (!date) return "-";
 
-        return date.toLocaleDateString();
+        // Format to dd-MMM-yyyy
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = date.toLocaleString('default', { month: 'short' });
+        const year = date.getFullYear();
+
+        return `${day}-${month}-${year}`;
     };
 
     const hasReturnDatePassed = (shippedDate: string | null): boolean => {
@@ -1319,6 +1136,25 @@ export default function Page() {
         return returnDateMidnight < todayMidnight;
     };
 
+    // Helper function to format date to dd-MMM-yyyy
+    const formatDateToCustomFormat = (dateString: string | null) => {
+        if (!dateString) return "-";
+
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return "-";
+
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = date.toLocaleString('default', { month: 'short' });
+            const year = date.getFullYear();
+
+            return `${day}-${month}-${year}`;
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return dateString;
+        }
+    };
+
     const calculateDaysOverdue = (shippedDate: string | null): number => {
         if (!shippedDate) return 0;
 
@@ -1328,7 +1164,6 @@ export default function Page() {
 
     const handleReject = async () => {
         if (!order || !isActionAuthorized) return;
-
 
         const startTime = Date.now();
 
@@ -1357,11 +1192,13 @@ export default function Page() {
                 process.env.NEXT_PUBLIC_STATUS_AWAITING,
                 process.env.NEXT_PUBLIC_STATUS_PROCESSING,
                 process.env.NEXT_PUBLIC_STATUS_SHIPPED,
-                process.env.NEXT_PUBLIC_STATUS_EXTENSION
+                process.env.NEXT_PUBLIC_STATUS_EXTENSION,
+                process.env.NEXT_PUBLIC_IN_TRANSIT,
+                process.env.NEXT_PUBLIC_FEDEX_DELIVERED
             ].filter(Boolean);
 
             if (allowedPreviousStatuses.includes(order.order_status) && order.products && order.quantity) {
-                const orderQuantity = parseInt(order.quantity) || 0;
+                const orderQuantity = order.quantity || 0;
 
                 if (orderQuantity > 0) {
                     // Parse current product quantities
@@ -1383,7 +1220,7 @@ export default function Page() {
                             stock_quantity: finalStockQty,
                             withCustomer: finalWithCustomerQty
                         })
-                        .eq('id', order.products.id);
+                        .eq('id', order.product_id); // Now directly using product_id
 
                     if (productUpdateError) {
                         await logActivity({
@@ -1393,10 +1230,10 @@ export default function Page() {
                             message: `Failed to update product quantities when rejecting order ${order.order_no}`,
                             userId: profile?.id || null,
                             orderId: order.id,
-                            productId: order.products.id,
+                            productId: order.product_id,
                             details: {
                                 orderNumber: order.order_no,
-                                productId: order.products.id,
+                                productId: order.product_id,
                                 quantity: orderQuantity,
                                 error: productUpdateError
                             },
@@ -1410,10 +1247,10 @@ export default function Page() {
                             message: `Updated product quantities when rejecting order ${order.order_no}`,
                             userId: profile?.id || null,
                             orderId: order.id,
-                            productId: order.products.id,
+                            productId: order.product_id,
                             details: {
                                 orderNumber: order.order_no,
-                                productId: order.products.id,
+                                productId: order.product_id,
                                 quantity: orderQuantity,
                                 oldStock: currentStockQty,
                                 newStock: finalStockQty,
@@ -1491,7 +1328,7 @@ export default function Page() {
                     previousStatus: order.order_status,
                     newStatus: `${process.env.NEXT_PUBLIC_STATUS_REJECTED}`,
                     quantityReturned: order.quantity,
-                    productId: order.products?.id,
+                    productId: order.product_id,
                     executionTimeMs: Date.now() - startTime,
                     userRole: profile?.role,
                     rejectedBy: profile?.email
@@ -1727,17 +1564,8 @@ export default function Page() {
 
                         // Handle product_id field
                         if (field === "product_id") {
-                            if (typeof editedValue === 'string') {
-                                try {
-                                    updated.product_id = JSON.parse(editedValue);
-                                } catch (error) {
-                                    updated.product_id = [editedValue];
-                                }
-                            } else if (Array.isArray(editedValue)) {
-                                updated.product_id = editedValue;
-                            } else {
-                                updated.product_id = order.product_id;
-                            }
+                            // For single product, just set the product_id directly
+                            updateData.product_id = editedValue;
                         }
 
                         // Update revenue opportunity if needed
@@ -1823,7 +1651,7 @@ export default function Page() {
             setEditingRowId(null);
             setEditedValue("");
 
-            toast.success(`${field} updated successfully!`);
+            toast.success(`Data updated successfully!`);
 
         } catch (err) {
             await logActivity({
@@ -2078,7 +1906,7 @@ export default function Page() {
             // Prepare products array for email template
             const productsForEmail = orderData.products_array.map((product, index) => ({
                 name: product.product_name || `Product ${index + 1}`,
-                quantity: orderData.quantity_array?.[index] || 0
+                quantity: orderData.quantities_array?.[index] || 0 // Changed from quantity_array to quantities_array
             }));
 
             // Calculate total quantity
@@ -2090,8 +1918,8 @@ export default function Page() {
                 customerName: orderData.contact_name || "Customer",
                 customerEmail: orderData.order_by_user?.email,
 
-                products: productsForEmail, // CHANGED: Pass products array instead of single product
-                totalQuantity: totalQuantity, // ADDED: Pass total quantity
+                products: productsForEmail,
+                totalQuantity: totalQuantity,
 
                 salesExecutive: orderData.sales_executive || "",
                 salesExecutiveEmail: orderData.se_email || "",
@@ -2150,7 +1978,7 @@ export default function Page() {
             // Prepare products array for email template
             const productsForEmail = orderData.products_array.map((product, index) => ({
                 name: product.product_name || `Product ${index + 1}`,
-                quantity: orderData.quantity_array?.[index] || 0
+                quantity: orderData.quantities_array?.[index] || 0 // Changed from quantity_array to quantities_array
             }));
 
             // Calculate total quantity
@@ -2162,8 +1990,8 @@ export default function Page() {
                 customerName: orderData.contact_name || "Customer",
                 customerEmail: orderData.order_by_user?.email,
 
-                products: productsForEmail, // CHANGED: Pass products array instead of single product
-                totalQuantity: totalQuantity, // ADDED: Pass total quantity
+                products: productsForEmail,
+                totalQuantity: totalQuantity,
 
                 salesExecutive: orderData.sales_executive || "",
                 salesExecutiveEmail: orderData.se_email || "",
@@ -2221,7 +2049,7 @@ export default function Page() {
 
             // Prepare products array for email template with returned quantities
             const productsForEmail = orderData.products_array.map((product, index) => {
-                const shippedQuantity = orderData.quantity_array?.[index] || 0;
+                const shippedQuantity = orderData.quantities_array?.[index] || 0; // Changed from quantity_array to quantities_array
                 const returnedProduct = returnedProductsData.find(rp => rp.productId === product.id);
                 const returnedQuantity = returnedProduct?.returnedQuantity || 0;
                 const leftWithCustomer = shippedQuantity - returnedQuantity;
@@ -2230,7 +2058,7 @@ export default function Page() {
                     name: product.product_name || `Product ${index + 1}`,
                     shippedQuantity: shippedQuantity,
                     returnedQuantity: returnedQuantity,
-                    leftWithCustomer: leftWithCustomer // New field for left quantity
+                    leftWithCustomer: leftWithCustomer
                 };
             });
 
@@ -2245,10 +2073,10 @@ export default function Page() {
                 customerName: orderData.contact_name || "Customer",
                 customerEmail: orderData.order_by_user?.email,
 
-                products: productsForEmail, // Pass products array with all details
-                totalQuantity: totalShipped, // Total shipped quantity
-                totalReturned: totalReturned, // Total returned quantity
-                totalLeft: totalLeft, // Total left with customer
+                products: productsForEmail,
+                totalQuantity: totalShipped,
+                totalReturned: totalReturned,
+                totalLeft: totalLeft,
 
                 salesExecutive: orderData.sales_executive || "",
                 salesExecutiveEmail: orderData.se_email || "",
@@ -2307,7 +2135,7 @@ export default function Page() {
             // Prepare products array for email template
             const productsForEmail = orderData.products_array.map((product, index) => ({
                 name: product.product_name || `Product ${index + 1}`,
-                quantity: orderData.quantity_array?.[index] || 0
+                quantity: orderData.quantities_array?.[index] || 0 // Changed from quantity_array to quantities_array
             }));
 
             // Calculate total quantity
@@ -2326,8 +2154,8 @@ export default function Page() {
                 caseType: orderData.case_type || "",
                 fileLink: orderData.return_label || "",
 
-                products: productsForEmail, // CHANGED: Pass products array instead of single product
-                totalQuantity: totalQuantity, // ADDED: Pass total quantity
+                products: productsForEmail,
+                totalQuantity: totalQuantity,
 
                 salesExecutive: orderData.sales_executive || "",
                 salesExecutiveEmail: orderData.se_email || "",
@@ -2541,7 +2369,7 @@ export default function Page() {
         }
     };
 
-    // Handle product selection - now updates the first product in the array
+    // Handle product selection - now updates single product
     const handleProductSelect = async (productId: string) => {
         if (!order || !isActionAuthorized) return;
 
@@ -2565,23 +2393,11 @@ export default function Page() {
         });
 
         try {
-            // Get current product IDs array
-            const currentProductIds = order.product_id || [];
-            const updatedProductIds = [...currentProductIds];
-
-            // If there are existing products, replace the first one
-            if (updatedProductIds.length > 0) {
-                updatedProductIds[0] = productId;
-            } else {
-                // If no products exist, add the new one
-                updatedProductIds.push(productId);
-            }
-
-            // Update the order with the new product array
+            // Update the order with the new product ID (single product)
             const { error } = await supabase
                 .from('orders')
                 .update({
-                    product_id: JSON.stringify(updatedProductIds) // Store as JSON string
+                    product_id: productId // Store as single UUID, not JSON
                 })
                 .eq('id', order.id);
 
@@ -2615,8 +2431,8 @@ export default function Page() {
                 orderId: order.id,
                 details: {
                     orderNumber: order.order_no,
-                    oldProductIds: order.product_id,
-                    newProductIds: updatedProductIds,
+                    oldProductId: order.product_id,
+                    newProductId: productId,
                     executionTimeMs: Date.now() - startTime,
                     userRole: profile?.role
                 },
@@ -2968,7 +2784,7 @@ export default function Page() {
                                                     <Link
                                                         href={order.tracking_link}
                                                         target="_blank"
-                                                        className="text-blue-600 hover:underline cursor-pointer"
+                                                        className="text-blue-600 underline cursor-pointer"
                                                     >
                                                         {order.tracking}
                                                     </Link>
@@ -3086,7 +2902,7 @@ export default function Page() {
                                                     <Link
                                                         href={order.return_tracking_link}
                                                         target="_blank"
-                                                        className="text-blue-600 hover:underline cursor-pointer"
+                                                        className="text-blue-600 underline cursor-pointer"
                                                     >
                                                         {order.return_tracking}
                                                     </Link>
@@ -3130,7 +2946,7 @@ export default function Page() {
                 <>
                     <div className="mb-6">
                         <h1 className="text-2xl font-bold">Order #{order.order_no}</h1>
-                        <p className="text-gray-600 mt-2">Order Date: {order.order_date}</p>
+                        <p className="text-gray-600 mt-2">Order Date: {formatDateToCustomFormat(order.order_date)}</p>
                     </div>
                 </>
             )}
@@ -3177,7 +2993,7 @@ export default function Page() {
                                 </Table>
                                 <div className="my-6">
                                     <h1 className="text-2xl font-bold">Order #{order.order_no}</h1>
-                                    <p className="text-gray-600 mt-2">Order Date: {order.order_date}</p>
+                                    <p className="text-gray-600 mt-2">Order Date: {formatDateToCustomFormat(order.order_date)}</p>
                                 </div>
                             </>
                         ) : (
@@ -3240,17 +3056,7 @@ export default function Page() {
                             </TableHeader>
                             <TableBody>
                                 {renderAllProducts()}
-                                {/* Total row */}
-                                {(order.product_id && order.product_id.length > 0) && (
-                                    <TableRow className="bg-gray-50 font-semibold">
-                                        <TableCell className="w-[85%] text-right">
-                                            Total:
-                                        </TableCell>
-                                        <TableCell className="w-[15%] border-l text-center">
-                                            {order.quantity || 0}
-                                        </TableCell>
-                                    </TableRow>
-                                )}
+                                {/* Single Total row - removed duplicate */}
                             </TableBody>
                         </Table>
                     </div>
@@ -3354,7 +3160,7 @@ export default function Page() {
                                 <TableRow>
                                     <TableCell className="w-[65%] font-semibold">Desired Demo Delivery Date</TableCell>
                                     <TableCell className="w-[35%] border-l">
-                                        {renderEditableCell("desired_date", order.desired_date, "shipping_date")}
+                                        {formatDateToCustomFormat(order.desired_date)}
                                     </TableCell>
                                 </TableRow>
                             </TableBody>
@@ -3466,11 +3272,13 @@ export default function Page() {
                             <TableBody>
                                 <TableRow>
                                     <TableCell colSpan={2}>
-                                        {order.order_status == process.env.NEXT_PUBLIC_STATUS_AWAITING ? (
-                                            order.order_status
-                                        ) : (
-                                            renderStatusDropdown("order_status", order.order_status, "status")
-                                        )}
+                                        {order.order_status === process.env.NEXT_PUBLIC_STATUS_AWAITING
+                                            ? order.order_status === "Shipped Extension"
+                                                ? "Shipped (Order Extension)"
+                                                : order.order_status
+                                            : renderStatusDropdown("order_status", order.order_status, "status")
+                                        }
+
                                     </TableCell>
                                 </TableRow>
                             </TableBody>

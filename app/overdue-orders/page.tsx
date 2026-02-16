@@ -122,6 +122,25 @@ export default function Page() {
         pageSize: 1000,
     });
 
+    // Format date to dd-MMM-yyyy
+    const formatDateToCustomFormat = (dateString: string | null) => {
+        if (!dateString) return '-';
+
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return '-';
+
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = date.toLocaleString('default', { month: 'short' });
+            const year = date.getFullYear();
+
+            return `${day}-${month}-${year}`;
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return '-';
+        }
+    };
+
     // Role constants from environment variables
     const smRole = process.env.NEXT_PUBLIC_SHOPMANAGER;
     const adminRole = process.env.NEXT_PUBLIC_ADMINISTRATOR;
@@ -205,7 +224,12 @@ export default function Page() {
         const date = calculateEstimatedReturnDate(shippedDate);
         if (!date) return "-";
 
-        return date.toLocaleDateString();
+        // Format to dd-MMM-yyyy
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = date.toLocaleString('default', { month: 'short' });
+        const year = date.getFullYear();
+
+        return `${day}-${month}-${year}`;
     };
 
     // Check if estimated return date has passed
@@ -383,10 +407,9 @@ export default function Page() {
         return new Date(dateString).toISOString().split('T')[0];
     };
 
-    // Format date for display
+    // Format date for display - UPDATED to use custom format
     const formatDate = (dateString: string | null) => {
-        if (!dateString) return '-';
-        return new Date(dateString).toLocaleDateString();
+        return formatDateToCustomFormat(dateString);
     };
 
     // Handle select all rows
@@ -621,10 +644,10 @@ export default function Page() {
                         daysCountText += ` (${daysOverdue} days overdue)`;
                     }
 
-                    // Prepare email data
+                    // In handleSendReminders function, update the date formatting:
                     const emailData = {
                         orderNumber: order.order_no,
-                        orderDate: formatDate(order.order_date),
+                        orderDate: formatDateToCustomFormat(order.order_date), // Use custom format
                         customerName: customerName,
                         customerEmail: order.users.email,
 
@@ -641,7 +664,7 @@ export default function Page() {
 
                         companyName: order.company_name || "N/A",
                         contactEmail: order.email || "N/A",
-                        shippedDate: formatDate(order.shipped_date),
+                        shippedDate: formatDateToCustomFormat(order.shipped_date), // Use custom format
                         daysCount: daysCountText
                     };
 
@@ -1358,19 +1381,19 @@ export default function Page() {
         try {
             const data = orders.map(order => ({
                 'Order #': order.order_no || '',
-                'Order Date': formatDate(order.order_date),
+                'Order Date': formatDateToCustomFormat(order.order_date), // Use custom format
                 'Shipping Status': order.order_status || '',
                 'Days Since Shipped': calculateDaysShipped(order.shipped_date),
                 'Days Overdue': calculateDaysOverdue(order.shipped_date),
-                'Estimated Return Date': formatEstimatedReturnDate(order.shipped_date),
+                'Estimated Return Date': formatEstimatedReturnDate(order.shipped_date), // Already using custom format
                 'Pipeline Opportunity': order.rev_opportunity || 0,
                 'Budget Per Device': order.dev_budget || 0,
                 'Device Opportunity Size': order.dev_opportunity || 0,
                 'Account #': order.crm_account || '',
                 'Sales Executive Email': order.se_email || '',
                 'Customer Name': order.company_name || '',
-                'Shipped Date': formatDate(order.shipped_date),
-                'Returned Date': formatDate(order.returned_date),
+                'Shipped Date': formatDateToCustomFormat(order.shipped_date), // Use custom format
+                'Returned Date': formatDateToCustomFormat(order.returned_date), // Use custom format
                 'Vertical': order.vertical || '',
                 'Segment': order.segment || '',
                 'Order Month': order.order_month || '',

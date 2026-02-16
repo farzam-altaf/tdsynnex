@@ -524,7 +524,10 @@ export default function UsersList() {
 
     const sendApprovedEmail = async (userEmail: string) => {
         try {
-            const template = emailTemplates.approvedUserEmail(userEmail);
+            // If you want to include current date in email
+            const currentDate = formatDateToCustomFormat(new Date().toISOString());
+
+            const template = emailTemplates.approvedUserEmail(userEmail); // You may need to update emailTemplates
 
             const result = await sendEmail({
                 to: userEmail,
@@ -532,6 +535,7 @@ export default function UsersList() {
                 text: template.text,
                 html: template.html,
             });
+
 
             if (result.success) {
                 logSuccess(
@@ -724,7 +728,7 @@ export default function UsersList() {
                 const date = row.getValue("registered_at") as string | null;
                 return (
                     <div className="text-left ps-2">
-                        {date ? new Date(date).toLocaleDateString() : 'N/A'}
+                        {formatDateToCustomFormat(date)}
                     </div>
                 )
             },
@@ -740,7 +744,7 @@ export default function UsersList() {
                 const date = row.getValue("login_at") as string | null;
                 return (
                     <div className="text-left ps-2">
-                        {date ? new Date(date).toLocaleDateString() : 'N/A'}
+                        {formatDateToCustomFormat(date)}
                     </div>
                 )
             },
@@ -880,6 +884,26 @@ export default function UsersList() {
         },
     });
 
+
+    // Format date to dd-MMM-yyyy
+    const formatDateToCustomFormat = (dateString: string | null) => {
+        if (!dateString) return 'N/A';
+
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return 'N/A';
+
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = date.toLocaleString('default', { month: 'short' });
+            const year = date.getFullYear();
+
+            return `${day}-${month}-${year}`;
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return 'N/A';
+        }
+    };
+
     // Handle CSV export
     const handleExportCSV = () => {
         if (users.length === 0) {
@@ -898,15 +922,15 @@ export default function UsersList() {
         }
 
         try {
-            // Prepare the data
+            // Prepare the data with custom date format
             const data = users.map(user => ({
                 'First Name': user.firstName || '',
                 'Last Name': user.lastName || '',
                 'Email': user.email || '',
                 'Role': user.role || '',
                 'Verified': user.isVerified ? 'Yes' : 'No',
-                'Registered': user.registered_at ? new Date(user.registered_at).toLocaleDateString() : 'N/A',
-                'Last Login': user.login_at ? new Date(user.login_at).toLocaleDateString() : 'N/A',
+                'Registered': formatDateToCustomFormat(user.registered_at), // Use custom format
+                'Last Login': formatDateToCustomFormat(user.login_at), // Use custom format
                 'Login Count': user.login_count || 0,
                 'User ID': user.id || ''
             }));
@@ -1208,7 +1232,7 @@ export default function UsersList() {
                 </div>
                 <div className="flex items-center justify-between py-4">
                     <div className="text-sm text-gray-600">
-                        {users.length} user{users.length !== 1 ? 's' : ''} found
+                        {/* {users.length} user{users.length !== 1 ? 's' : ''} found */}
                     </div>
                     <div className="flex items-center space-x-4">
                         <div className="flex items-center space-x-2">
@@ -1305,7 +1329,7 @@ export default function UsersList() {
                                             }
                                         }}
                                         disabled={!table.getCanPreviousPage()}
-                                    >
+                                    >   
                                         Previous
                                     </Button>
                                     <Button

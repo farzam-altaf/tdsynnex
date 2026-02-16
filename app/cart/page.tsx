@@ -38,6 +38,7 @@ export default function Page() {
     const [taxRate] = useState(0.08); // 8% tax
     const [removingItemId, setRemovingItemId] = useState<string | null>(null); // Track which item is being removed
     const [debugInfo, setDebugInfo] = useState<string>(''); // For debugging
+    const [showSingleProductAlert, setShowSingleProductAlert] = useState(false);
 
     // Calculate totals
     const subtotal = getCartTotal();
@@ -234,6 +235,30 @@ export default function Page() {
 
     // Handle checkout
     const handleCheckout = () => {
+        // Check if more than one product in cart
+        if (cartItems.length > 1) {
+            setShowSingleProductAlert(true);
+
+            // Auto hide alert after 5 seconds
+            setTimeout(() => {
+                setShowSingleProductAlert(false);
+            }, 5000);
+
+            logActivity({
+                type: 'cart',
+                level: 'warning',
+                action: 'checkout_blocked_multiple_products',
+                message: 'User attempted checkout with multiple products',
+                userId: profile?.id || null,
+                details: {
+                    cartItemCount: cartItems.length,
+                    productIds: cartItems.map(item => item.product_id)
+                },
+                status: 'failed'
+            });
+            return;
+        }
+
         logActivity({
             type: 'navigation',
             level: 'info',
@@ -313,6 +338,7 @@ export default function Page() {
             <div className="max-w-6xl mx-auto">
                 <h1 className="text-3xl font-bold text-gray-900 mb-8">Your Cart</h1>
                 <div className="flex flex-col lg:flex-row gap-8">
+
                     {/* Cart Items Section */}
                     <div className="lg:w-2/3">
                         <div className="border px-3 mb-6">
@@ -356,109 +382,6 @@ export default function Page() {
 
                                             {/* Quantity Controls */}
                                             <div className="flex items-center space-x-4 mb-4">
-                                                <div className="flex items-center space-x-2">
-                                                    {/* Minus Button */}
-                                                    <button
-                                                        onClick={() => handleDecreaseQuantity(item.product_id)}
-                                                        disabled={isUpdating || item.quantity <= 1}
-                                                        className={`w-7 h-7 cursor-pointer flex items-center justify-center border border-gray-300 rounded-md transition-colors
-          ${isUpdating || item.quantity <= 1
-                                                                ? 'opacity-50 cursor-not-allowed text-gray-400'
-                                                                : 'hover:bg-gray-100 hover:border-gray-400 text-gray-700'
-                                                            }`}
-                                                    >
-                                                        −
-                                                    </button>
-
-                                                    {/* Quantity Input Field */}
-                                                    <div className="relative">
-                                                        <div className="flex items-center space-x-2">
-                                                            {/* Input field */}
-                                                            <input
-                                                                type="number"
-                                                                min="1"
-                                                                max={item.product?.stock_quantity || undefined}
-                                                                value={quantityInputValues[item.product_id] !== undefined
-                                                                    ? quantityInputValues[item.product_id]
-                                                                    : item.quantity.toString()}
-                                                                onChange={(e) => handleQuantityInputChange(item.product_id, e.target.value)}
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === 'Enter') {
-                                                                        handleInputSave(item.product_id);
-                                                                    }
-                                                                }}
-                                                                onBlur={() => {
-                                                                    const inputValue = parseInt(quantityInputValues[item.product_id] || item.quantity.toString());
-                                                                    if (!isNaN(inputValue) && inputValue >= 1) {
-                                                                        handleInputSave(item.product_id);
-                                                                    }
-                                                                }}
-                                                                disabled={isUpdating}
-                                                                className="w-16 text-center border border-gray-300 rounded-md py-1.5 px-2 text-sm 
-                                                                focus:outline-none focus:ring-1 focus:ring-[#35c8dc] focus:border-[#35c8dc]
-                                                                disabled:opacity-50 disabled:cursor-not-allowed
-                                                                [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
-                                                                transition-all duration-200"
-                                                            />
-
-                                                            {/* Save Button - Only show when editing this product */}
-                                                            {editingProductId === item.product_id && (
-                                                                <button
-                                                                    onClick={() => handleInputSave(item.product_id)}
-                                                                    disabled={isUpdating}
-                                                                    className="w-7 h-7 flex items-center justify-center bg-[#35c8dc] text-white rounded-md hover:bg-[#2db4c8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                    title="Save quantity"
-                                                                >
-                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                                    </svg>
-                                                                </button>
-                                                            )}
-                                                        </div>
-
-                                                        {/* Stock limit warning */}
-                                                        {item.product?.stock_quantity &&
-                                                            parseInt(quantityInputValues[item.product_id] || item.quantity.toString()) > item.product.stock_quantity && (
-                                                                <div className="absolute -bottom-5 left-0 right-0 text-xs text-red-500 font-medium text-center">
-                                                                    Max: {item.product.stock_quantity}
-                                                                </div>
-                                                            )}
-                                                    </div>
-
-                                                    {/* Plus Button */}
-                                                    <button
-                                                        onClick={() => handleIncreaseQuantity(item.product_id)}
-                                                        disabled={
-                                                            isUpdating ||
-                                                            (typeof item.product?.stock_quantity === 'number' && item.quantity >= item.product.stock_quantity)
-                                                        }
-                                                        className={`w-7 h-7 cursor-pointer flex items-center justify-center border border-gray-300 rounded-md transition-colors
-          ${isUpdating || (item.product?.stock_quantity && item.quantity >= item.product.stock_quantity)
-                                                                ? 'opacity-50 cursor-not-allowed text-gray-400'
-                                                                : 'hover:bg-gray-100 hover:border-gray-400 text-gray-700'
-                                                            }`}
-                                                    >
-                                                        +
-                                                    </button>
-                                                </div>
-
-                                                {/* Stock Status */}
-                                                {item.product?.stock_quantity && (
-                                                    <div className="text-xs">
-                                                        {item.product.stock_quantity === 0 ? (
-                                                            <span className="text-red-500 font-medium">Out of stock</span>
-                                                        ) : item.quantity >= item.product.stock_quantity ? (
-                                                            <span className="text-amber-600 font-medium">
-                                                                Only {item.product.stock_quantity} left
-                                                            </span>
-                                                        ) : item.product.stock_quantity < 10 ? (
-                                                            <span className="text-green-600">
-                                                                {item.product.stock_quantity} in stock
-                                                            </span>
-                                                        ) : null}
-                                                    </div>
-                                                )}
-
                                                 <button
                                                     onClick={() => handleRemoveItem(item.product_id)}
                                                     className="text-red-600 hover:text-red-800 font-medium"
@@ -482,6 +405,38 @@ export default function Page() {
                                 );
                             })}
                         </div>
+
+                        {(cartItems.length > 1 || cartItems.some(item => item.quantity > 1)) && (
+                            <Alert variant="destructive" className="mb-6 border-red-200 bg-red-50">
+                                <AlertCircleIcon className="h-4 w-4 text-red-600" />
+                                <AlertTitle className="text-red-800 font-semibold">
+                                    Demo Unit Limitation
+                                </AlertTitle>
+                                <AlertDescription className="text-red-700">
+                                    <div className="space-y-1">
+                                        <p>You can only request <span className="font-bold">one demo unit</span> at a time.</p>
+                                        <p className="text-sm">
+                                            {cartItems.length > 1
+                                                ? `Please remove ${cartItems.length - 1} item(s) to proceed with checkout.`
+                                                : 'Only 1 quantity allowed per demo unit. Please reduce quantity to 1.'
+                                            }
+                                        </p>
+                                        {cartItems.length > 1 && (
+                                            <ul className="list-disc list-inside text-sm mt-2 space-y-1">
+                                                {cartItems.map((item, index) => (
+                                                    <li key={item.product_id} className="text-red-600">
+                                                        {item.product?.product_name || 'Product'}
+                                                        {item.quantity > 1 && (
+                                                            <span className="font-medium"> (Quantity: {item.quantity})</span>
+                                                        )}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
+                                </AlertDescription>
+                            </Alert>
+                        )}
                     </div>
 
                     {/* Order Summary Section */}
@@ -511,12 +466,42 @@ export default function Page() {
                             <div className="border-t border-gray-200 pt-6 space-y-4">
                             </div>
 
+                            {/* Show alert if multiple products */}
+                            {showSingleProductAlert && (
+                                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                                    <div className="flex items-start">
+                                        <AlertCircleIcon className="h-5 w-5 text-red-600 mt-0.5 mr-2 flex-shrink-0" />
+                                        <div>
+                                            <p className="text-sm text-red-700 font-medium">
+                                                Only one product can be selected for checkout
+                                            </p>
+                                            <p className="text-xs text-red-600 mt-1">
+                                                Please remove other items from your cart to proceed.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <button
                                 onClick={handleCheckout}
-                                className="w-full bg-[#35c8dc] text-white py-3 px-4 cursor-pointer font-semibold hover:bg-[#2db4c8] transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                disabled={isUpdating || cartItems.length === 0}
+                                className={`w-full py-3 px-4 cursor-pointer font-semibold transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${cartItems.length > 1 || cartItems.some(item => item.quantity > 1)
+                                        ? 'bg-gray-400 hover:bg-gray-400'
+                                        : 'bg-[#35c8dc] hover:bg-[#2db4c8] text-white'
+                                    }`}
+                                disabled={
+                                    isUpdating ||
+                                    cartItems.length === 0 ||
+                                    cartItems.length > 1 ||
+                                    cartItems.some(item => item.quantity > 1)
+                                }
                             >
-                                {isUpdating ? 'Processing...' : 'Proceed to Checkout'}
+                                {isUpdating
+                                    ? 'Processing...'
+                                    : (cartItems.length > 1 || cartItems.some(item => item.quantity > 1))
+                                        ? 'Cannot Proceed - Demo Unit Limit'
+                                        : 'Proceed to Checkout'
+                                }
                             </button>
                         </div>
                     </div>

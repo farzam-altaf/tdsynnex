@@ -13,9 +13,6 @@ import { useCart } from "@/app/context/CartContext";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/logger";
 
-// Filter types to fetch from database
-const FILTER_TYPES = ["form_factor", "processor", "screen_size", "memory", "storage"];
-
 // Hardcoded filters (not from database)
 const HARDCODED_FILTERS = {
     copilotPC: ["Yes"],
@@ -31,11 +28,11 @@ interface Product {
     product_name: string;
     slug: string;
     sku: string;
-    form_factor: string; // This is the ID, not the title
-    processor: string; // This is the ID, not the title
-    memory: string; // This is the ID, not the title
-    storage: string; // This is the ID, not the title
-    screen_size: string; // This is the ID, not the title
+    form_factor: string; // Now this is the actual text value, not ID
+    processor: string; // Now this is the actual text value, not ID
+    memory: string; // Now this is the actual text value, not ID
+    storage: string; // Now this is the actual text value, not ID
+    screen_size: string; // Now this is the actual text value, not ID
     technologies: string;
     inventory_type: string;
     total_inventory: number;
@@ -50,12 +47,6 @@ interface Product {
     gallery: string[];
     user_id: string;
     created_at: string;
-    // We'll map these to titles from filters
-    formFactorTitle?: string;
-    processorTitle?: string;
-    memoryTitle?: string;
-    storageTitle?: string;
-    screenSizeTitle?: string;
 }
 
 // Skeleton component for products grid
@@ -139,10 +130,8 @@ export default function Page() {
         cartItems
     } = useCart()
 
-    // State for database filters
-    const [databaseFilters, setDatabaseFilters] = useState<Record<string, string[]>>({});
-    // State for filter mappings (ID to Title)
-    const [filterMappings, setFilterMappings] = useState<Record<string, Record<string, string>>>({});
+    // State for filter options from products table
+    const [filterOptions, setFilterOptions] = useState<Record<string, string[]>>({});
     // State for products
     const [products, setProducts] = useState<Product[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -180,7 +169,7 @@ export default function Page() {
                 }
             });
 
-            await addToCart(productId, 1)
+            await addToCart(productId, 1);
 
             // Log success
             await logActivity({
@@ -199,9 +188,9 @@ export default function Page() {
 
             toast.success('Product added to cart!', {
                 style: { background: "black", color: "white" },
-            })
+            });
         } catch (error: any) {
-            let errorMessage = 'Failed to add product to cart. Please try again.'
+            let errorMessage = 'Failed to add product to cart. Please try again.';
 
             await logActivity({
                 type: 'product',
@@ -219,18 +208,18 @@ export default function Page() {
             });
 
             if (error?.code === '23505') {
-                errorMessage = 'This product is already in your cart.'
+                errorMessage = 'This product is already in your cart.';
             } else if (error?.code === '23503') {
-                errorMessage = 'Product not found.'
+                errorMessage = 'Product not found.';
             } else if (error?.message?.includes('foreign key constraint')) {
-                errorMessage = 'Invalid product. Please refresh the page and try again.'
+                errorMessage = 'Invalid product. Please refresh the page and try again.';
             }
 
             toast.error(errorMessage, {
                 style: { background: "red", color: "white" },
-            })
+            });
         }
-    }
+    };
 
     // Handle cart item removal
     const handleRemoveFromCart = async (productId: string) => {
@@ -281,12 +270,11 @@ export default function Page() {
                 status: 'failed'
             });
         }
-    }
+    };
 
     const checkIfInCart = (productId: string): boolean => {
-        return isInCart(productId)
-    }
-
+        return isInCart(productId);
+    };
 
     const [showFilters, setShowFilters] = useState(false);
     // Set all filters to be open by default
@@ -339,44 +327,8 @@ export default function Page() {
         try {
             setIsLoading(true);
 
-            // 1. Fetch filters from database
-            const allFilters: Record<string, string[]> = {};
-            const mappings: Record<string, Record<string, string>> = {};
-
             if (isLoggedIn) {
-                // Fetch each filter type
-                for (const type of FILTER_TYPES) {
-                    const { data, error } = await supabase
-                        .from("filters")
-                        .select("id, title")
-                        .eq("type", type)
-                        .order("title");
-
-                    if (error) {
-                        allFilters[type] = [];
-                        mappings[type] = {};
-                    } else {
-                        // Map database type names to frontend names
-                        const frontendKey = type === "form_factor" ? "formFactor" :
-                            type === "screen_size" ? "screenSize" : type;
-
-                        // Store titles for display
-                        allFilters[frontendKey] = data?.map(item => item.title) || [];
-
-                        // Create ID to title mapping for this filter type
-                        const idToTitle: Record<string, string> = {};
-                        data?.forEach(item => {
-                            idToTitle[item.id] = item.title;
-                        });
-
-                        mappings[frontendKey] = idToTitle;
-                    }
-                }
-
-                setDatabaseFilters(allFilters);
-                setFilterMappings(mappings);
-
-                // 2. Fetch products from database
+                // 1. Fetch products from database
                 const { data: productsData, error: productsError } = await supabase
                     .from("products")
                     .select("*")
@@ -397,19 +349,33 @@ export default function Page() {
                     });
                     setProducts([]);
                 } else if (productsData) {
-                    // Now that mappings are set, we need to map products with the correct mappings
-                    // Since state updates are async, we need to use the local mappings variable
-                    const productsWithTitles = productsData.map(product => ({
-                        ...product,
-                        // Map filter IDs to titles using the local mappings variable
-                        formFactorTitle: mappings.formFactor?.[product.form_factor] || product.form_factor,
-                        processorTitle: mappings.processor?.[product.processor] || product.processor,
-                        memoryTitle: mappings.memory?.[product.memory] || product.memory,
-                        storageTitle: mappings.storage?.[product.storage] || product.storage,
-                        screenSizeTitle: mappings.screenSize?.[product.screen_size] || product.screen_size,
-                    }));
+                    setProducts(productsData);
 
-                    setProducts(productsWithTitles);
+                    // 2. Extract unique filter options from products data
+                    const extractUniqueValues = (key: keyof Product): string[] => {
+                        const values = productsData
+                            .map(product => product[key])
+                            .filter(value =>
+                                value !== null &&
+                                value !== undefined &&
+                                value !== '' &&
+                                (typeof value === 'string' ? value.trim() !== '' : true)
+                            );
+
+                        // Convert to strings and remove duplicates
+                        return [...new Set(values.map(v => v.toString()))].sort();
+                    };
+
+                    // Map frontend filter keys to database column names
+                    const filterOptionsMap = {
+                        formFactor: extractUniqueValues('form_factor'),
+                        processor: extractUniqueValues('processor'),
+                        memory: extractUniqueValues('memory'),
+                        storage: extractUniqueValues('storage'),
+                        screenSize: extractUniqueValues('screen_size'),
+                    };
+
+                    setFilterOptions(filterOptionsMap);
 
                     await logActivity({
                         type: 'product',
@@ -421,15 +387,28 @@ export default function Page() {
                             totalProducts: productsData.length,
                             publishedProducts: productsData.filter(p => p.post_status === 'Publish').length,
                             outOfStockProducts: productsData.filter(p => p.stock_quantity === 0).length,
+                            filterOptionsCount: {
+                                formFactor: filterOptionsMap.formFactor.length,
+                                processor: filterOptionsMap.processor.length,
+                                memory: filterOptionsMap.memory.length,
+                                storage: filterOptionsMap.storage.length,
+                                screenSize: filterOptionsMap.screenSize.length,
+                            },
                             executionTimeMs: Date.now() - startTime
                         },
                         status: 'completed'
                     });
-
                 }
 
                 // Initialize open filters with all available keys
-                const allFilterKeys = [...Object.keys(allFilters), ...HARDCODED_FILTER_KEYS];
+                const allFilterKeys = [
+                    'formFactor',
+                    'processor',
+                    'memory',
+                    'storage',
+                    'screenSize',
+                    ...HARDCODED_FILTER_KEYS
+                ];
                 setOpenFilters(allFilterKeys);
             }
         } catch (error) {
@@ -467,13 +446,13 @@ export default function Page() {
 
             // Map filter keys to product property names
             const keyMapping: Record<string, keyof Product> = {
-                formFactor: "formFactorTitle",
+                formFactor: "form_factor",
                 fiveGEnabled: "five_g_Enabled",
                 copilotPC: "copilot",
-                processor: "processorTitle",
-                screenSize: "screenSizeTitle",
-                memory: "memoryTitle",
-                storage: "storageTitle"
+                processor: "processor",
+                screenSize: "screen_size",
+                memory: "memory",
+                storage: "storage"
             };
 
             const productKey = keyMapping[key] || key as keyof Product;
@@ -489,7 +468,7 @@ export default function Page() {
                 return values.includes("Yes") ? productValue === true : true;
             }
 
-            // Handle string values (for filter titles)
+            // Handle string values
             return values.includes(productValue.toString());
         });
     });
@@ -517,46 +496,133 @@ export default function Page() {
         return dateB - dateA; // Descending order (latest first)
     });
 
-    // Alternative: More explicit sorting with numeric priorities
-    // filteredProducts.sort((a, b) => {
-    //     // Create priority score for each product
-    //     const getPriority = (product) => {
-    //         let priority = 0;
-
-    //         // Post Status: Publish = 2, others = 1
-    //         priority += product.post_status === "Publish" ? 2 : 1;
-
-    //         // Stock Quantity: Has stock = 2, no stock = 1
-    //         priority += product.stock_quantity > 0 ? 2 : 1;
-
-    //         // Date: Convert to timestamp (milliseconds)
-    //         const dateScore = product.date ? new Date(product.date).getTime() : 0;
-
-    //         return { priority, dateScore };
-    //     };
-
-    //     const priorityA = getPriority(a);
-    //     const priorityB = getPriority(b);
-
-    //     // Compare priority scores first
-    //     if (priorityA.priority !== priorityB.priority) {
-    //         return priorityB.priority - priorityA.priority; // Higher priority first
-    //     }
-
-    //     // If same priority, compare dates
-    //     return priorityB.dateScore - priorityA.dateScore; // Latest date first
-    // });
-
-
+    // Pehle yeh state update function ko fix karo - line 300 ke around
     const handleFilterChange = (filterType: string, value: string) => {
         setFilters(prev => {
-            const currentValues = prev[filterType] || [];
-            const newValues = currentValues.includes(value)
-                ? currentValues.filter(v => v !== value)
-                : [...currentValues, value];
+            // Ensure prev[filterType] exists and is an array
+            const currentValues = Array.isArray(prev[filterType]) ? prev[filterType] : [];
 
-            return { ...prev, [filterType]: newValues };
+            // Check if value exists
+            const newValues = currentValues.includes(value)
+                ? currentValues.filter(v => v !== value)  // Remove if exists
+                : [...currentValues, value];               // Add if doesn't exist
+
+            console.log(`Filter ${filterType}:`, { current: currentValues, new: newValues }); // Debug log
+
+            return {
+                ...prev,
+                [filterType]: newValues
+            };
         });
+    };
+
+    // Yeh simpler approach hai - just add onClick to label
+    const DatabaseFilterSection = ({ filterKey, title }: { filterKey: string, title: string }) => {
+        const filterOptionsList = filterOptions[filterKey] || [];
+        const currentFilterValues = filters[filterKey] || [];
+
+        const handleCheckboxChange = (item: string) => {
+            handleFilterChange(filterKey, item);
+        };
+
+        if (filterOptionsList.length === 0) return null;
+
+        return (
+            <div className="border-b pb-4">
+                <button
+                    onClick={() => toggleFilter(filterKey)}
+                    className="flex items-center justify-between w-full text-left font-semibold text-gray-800 hover:text-[#3ba1da]"
+                >
+                    {title}
+                    {openFilters.includes(filterKey) ? (
+                        <ChevronUp className="h-4 w-4" />
+                    ) : (
+                        <ChevronDown className="h-4 w-4" />
+                    )}
+                </button>
+                {openFilters.includes(filterKey) && (
+                    <div className="mt-3 space-y-2">
+                        {filterOptionsList.map(item => {
+                            const checkboxId = `${filterKey}-${item}`;
+
+                            return (
+                                <div key={checkboxId} className="flex items-center space-x-3 py-1">
+                                    <input
+                                        type="checkbox"
+                                        id={checkboxId}
+                                        checked={currentFilterValues.includes(item)}
+                                        onChange={() => handleCheckboxChange(item)}
+                                        className="h-4 w-4 text-[#3ba1da] rounded border-gray-300 focus:ring-[#3ba1da]"
+                                    />
+                                    <label
+                                        htmlFor={checkboxId}
+                                        className="text-gray-700 text-sm cursor-pointer flex-1 select-none"
+                                        onClick={(e) => e.stopPropagation()} // Prevent click from reaching parent
+                                    >
+                                        {item}
+                                    </label>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // Hardcoded filter section ko bhi same pattern par update karo
+    const HardcodedFilterSection = ({ filterKey, title }: { filterKey: string, title: string }) => {
+        const filterOptionsList = HARDCODED_FILTERS[filterKey as keyof typeof HARDCODED_FILTERS] || [];
+
+        // Get current filter values from state
+        const currentFilterValues = filters[filterKey] || [];
+
+        const handleCheckboxChange = (item: string) => {
+            handleFilterChange(filterKey, item);
+        };
+
+        if (filterOptionsList.length === 0) return null;
+
+        return (
+            <div className="border-b pb-4">
+                <button
+                    onClick={() => toggleFilter(filterKey)}
+                    className="flex items-center justify-between w-full text-left font-semibold text-gray-800 hover:text-[#3ba1da]"
+                >
+                    {title}
+                    {openFilters.includes(filterKey) ? (
+                        <ChevronUp className="h-4 w-4" />
+                    ) : (
+                        <ChevronDown className="h-4 w-4" />
+                    )}
+                </button>
+                {openFilters.includes(filterKey) && (
+                    <div className="mt-3 space-y-2">
+                        {filterOptionsList.map(item => {
+                            const checkboxId = `${filterKey}-hardcoded-${item}`;
+
+                            return (
+                                <div key={checkboxId} className="flex items-center space-x-3 cursor-pointer py-1">
+                                    <input
+                                        type="checkbox"
+                                        id={checkboxId}
+                                        checked={currentFilterValues.includes(item)}
+                                        onChange={() => handleCheckboxChange(item)}
+                                        className="h-4 w-4 text-[#3ba1da] rounded border-gray-300 focus:ring-[#3ba1da] pointer-events-auto"
+                                    />
+                                    <label
+                                        htmlFor={checkboxId}
+                                        className="text-gray-700 text-sm cursor-pointer flex-1 select-none"
+                                    >
+                                        {item}
+                                    </label>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        );
     };
 
     const clearFilters = () => {
@@ -575,84 +641,15 @@ export default function Page() {
         return Object.values(filters).reduce((total, values) => total + values.length, 0);
     };
 
-    // Helper component for database filter section
-    const DatabaseFilterSection = ({ filterKey, title }: { filterKey: string, title: string }) => {
-        const filterOptions = databaseFilters[filterKey] || [];
-
-        if (filterOptions.length === 0) return null;
-
-        return (
-            <div className="border-b pb-4">
-                <button
-                    onClick={() => toggleFilter(filterKey)}
-                    className="flex items-center justify-between w-full text-left font-semibold text-gray-800 hover:text-[#3ba1da]"
-                >
-                    {title}
-                    {openFilters.includes(filterKey) ? (
-                        <ChevronUp className="h-4 w-4" />
-                    ) : (
-                        <ChevronDown className="h-4 w-4" />
-                    )}
-                </button>
-                {openFilters.includes(filterKey) && (
-                    <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
-                        {filterOptions.map(item => (
-                            <label key={item} className="flex items-center space-x-3 cursor-pointer py-1">
-                                <input
-                                    type="checkbox"
-                                    checked={filters[filterKey]?.includes(item) || false}
-                                    onChange={() => handleFilterChange(filterKey, item)}
-                                    className="h-4 w-4 text-[#3ba1da] rounded border-gray-300 focus:ring-[#3ba1da]"
-                                />
-                                <span className="text-gray-700 text-sm">{item}</span>
-                            </label>
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    // Helper component for hardcoded filter section
-    const HardcodedFilterSection = ({ filterKey, title }: { filterKey: string, title: string }) => {
-        const filterOptions = HARDCODED_FILTERS[filterKey as keyof typeof HARDCODED_FILTERS] || [];
-
-        if (filterOptions.length === 0) return null;
-
-        return (
-            <div className="border-b pb-4">
-                <button
-                    onClick={() => toggleFilter(filterKey)}
-                    className="flex items-center justify-between w-full text-left font-semibold text-gray-800 hover:text-[#3ba1da]"
-                >
-                    {title}
-                    {openFilters.includes(filterKey) ? (
-                        <ChevronUp className="h-4 w-4" />
-                    ) : (
-                        <ChevronDown className="h-4 w-4" />
-                    )}
-                </button>
-                {openFilters.includes(filterKey) && (
-                    <div className="mt-3 space-y-2">
-                        {filterOptions.map(item => (
-                            <label key={item} className="flex items-center space-x-3 cursor-pointer py-1">
-                                <input
-                                    type="checkbox"
-                                    checked={filters[filterKey]?.includes(item) || false}
-                                    onChange={() => handleFilterChange(filterKey, item)}
-                                    className="h-4 w-4 text-[#3ba1da] rounded border-gray-300 focus:ring-[#3ba1da]"
-                                />
-                                <span className="text-gray-700 text-sm">{item}</span>
-                            </label>
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
-    };
-
     // Get all filter keys for rendering
-    const allFilterKeys = [...Object.keys(databaseFilters), ...HARDCODED_FILTER_KEYS];
+    const allFilterKeys = [
+        'formFactor',
+        'processor',
+        'memory',
+        'storage',
+        'screenSize',
+        ...HARDCODED_FILTER_KEYS
+    ];
 
     // Optional: prevent UI flicker - MUST BE AFTER ALL HOOKS
     if (isLoggedIn === null) {
@@ -688,24 +685,12 @@ export default function Page() {
                             <FiltersSidebarSkeleton />
                         ) : (
                             <div className="space-y-4">
-                                {/* Database Filters */}
-                                {Object.keys(databaseFilters).map(key => {
-                                    const titleMap: Record<string, string> = {
-                                        formFactor: "Form Factor",
-                                        processor: "Processor",
-                                        screenSize: "Screen Size",
-                                        memory: "Memory",
-                                        storage: "Storage"
-                                    };
-
-                                    return (
-                                        <DatabaseFilterSection
-                                            key={key}
-                                            filterKey={key}
-                                            title={titleMap[key] || key}
-                                        />
-                                    );
-                                })}
+                                {/* Database Filters from products table */}
+                                <DatabaseFilterSection filterKey="formFactor" title="Form Factor" />
+                                <DatabaseFilterSection filterKey="processor" title="Processor" />
+                                <DatabaseFilterSection filterKey="screenSize" title="Screen Size" />
+                                <DatabaseFilterSection filterKey="memory" title="Memory" />
+                                <DatabaseFilterSection filterKey="storage" title="Storage" />
 
                                 {/* Hardcoded Filters */}
                                 <HardcodedFilterSection filterKey="copilotPC" title="Copilot + PC" />
@@ -735,20 +720,8 @@ export default function Page() {
                         </button>
                     </div>
 
-
-                    {/* Full Width Banner - Only on Large Screens */}
-                    <div className="relative h-[60vh] w-full overflow-hidden hidden lg:block">
-                        <div
-                            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-                            style={{
-                                backgroundImage: "url('/products-panel.png')",
-                            }}
-                        />
-                    </div>
-
-
                     {/* Products Section */}
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-14">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         {/* Results header - Only show when not loading */}
                         {!isLoading && getActiveFilterCount() > 0 && (
                             <div className="mb-8">
@@ -785,9 +758,9 @@ export default function Page() {
                                 <ProductsGridSkeleton />
                             ) : filteredProducts.length > 0 ? (
                                 <>
-                                    {(admin === profile?.role || shopManager === profile?.role) && (
-                                        <div className="flex items-center justify-between sm:my-10 my-5">
-                                            <div className="text-3xl font-semibold">Devices</div>
+                                    <div className="flex items-center justify-between sm:my-10 my-5">
+                                        <div className="text-3xl font-semibold">Devices</div>
+                                        {(admin === profile?.role || shopManager === profile?.role) && (
                                             <div className="">
                                                 <div className="flex justify-center md:justify-start">
                                                     <Link
@@ -799,8 +772,8 @@ export default function Page() {
                                                     </Link>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-10">
                                         {filteredProducts.map(product => {
                                             // If product is not published, only show to admin/shop_manager
@@ -810,7 +783,7 @@ export default function Page() {
                                                 }
                                             }
 
-                                            const isProductInCart = checkIfInCart(product.id)
+                                            const isProductInCart = checkIfInCart(product.id);
 
                                             return (
                                                 <Link href={`/product/${product.slug}`} key={product.id}>
@@ -882,9 +855,9 @@ export default function Page() {
 
                                                                                 <button
                                                                                     onClick={(e) => {
-                                                                                        e.preventDefault() // Prevent Link navigation
-                                                                                        e.stopPropagation()
-                                                                                        handleRemoveFromCart(product.id)
+                                                                                        e.preventDefault(); // Prevent Link navigation
+                                                                                        e.stopPropagation();
+                                                                                        handleRemoveFromCart(product.id);
                                                                                     }}
                                                                                     disabled={isUpdating}
                                                                                     className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm text-red-600 hover:text-white border border-red-600 rounded-sm cursor-pointer hover:bg-red-500 hover:border-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
@@ -896,9 +869,9 @@ export default function Page() {
                                                                             // Add to cart button
                                                                             <button
                                                                                 onClick={(e) => {
-                                                                                    e.preventDefault() // Prevent Link navigation
-                                                                                    e.stopPropagation()
-                                                                                    handleAddToCart(product.id)
+                                                                                    e.preventDefault(); // Prevent Link navigation
+                                                                                    e.stopPropagation();
+                                                                                    handleAddToCart(product.id);
                                                                                 }}
                                                                                 disabled={isUpdating && addingProductId === product.id}
                                                                                 className="sm:px-6 px-3 sm:py-2.5 py-1.5 text-sm font-medium text-[#0a4647] border border-[#0a4647] rounded-sm cursor-pointer hover:bg-[#0a4647] hover:text-white transition-colors disabled:opacity-50"
@@ -964,24 +937,12 @@ export default function Page() {
                 className="filter-drawer"
             >
                 <div className="space-y-6">
-                    {/* Database Filters */}
-                    {Object.keys(databaseFilters).map(key => {
-                        const titleMap: Record<string, string> = {
-                            formFactor: "Form Factor",
-                            processor: "Processor",
-                            screenSize: "Screen Size",
-                            memory: "Memory",
-                            storage: "Storage"
-                        };
-
-                        return (
-                            <DatabaseFilterSection
-                                key={key}
-                                filterKey={key}
-                                title={titleMap[key] || key}
-                            />
-                        );
-                    })}
+                    {/* Database Filters from products table */}
+                    <DatabaseFilterSection filterKey="formFactor" title="Form Factor" />
+                    <DatabaseFilterSection filterKey="processor" title="Processor" />
+                    <DatabaseFilterSection filterKey="screenSize" title="Screen Size" />
+                    <DatabaseFilterSection filterKey="memory" title="Memory" />
+                    <DatabaseFilterSection filterKey="storage" title="Storage" />
 
                     {/* Hardcoded Filters */}
                     <HardcodedFilterSection filterKey="copilotPC" title="Copilot + PC" />

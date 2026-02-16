@@ -92,6 +92,7 @@ export default function Page() {
     const viewRoles = [subscriberRole, superSubscriberRole].filter(Boolean);
     const isViewAuthorized = profile?.role && viewRoles.includes(profile.role);
 
+
     const columnDisplayNames: Record<string, string> = {
         "order_no": "Order #",
         "customerName": "Customer Name",
@@ -128,6 +129,25 @@ export default function Page() {
         }
 
     }, [loading, isLoggedIn, profile, router, isAuthorized]);
+
+    // Format date to dd-MMM-yyyy
+    const formatDateToCustomFormat = (dateString: string | null) => {
+        if (!dateString) return 'N/A';
+
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return 'N/A';
+
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = date.toLocaleString('default', { month: 'short' });
+            const year = date.getFullYear();
+
+            return `${day}-${month}-${year}`;
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return 'N/A';
+        }
+    };
 
     const fetchWins = async () => {
         const startTime = Date.now();
@@ -662,7 +682,7 @@ export default function Page() {
             const data = wins.map(win => ({
                 'Order #': win.order_no || win.orderHash || 'N/A',
                 'Customer Name': win.customerName || '',
-                'Date of Submission': win.created_at ? new Date(win.created_at).toLocaleDateString() : 'N/A',
+                'Date of Submission': formatDateToCustomFormat(win.created_at), // Updated to use custom format
                 'Total Deal Revenue ($)': `$${win.deal_rev?.toFixed(2) || '0.00'}`,
                 'Number of Units': win.units || 0,
                 'Reseller': win.reseller || '',
@@ -679,7 +699,6 @@ export default function Page() {
 
             // Download file
             downloadCSV(csvString, `wins_${new Date().toISOString().split('T')[0]}.csv`);
-
 
             logSuccess(
                 'export',
@@ -913,7 +932,7 @@ export default function Page() {
                 const date = row.getValue("created_at") as string;
                 return (
                     <div className="text-left ps-2">
-                        {date ? new Date(date).toLocaleDateString() : 'N/A'}
+                        {formatDateToCustomFormat(date)}
                     </div>
                 )
             },

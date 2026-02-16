@@ -60,7 +60,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { PlusOutlined } from "@ant-design/icons"
 import { toast } from "sonner";
 
-// Define Product type based on your Supabase table
+// Define Product type based on your Supabase table - Now using text values directly
 export type Product = {
     id: string
     product_name: string
@@ -68,16 +68,26 @@ export type Product = {
     sku: string
     stock_quantity: number | null
     total_inventory: number | null
-    processor: string | null
-    form_factor: string | null
-    processor_title?: string | null  // from filters table
-    form_factor_title?: string | null // from filters table
-}
-
-// Define Filter type for joins
-export type Filter = {
-    id: string
-    title: string
+    withCustomer: string | null
+    inventory_type: string | null
+    processor: string | null  // Now stores text value directly
+    form_factor: string | null // Now stores text value directly
+    memory: string | null
+    storage: string | null
+    screen_size: string | null
+    technologies: string | null
+    description: string | null
+    copilot: boolean | null
+    five_g_Enabled: boolean | null
+    post_status: string | null
+    isBundle: boolean | null
+    isInStock: boolean | null
+    thumbnail: string | null
+    gallery: string[] | null
+    date: string | null
+    user_id: string | null
+    created_at: string | null
+    updated_at: string | null
 }
 
 export default function Page() {
@@ -101,6 +111,10 @@ export default function Page() {
         pageSize: 1000,
     });
 
+    // For dropdown options in edit modal - fetch unique values from products table
+    const [processorOptions, setProcessorOptions] = useState<string[]>([]);
+    const [formFactorOptions, setFormFactorOptions] = useState<string[]>([]);
+
     // Role constants from environment variables
     const smRole = process.env.NEXT_PUBLIC_SHOPMANAGER;
     const adminRole = process.env.NEXT_PUBLIC_ADMINISTRATOR;
@@ -117,8 +131,15 @@ export default function Page() {
         "total_inventory": "Total Inventory",
         "withCustomer": "With Customer",
         "inventory_type": "Inventory Owner",
-        "processor_title": "Processor",
-        "form_factor_title": "Form Factor",
+        "processor": "Processor",
+        "form_factor": "Form Factor",
+        "memory": "Memory",
+        "storage": "Storage",
+        "screen_size": "Screen Size",
+        "technologies": "Technologies",
+        "copilot": "Copilot + PC",
+        "five_g_Enabled": "5G Enabled",
+        "post_status": "Post Status",
         "actions": "Actions"
     };
 
@@ -143,7 +164,7 @@ export default function Page() {
 
     }, [loading, isLoggedIn, profile, router, isAuthorized]);
 
-    // Fetch products data from Supabase with joins to filters table
+    // Fetch products data from Supabase - Now directly without joining filters table
     const fetchProducts = async () => {
         const startTime = Date.now();
 
@@ -164,14 +185,10 @@ export default function Page() {
             setIsLoading(true);
             setError(null);
 
-            // Fetch products with joins to filters table
+            // Fetch products directly - no joins needed anymore
             const { data: productsData, error: productsError } = await supabase
                 .from('products')
-                .select(`
-                    *,
-                    processor_filter:processor!inner (title),
-                    form_factor_filter:form_factor!inner (title)
-                `)
+                .select('*')
                 .order('product_name', { ascending: true });
 
             if (productsError) {
@@ -192,37 +209,24 @@ export default function Page() {
             }
 
             if (productsData) {
-                // Transform the data to match our Product type
-                const transformedProducts = productsData.map((product: any) => ({
-                    id: product.id,
-                    product_name: product.product_name || '',
-                    sku: product.sku || '',
-                    slug: product.slug || '',
-                    stock_quantity: product.stock_quantity,
-                    total_inventory: product.total_inventory,
-                    withCustomer: product.withCustomer,
-                    inventory_type: product.inventory_type,
-                    processor: product.processor,
-                    form_factor: product.form_factor,
-                    processor_title: product.processor_filter?.title || null,
-                    form_factor_title: product.form_factor_filter?.title || null
-                }));
-
                 await logActivity({
                     type: 'product',
                     level: 'success',
                     action: 'products_fetch_success',
-                    message: `Successfully fetched ${transformedProducts.length} products`,
+                    message: `Successfully fetched ${productsData.length} products`,
                     userId: profile?.id || null,
                     details: {
-                        productsCount: transformedProducts.length,
+                        productsCount: productsData.length,
                         executionTimeMs: Date.now() - startTime,
                         userRole: profile?.role
                     },
                     status: 'completed'
                 });
 
-                setProducts(transformedProducts as Product[]);
+                setProducts(productsData as Product[]);
+                
+                // Extract unique values for dropdowns
+                extractUniqueOptions(productsData as Product[]);
             }
         } catch (err: unknown) {
             await logActivity({
@@ -248,140 +252,34 @@ export default function Page() {
         }
     };
 
-    // Alternative fetch method if the above doesn't work
-    const fetchProductsAlternative = async () => {
-        const startTime = Date.now();
+    // Extract unique values for dropdown options
+    const extractUniqueOptions = (productsData: Product[]) => {
+        // Extract unique processor values
+        const processors = [...new Set(
+            productsData
+                .map(p => p.processor)
+                .filter((value): value is string => 
+                    value !== null && value !== undefined && value !== ''
+                )
+        )].sort();
+        
+        // Extract unique form factor values
+        const formFactors = [...new Set(
+            productsData
+                .map(p => p.form_factor)
+                .filter((value): value is string => 
+                    value !== null && value !== undefined && value !== ''
+                )
+        )].sort();
 
-        await logActivity({
-            type: 'product',
-            level: 'info',
-            action: 'products_alternative_fetch_attempt',
-            message: 'Attempting alternative method to fetch products',
-            userId: profile?.id || null,
-            details: {
-                userRole: profile?.role
-            }
-        });
-
-        try {
-            setIsLoading(true);
-            setError(null);
-
-            // Fetch products
-            const { data: productsData, error: productsError } = await supabase
-                .from('products')
-                .select('*')
-                .order('product_name', { ascending: true });
-
-            if (productsError) {
-                await logActivity({
-                    type: 'product',
-                    level: 'error',
-                    action: 'products_fetch_failed',
-                    message: `Failed to fetch products: ${productsError.message}`,
-                    userId: profile?.id || null,
-                    details: {
-                        error: productsError,
-                        executionTimeMs: Date.now() - startTime,
-                        userRole: profile?.role
-                    },
-                    status: 'failed'
-                });
-                throw productsError;
-            }
-
-            // Fetch filters
-            const { data: filtersData, error: filtersError } = await supabase
-                .from('filters')
-                .select('id, title');
-
-            if (filtersError) {
-                await logActivity({
-                    type: 'product',
-                    level: 'error',
-                    action: 'filters_fetch_failed',
-                    message: `Failed to fetch filters: ${filtersError.message}`,
-                    userId: profile?.id || null,
-                    details: {
-                        error: filtersError,
-                        executionTimeMs: Date.now() - startTime,
-                        userRole: profile?.role
-                    },
-                    status: 'failed'
-                });
-                throw filtersError;
-            }
-
-            // Create a map of filter IDs to titles
-            const filterMap = new Map();
-            if (filtersData) {
-                filtersData.forEach((filter: Filter) => {
-                    filterMap.set(filter.id, filter.title);
-                });
-            }
-
-            // Transform products
-            const transformedProducts = productsData?.map((product: any) => ({
-                id: product.id,
-                slug: product.slug,
-                product_name: product.product_name || '',
-                sku: product.sku || '',
-                stock_quantity: product.stock_quantity,
-                total_inventory: product.total_inventory,
-                withCustomer: product.withCustomer,
-                processor: product.processor,
-                inventory_type: product.inventory_type,
-                form_factor: product.form_factor,
-                processor_title: product.processor ? filterMap.get(product.processor) || null : null,
-                form_factor_title: product.form_factor ? filterMap.get(product.form_factor) || null : null
-            }));
-
-            await logActivity({
-                type: 'product',
-                level: 'success',
-                action: 'products_fetch_success',
-                message: `Successfully fetched ${transformedProducts?.length || 0} products using alternative method`,
-                userId: profile?.id || null,
-                details: {
-                    productsCount: transformedProducts?.length || 0,
-                    filtersCount: filtersData?.length || 0,
-                    executionTimeMs: Date.now() - startTime,
-                    userRole: profile?.role
-                },
-                status: 'completed'
-            });
-
-            setProducts(transformedProducts || []);
-
-        } catch (err: unknown) {
-            await logActivity({
-                type: 'product',
-                level: 'error',
-                action: 'products_fetch_error',
-                message: 'Failed to fetch products using alternative method',
-                userId: profile?.id || null,
-                details: {
-                    error: err,
-                    executionTimeMs: Date.now() - startTime,
-                    userRole: profile?.role
-                },
-                status: 'failed'
-            });
-            if (err instanceof Error) {
-                setError(err.message || 'Failed to fetch products');
-            } else {
-                setError('Failed to fetch products');
-            }
-        } finally {
-            setIsLoading(false);
-        }
+        setProcessorOptions(processors);
+        setFormFactorOptions(formFactors);
     };
 
     // Fetch data when authorized
     useEffect(() => {
         if (!loading && isLoggedIn && profile?.isVerified && isAuthorized) {
-            // Try the first method, fall back to alternative
-            fetchProducts().catch(() => fetchProductsAlternative());
+            fetchProducts();
         }
     }, [loading, isLoggedIn, profile, isAuthorized]);
 
@@ -466,6 +364,9 @@ export default function Page() {
                     sku: editProduct.sku,
                     stock_quantity: editProduct.stock_quantity,
                     total_inventory: editProduct.total_inventory,
+                    processor: editProduct.processor,
+                    form_factor: editProduct.form_factor,
+                    updated_at: new Date().toISOString(),
                 })
                 .eq('id', editProduct.id);
 
@@ -500,6 +401,8 @@ export default function Page() {
                     sku: editProduct.sku,
                     stockQuantity: editProduct.stock_quantity,
                     totalInventory: editProduct.total_inventory,
+                    processor: editProduct.processor,
+                    formFactor: editProduct.form_factor,
                     executionTimeMs: Date.now() - startTime,
                     userRole: profile?.role
                 },
@@ -509,6 +412,10 @@ export default function Page() {
             fetchProducts(); // Refresh data
             setIsEditDialogOpen(false);
             setEditProduct(null);
+            
+            toast.success("Product updated successfully!", {
+                style: { background: "black", color: "white" }
+            });
         } catch (error) {
             await logActivity({
                 type: 'product',
@@ -526,93 +433,12 @@ export default function Page() {
                 status: 'failed'
             });
             setError('Failed to update product');
+            
+            toast.error("Failed to update product", {
+                style: { background: "red", color: "white" }
+            });
         }
     };
-
-    // Fetch filters for dropdowns in edit modal
-    const [processorFilters, setProcessorFilters] = useState<Filter[]>([]);
-    const [formFactorFilters, setFormFactorFilters] = useState<Filter[]>([]);
-
-    useEffect(() => {
-        const fetchFilters = async () => {
-            const startTime = Date.now();
-
-            // Log filters fetch attempt
-            await logActivity({
-                type: 'product',
-                level: 'info',
-                action: 'filters_fetch_attempt',
-                message: 'Attempting to fetch filters for edit modal',
-                userId: profile?.id || null,
-                details: {
-                    userRole: profile?.role
-                }
-            });
-            try {
-                // Assuming you have a way to identify processor vs form_factor filters
-                // You might need to adjust this based on your filters table structure
-                const { data, error } = await supabase
-                    .from('filters')
-                    .select('id, title')
-                    .or('type.eq.processor,type.eq.form_factor')
-                    .order('title', { ascending: true });
-
-                if (error) {
-                    await logActivity({
-                        type: 'product',
-                        level: 'error',
-                        action: 'filters_fetch_failed',
-                        message: `Failed to fetch filters: ${error.message}`,
-                        userId: profile?.id || null,
-                        details: {
-                            error: error,
-                            executionTimeMs: Date.now() - startTime,
-                            userRole: profile?.role
-                        },
-                        status: 'failed'
-                    });
-                    throw error;
-                }
-
-                if (data) {
-                    setProcessorFilters(data);
-                    setFormFactorFilters(data);
-                    await logActivity({
-                        type: 'product',
-                        level: 'success',
-                        action: 'filters_fetch_success',
-                        message: `Successfully fetched ${data.length} filters`,
-                        userId: profile?.id || null,
-                        details: {
-                            filtersCount: data.length,
-                            executionTimeMs: Date.now() - startTime,
-                            userRole: profile?.role
-                        },
-                        status: 'completed'
-                    });
-                }
-            } catch (err) {
-                await logActivity({
-                    type: 'product',
-                    level: 'error',
-                    action: 'filters_fetch_error',
-                    message: 'Failed to fetch filters',
-                    userId: profile?.id || null,
-                    details: {
-                        error: err,
-                        executionTimeMs: Date.now() - startTime,
-                        userRole: profile?.role
-                    },
-                    status: 'failed'
-                });
-            }
-        };
-
-        if (isEditDialogOpen) {
-            fetchFilters();
-        }
-    }, [isEditDialogOpen]);
-
 
     // Define columns with proper typing
     const columns: ColumnDef<Product>[] = [
@@ -754,9 +580,9 @@ export default function Page() {
                 return <div className={`text-left ps-2 font-medium ${quantity == 0 && "text-red-600"}`}>{inventory_type || 'N/A'}</div>
             },
         },
-        // Processor column (from filters table)
+        // Processor column - now direct text value
         {
-            accessorKey: "processor_title",
+            accessorKey: "processor",
             header: ({ column }) => {
                 return (
                     <Button
@@ -770,15 +596,15 @@ export default function Page() {
                 )
             },
             cell: ({ row }) => {
-                const processor = row.getValue("processor_title") as string | null;
+                const processor = row.getValue("processor") as string | null;
                 const quantity = row.getValue("stock_quantity") as number | null;
                 return <div className={`text-left ps-2 font-medium ${quantity == 0 && "text-red-600"}`}>{processor || 'N/A'}</div>
             },
         },
 
-        // Form Factor column (from filters table)
+        // Form Factor column - now direct text value
         {
-            accessorKey: "form_factor_title",
+            accessorKey: "form_factor",
             header: ({ column }) => {
                 return (
                     <Button
@@ -792,7 +618,7 @@ export default function Page() {
                 )
             },
             cell: ({ row }) => {
-                const formFactor = row.getValue("form_factor_title") as string | null;
+                const formFactor = row.getValue("form_factor") as string | null;
                 const quantity = row.getValue("stock_quantity") as number | null;
                 return <div className={`text-left ps-2 font-medium ${quantity == 0 && "text-red-600"}`}>{formFactor || 'N/A'}</div>
             },
@@ -875,10 +701,13 @@ export default function Page() {
                             status: 'completed'
                         });
 
-
                         // Refresh the products list
                         fetchProducts();
                         setIsDeleteDialogOpen(false);
+                        
+                        toast.success("Product deleted successfully!", {
+                            style: { background: "black", color: "white" }
+                        });
                     } catch (error) {
                         await logActivity({
                             type: 'product',
@@ -896,6 +725,10 @@ export default function Page() {
                             status: 'failed'
                         });
                         setError('Failed to delete product');
+                        
+                        toast.error("Failed to delete product", {
+                            style: { background: "red", color: "white" }
+                        });
                     }
                 };
 
@@ -1026,7 +859,6 @@ export default function Page() {
             return;
         }
 
-
         const startTime = Date.now();
 
         // Log export attempt
@@ -1049,8 +881,10 @@ export default function Page() {
                 'SKU': product.sku || '',
                 'Stock Quantity': product.stock_quantity || 0,
                 'Total Inventory': product.total_inventory || 0,
-                'Processor': product.processor_title || 'N/A',
-                'Form Factor': product.form_factor_title || 'N/A',
+                'With Customer': product.withCustomer || 0,
+                'Inventory Owner': product.inventory_type || 'N/A',
+                'Processor': product.processor || 'N/A',
+                'Form Factor': product.form_factor || 'N/A',
                 'Product ID': product.id || ''
             }));
 
@@ -1059,7 +893,6 @@ export default function Page() {
 
             // Download file
             downloadCSV(csvString, `products_${new Date().toISOString().split('T')[0]}.csv`);
-
 
             logActivity({
                 type: 'export',
@@ -1534,11 +1367,14 @@ export default function Page() {
                                         <SelectValue placeholder="Select processor" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {processorFilters.map((filter) => (
-                                            <SelectItem key={filter.id} value={filter.id}>
-                                                {filter.title}
+                                        {processorOptions.map((option) => (
+                                            <SelectItem key={option} value={option}>
+                                                {option}
                                             </SelectItem>
                                         ))}
+                                        <SelectItem value="__custom__" className="text-[#3ba1da] font-medium">
+                                            + Add Custom
+                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1554,11 +1390,14 @@ export default function Page() {
                                         <SelectValue placeholder="Select form factor" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {formFactorFilters.map((filter) => (
-                                            <SelectItem key={filter.id} value={filter.id}>
-                                                {filter.title}
+                                        {formFactorOptions.map((option) => (
+                                            <SelectItem key={option} value={option}>
+                                                {option}
                                             </SelectItem>
                                         ))}
+                                        <SelectItem value="__custom__" className="text-[#3ba1da] font-medium">
+                                            + Add Custom
+                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

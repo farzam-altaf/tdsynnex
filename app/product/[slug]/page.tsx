@@ -98,71 +98,36 @@ const ProductSkeleton = () => {
     )
 };
 
-// Interface for product data
+// Interface for product data - Now using direct text values
 interface Product {
     id: string;
     product_name: string;
     slug: string;
     sku: string;
-    form_factor: string;
-    processor: string;
-    memory: string;
-    storage: string;
-    screen_size: string;
-    technologies: string;
-    inventory_type: string;
-    total_inventory: number;
-    stock_quantity: number;
-    date: string;
-    copilot: boolean;
-    five_g_Enabled: boolean;
-    post_status: string;
-    description: string;
-    isBundle: boolean;
-    isInStock: boolean;
-    thumbnail: string;
-    gallery: string[] | string; // Changed to accept both array and string
-    user_id: string;
-    created_at: string;
-    formFactorTitle?: string;
-    processorTitle?: string;
-    memoryTitle?: string;
-    storageTitle?: string;
-    screenSizeTitle?: string;
+    form_factor: string | null;  // Now stores text directly
+    processor: string | null;     // Now stores text directly
+    memory: string | null;        // Now stores text directly
+    storage: string | null;       // Now stores text directly
+    screen_size: string | null;   // Now stores text directly
+    technologies: string | null;
+    inventory_type: string | null;
+    total_inventory: number | null;
+    stock_quantity: number | null;
+    date: string | null;
+    copilot: boolean | null;
+    five_g_Enabled: boolean | null;
+    post_status: string | null;
+    description: string | null;
+    isBundle: boolean | null;
+    isInStock: boolean | null;
+    thumbnail: string | null;
+    gallery: string[] | string | null;
+    user_id: string | null;
+    created_at: string | null;
 }
 
-// Related product interface
-interface RelatedProduct {
-    id: string;
-    product_name: string;
-    slug: string;
-    sku: string;
-    form_factor: string;
-    processor: string;
-    memory: string;
-    storage: string;
-    screen_size: string;
-    technologies: string;
-    inventory_type: string;
-    total_inventory: number;
-    stock_quantity: number;
-    date: string;
-    copilot: boolean;
-    five_g_Enabled: boolean;
-    post_status: string;
-    description: string;
-    isBundle: boolean;
-    isInStock: boolean;
-    thumbnail: string;
-    gallery: string[] | string; // Changed to accept both array and string
-    user_id: string;
-    created_at: string;
-    formFactorTitle?: string;
-    processorTitle?: string;
-    memoryTitle?: string;
-    storageTitle?: string;
-    screenSizeTitle?: string;
-}
+// Related product interface - Same as Product
+type RelatedProduct = Product;
 
 export default function Page() {
     const params = useParams();
@@ -715,7 +680,7 @@ export default function Page() {
                 setLoading(true);
                 setError(null);
 
-                // Fetch product by slug
+                // Fetch product by slug - directly from products table
                 const { data: productData, error: productError } = await supabase
                     .from("products")
                     .select("*")
@@ -768,45 +733,6 @@ export default function Page() {
 
                 setProduct(productWithParsedGallery);
 
-                // Fetch filter titles for display
-                const filterTypes = ["form_factor", "processor", "memory", "storage", "screen_size"];
-                const filterPromises = filterTypes.map(async (type) => {
-                    const { data } = await supabase
-                        .from("filters")
-                        .select("id, title")
-                        .eq("type", type);
-
-                    return { type, data: data || [] };
-                });
-
-                const filterResults = await Promise.all(filterPromises);
-
-                // Create mapping object
-                const filterMappings: Record<string, Record<string, string>> = {};
-                filterResults.forEach(result => {
-                    const key = result.type === "form_factor" ? "formFactor" :
-                        result.type === "screen_size" ? "screenSize" : result.type;
-
-                    const mapping: Record<string, string> = {};
-                    result.data.forEach(item => {
-                        mapping[item.id] = item.title;
-                    });
-
-                    filterMappings[key] = mapping;
-                });
-
-                // Map filter IDs to titles
-                const productWithTitles = {
-                    ...productWithParsedGallery,
-                    formFactorTitle: filterMappings.formFactor?.[productData.form_factor] || productData.form_factor,
-                    processorTitle: filterMappings.processor?.[productData.processor] || productData.processor,
-                    memoryTitle: filterMappings.memory?.[productData.memory] || productData.memory,
-                    storageTitle: filterMappings.storage?.[productData.storage] || productData.storage,
-                    screenSizeTitle: filterMappings.screenSize?.[productData.screen_size] || productData.screen_size,
-                };
-
-                setProduct(productWithTitles);
-
                 await logActivity({
                     type: 'product',
                     level: 'success',
@@ -818,6 +744,11 @@ export default function Page() {
                         productName: productData.product_name,
                         sku: productData.sku,
                         slug: slug,
+                        formFactor: productData.form_factor,
+                        processor: productData.processor,
+                        memory: productData.memory,
+                        storage: productData.storage,
+                        screenSize: productData.screen_size,
                         isPublished: productData.post_status === 'Publish',
                         stockQuantity: productData.stock_quantity,
                         executionTimeMs: Date.now() - startTime
@@ -825,41 +756,56 @@ export default function Page() {
                     status: 'completed'
                 });
 
-                // Fetch related products based on filters
-                const relatedConditions = [];
+                // Fetch related products based on filters (using text values)
                 const relatedProductsStartTime = Date.now();
-
+                
+                // Build conditions array for related products
+                const conditions = [];
+                
                 if (productData.form_factor) {
-                    relatedConditions.push(`form_factor.eq.${productData.form_factor}`);
+                    conditions.push(`form_factor.eq.${productData.form_factor}`);
                 }
-
+                
                 if (productData.processor) {
-                    relatedConditions.push(`processor.eq.${productData.processor}`);
+                    conditions.push(`processor.eq.${productData.processor}`);
+                }
+                
+                if (productData.memory) {
+                    conditions.push(`memory.eq.${productData.memory}`);
+                }
+                
+                if (productData.storage) {
+                    conditions.push(`storage.eq.${productData.storage}`);
                 }
 
-                const { data: relatedData, error: relatedError } = await supabase
-                    .from("products")
-                    .select("*")
-                    .or(relatedConditions.join(','))
-                    .neq("id", productData.id)
-                    .limit(4);
+                // Only fetch if there are conditions
+                if (conditions.length > 0) {
+                    const { data: relatedData, error: relatedError } = await supabase
+                        .from("products")
+                        .select("*")
+                        .or(conditions.join(','))
+                        .neq("id", productData.id)
+                        .limit(4);
 
-                if (!relatedError && relatedData) {
-                    await logActivity({
-                        type: 'product',
-                        level: 'info',
-                        action: 'related_products_fetch_success',
-                        message: `Fetched ${relatedData.length} related products`,
-                        userId: user?.id || null,
-                        details: {
-                            mainProductId: productData.id,
-                            mainProductName: productData.product_name,
-                            relatedProductsCount: relatedData.length,
-                            executionTimeMs: Date.now() - relatedProductsStartTime
-                        },
-                        status: 'completed'
-                    });
-                    setRelatedProducts(relatedData);
+                    if (!relatedError && relatedData) {
+                        await logActivity({
+                            type: 'product',
+                            level: 'info',
+                            action: 'related_products_fetch_success',
+                            message: `Fetched ${relatedData.length} related products`,
+                            userId: user?.id || null,
+                            details: {
+                                mainProductId: productData.id,
+                                mainProductName: productData.product_name,
+                                relatedProductsCount: relatedData.length,
+                                executionTimeMs: Date.now() - relatedProductsStartTime
+                            },
+                            status: 'completed'
+                        });
+                        setRelatedProducts(relatedData);
+                    }
+                } else {
+                    setRelatedProducts([]);
                 }
 
             } catch (err) {
@@ -999,7 +945,7 @@ export default function Page() {
             };
         }
 
-        if (product.stock_quantity > 0 && product.stock_quantity <= 5) {
+        if (product.stock_quantity && product.stock_quantity > 0 && product.stock_quantity <= 5) {
             return {
                 text: `Only ${product.stock_quantity} Left`,
                 color: "bg-yellow-100 text-yellow-800",
@@ -1007,13 +953,15 @@ export default function Page() {
             };
         }
 
-        if (product.stock_quantity > 5) {
+        if (product.stock_quantity && product.stock_quantity > 5) {
             return {
                 text: `${product.stock_quantity} In Stock`,
                 color: "bg-green-100 text-green-800",
                 icon: <Check className="h-3 w-3 mr-1" />
             };
         }
+        
+        return { text: "", color: "", icon: null };
     };
 
     const stockInfo = stockStatus();
@@ -1057,10 +1005,10 @@ export default function Page() {
                                 </Link>
                                 {" / "}
                                 <Link
-                                    href={`/product-category/${product?.memoryTitle?.toLowerCase().replace(/\s+/g, '-')}/`}
+                                    href={`/product-category/${product?.memory?.toLowerCase().replace(/\s+/g, '-')}/`}
                                     className="text-xs hover:text-red-700"
                                 >
-                                    {product?.memoryTitle}
+                                    {product?.memory}
                                 </Link>
                                 {" / "}
                                 <span className="text-xs text-gray-600">{product?.product_name}</span>
@@ -1243,6 +1191,43 @@ export default function Page() {
                                 </div>
                             </div>
 
+                            {/* Display Specifications */}
+                            <div className="mb-6">
+                                <h3 className="text-sm font-semibold text-gray-900 mb-3">Specifications</h3>
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    {product?.form_factor && (
+                                        <div className="flex justify-between border-b pb-1">
+                                            <span className="text-gray-600">Form Factor:</span>
+                                            <span className="font-medium">{product.form_factor}</span>
+                                        </div>
+                                    )}
+                                    {product?.processor && (
+                                        <div className="flex justify-between border-b pb-1">
+                                            <span className="text-gray-600">Processor:</span>
+                                            <span className="font-medium">{product.processor}</span>
+                                        </div>
+                                    )}
+                                    {product?.memory && (
+                                        <div className="flex justify-between border-b pb-1">
+                                            <span className="text-gray-600">Memory:</span>
+                                            <span className="font-medium">{product.memory}</span>
+                                        </div>
+                                    )}
+                                    {product?.storage && (
+                                        <div className="flex justify-between border-b pb-1">
+                                            <span className="text-gray-600">Storage:</span>
+                                            <span className="font-medium">{product.storage}</span>
+                                        </div>
+                                    )}
+                                    {product?.screen_size && (
+                                        <div className="flex justify-between border-b pb-1">
+                                            <span className="text-gray-600">Screen Size:</span>
+                                            <span className="font-medium">{product.screen_size}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
                             {/* Description Points with ID for Read More button */}
                             <div id="product-description">
                                 {descriptionPoints.length > 0 && (
@@ -1251,7 +1236,7 @@ export default function Page() {
                                         <ul className="space-y-2">
                                             {descriptionPoints.map((point, index) => (
                                                 <li key={index} className="flex items-start">
-                                                    <BiRadioCircle className="h-5 w-5  mt-0.5 mr-1 shrink-0" />
+                                                    <BiRadioCircle className="h-5 w-5 mt-0.5 mr-1 shrink-0" />
                                                     <span className="text-gray-700 text-sm">{point}</span>
                                                 </li>
                                             ))}

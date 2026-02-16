@@ -3,12 +3,12 @@
 import { ImAidKit } from "react-icons/im"
 import StepCard from "./step-card"
 import { TfiWrite } from "react-icons/tfi"
-import { FaCircleCheck, FaPlaneDeparture, FaTrophy } from "react-icons/fa6"
+import { FaBriefcase, FaCircleCheck, FaPlaneDeparture, FaTrophy } from "react-icons/fa6"
 import { IoReturnUpBack } from "react-icons/io5"
 
 const STEPS = [
   { title: 'REGISTRATION', description: 'Complete the registration process to start using the portal', icon: <TfiWrite className="h-8 w-8 text-[#3D9DD6]" />, number: 1 },
-  { title: 'CREATE DEMO KIT', description: 'Choose between different products for a 30-day demo', icon: <ImAidKit className="h-8 w-8 text-[#3D9DD6]" />, number: 2 },
+  { title: 'CREATE DEMO KIT', description: 'Choose between different products for a 30-day demo', icon: <FaBriefcase  className="h-8 w-8 text-[#3D9DD6]" />, number: 2 },
   { title: 'CHECKOUT', description: 'Fill out the form with shipping & opportunity details and checkout easily', icon: <FaCircleCheck className="h-8 w-8 text-[#3D9DD6]" />, number: 3 },
   { title: 'ORDER SHIPMENT', description: 'Seamless overnight shipment after order approval', icon: <FaPlaneDeparture className="h-8 w-8 text-[#3D9DD6]" />, number: 4 }, // Changed from 3 to 4
   { title: 'RETURN ORDER', description: 'Simple order return using hard/soft copy of provided prepaid return label', icon: <IoReturnUpBack className="h-8 w-8 text-[#3D9DD6]" />, number: 5 },

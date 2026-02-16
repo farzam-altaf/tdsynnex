@@ -322,10 +322,23 @@ export default function Page() {
         return new Date(dateString).toISOString().split('T')[0];
     };
 
-    // Format date for display
+    // Format date for display in dd-MMM-yyyy format
     const formatDate = (dateString: string | null) => {
         if (!dateString) return '-';
-        return new Date(dateString).toLocaleDateString();
+
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return '-';
+
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = date.toLocaleString('default', { month: 'short' });
+            const year = date.getFullYear();
+
+            return `${day}-${month}-${year}`;
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return '-';
+        }
     };
 
     // Handle edit order click
@@ -671,8 +684,13 @@ export default function Page() {
                 )
             },
             cell: ({ row }) => {
-                const order_status = row.getValue("order_status") as string;
-                return <div className="text-left ps-2 capitalize">{order_status}</div>
+                let order_status = row.getValue("order_status") as string;
+
+                if (order_status === "Shipped Extension") {
+                    order_status = "Shipped (Order Extension)";
+                }
+
+                return <div className="text-left ps-2 capitalize">{order_status}</div>;
             },
         },
         {
@@ -934,31 +952,99 @@ export default function Page() {
                     });
 
                     try {
+                        // First, fetch the complete order with product details
+                        const { data: orderData, error: fetchError } = await supabase
+                            .from('orders')
+                            .select(`
+                                *,
+                                products:product_id (*)
+                            `)
+                            .eq('id', order.id)
+                            .single();
+
+                        if (fetchError) throw fetchError;
+
+                        // Check if order status is not Returned or Rejected
+                        const nonReturnableStatuses = [
+                            process.env.NEXT_PUBLIC_STATUS_RETURNED,
+                            process.env.NEXT_PUBLIC_STATUS_REJECTED
+                        ].filter(Boolean);
+
+                        // If order status is not Returned or Rejected, update stock
+                        if (!nonReturnableStatuses.includes(orderData.order_status) && orderData.products && orderData.quantity) {
+                            const orderQuantity = orderData.quantity || 0;
+
+                            if (orderQuantity > 0) {
+                                // Parse current product quantities
+                                const currentStockQty = parseInt(orderData.products.stock_quantity) || 0;
+                                const currentWithCustomerQty = parseInt(orderData.products.withCustomer) || 0;
+
+                                // Calculate new quantities
+                                const newStockQty = currentStockQty + orderQuantity; // Increase stock
+                                const newWithCustomerQty = Math.max(0, currentWithCustomerQty - orderQuantity); // Decrease withCustomer
+
+                                // Ensure quantities don't go negative
+                                const finalStockQty = Math.max(0, newStockQty).toString();
+                                const finalWithCustomerQty = Math.max(0, newWithCustomerQty).toString();
+
+                                // Update product quantities
+                                const { error: productUpdateError } = await supabase
+                                    .from('products')
+                                    .update({
+                                        stock_quantity: finalStockQty,
+                                        withCustomer: finalWithCustomerQty
+                                    })
+                                    .eq('id', orderData.product_id);
+
+                                if (productUpdateError) {
+                                    await logActivity({
+                                        type: 'product',
+                                        level: 'error',
+                                        action: 'product_quantity_update_failed_on_delete',
+                                        message: `Failed to update product quantities when deleting order ${order.order_no}`,
+                                        userId: profile?.id || null,
+                                        orderId: order.id,
+                                        productId: orderData.product_id,
+                                        details: {
+                                            orderNumber: order.order_no,
+                                            productId: orderData.product_id,
+                                            quantity: orderQuantity,
+                                            error: productUpdateError
+                                        },
+                                        status: 'failed'
+                                    });
+                                    // Don't throw - continue with order deletion
+                                } else {
+                                    await logActivity({
+                                        type: 'product',
+                                        level: 'info',
+                                        action: 'product_quantity_updated_on_delete',
+                                        message: `Updated product quantities when deleting order ${order.order_no}`,
+                                        userId: profile?.id || null,
+                                        orderId: order.id,
+                                        productId: orderData.product_id,
+                                        details: {
+                                            orderNumber: order.order_no,
+                                            productId: orderData.product_id,
+                                            quantity: orderQuantity,
+                                            oldStock: currentStockQty,
+                                            newStock: finalStockQty,
+                                            oldWithCustomer: currentWithCustomerQty,
+                                            newWithCustomer: finalWithCustomerQty
+                                        },
+                                        status: 'completed'
+                                    });
+                                }
+                            }
+                        }
+
+                        // Now delete the order
                         const { error } = await supabase
                             .from('orders')
                             .delete()
                             .eq('id', order.id);
 
-                        if (error) {
-                            // Log delete error
-                            await logActivity({
-                                type: 'order',
-                                level: 'error',
-                                action: 'order_delete_failed',
-                                message: `Failed to delete order ${order.order_no}: ${error.message}`,
-                                userId: profile?.id || null,
-                                orderId: order.id,
-                                details: {
-                                    orderNumber: order.order_no,
-                                    error: error,
-                                    executionTimeMs: Date.now() - startTime,
-                                    userRole: profile?.role
-                                },
-                                status: 'failed'
-                            });
-
-                            throw error;
-                        }
+                        if (error) throw error;
 
                         await logActivity({
                             type: 'order',
@@ -973,6 +1059,7 @@ export default function Page() {
                                 orderStatus: order.order_status,
                                 revOpportunity: order.rev_opportunity,
                                 devOpportunity: order.dev_opportunity,
+                                stockUpdated: !nonReturnableStatuses.includes(orderData.order_status),
                                 executionTimeMs: Date.now() - startTime,
                                 userRole: profile?.role,
                                 deletedBy: profile?.email
@@ -983,12 +1070,17 @@ export default function Page() {
                         // Refresh the orders list
                         fetchOrders();
                         setIsDeleteDialogOpen(false);
-                    } catch (error) {
+
+                        toast.success("Order deleted successfully!", {
+                            style: { background: "black", color: "white" }
+                        });
+
+                    } catch (error: any) {
                         await logActivity({
                             type: 'order',
                             level: 'error',
                             action: 'order_delete_error',
-                            message: `Failed to delete order ${order.order_no}`,
+                            message: `Failed to delete order ${order.order_no}: ${error.message}`,
                             userId: profile?.id || null,
                             orderId: order.id,
                             details: {
@@ -998,6 +1090,10 @@ export default function Page() {
                                 userRole: profile?.role
                             },
                             status: 'failed'
+                        });
+
+                        toast.error(error.message || "Failed to delete order", {
+                            style: { background: "red", color: "white" }
                         });
                         setError('Failed to delete order');
                     }
@@ -1109,6 +1205,7 @@ export default function Page() {
                         setError('Failed to delete order');
                     }
                 };
+
                 return (
                     <div className="flex space-x-2 ps-2">
                         <DropdownMenu>
