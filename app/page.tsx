@@ -5,7 +5,7 @@ import Banner from "./components/Banner";
 import Laptop from "./components/Laptop";
 import ImageBanner from "./components/ImageBanner";
 import HowItWorks from "./components/how-it-works-section";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useAuth } from "./context/AuthContext";
 import { useRouter } from "next/navigation";
 import LoginForm from "./login/LoginForm";
@@ -35,7 +35,9 @@ export default function Home() {
           <HowItWorks />
         </>
       ) : (
-        <LoginForm />
+         <Suspense fallback={null}>
+           <LoginForm />
+         </Suspense>
       )}
     </>
   );

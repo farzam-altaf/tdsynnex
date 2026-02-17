@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import HowItWorks from "../components/how-it-works-section";
 import { useAuth } from "../context/AuthContext";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import LoginForm from "../login/LoginForm";
 
 export default function Page() {
@@ -21,9 +21,13 @@ export default function Page() {
     return (
         <>
             {isLoggedIn ? (
-                <HowItWorks />
+                <Suspense fallback={null}>
+                    <HowItWorks />
+                </Suspense>
             ) : (
-                <LoginForm />
+                <Suspense fallback={null}>
+                    <LoginForm />
+                </Suspense>
             )}
         </>
     )
