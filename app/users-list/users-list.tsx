@@ -58,6 +58,7 @@ import { supabase } from "@/lib/supabase/client"
 import { emailTemplates, sendEmail } from "@/lib/email"
 import { logger, logAuth, logError, logSuccess, logWarning, logInfo } from "@/lib/logger"
 import { toast } from "sonner"
+import { AprovedUserCC } from "@/lib/emailconst"
 
 // Define User type based on your Supabase table
 export type User = {
@@ -180,6 +181,10 @@ export default function UsersList() {
                 source
             );
 
+            router.replace('/product-category/alldevices');
+            return;
+        }
+        if (smRole == profile?.role) {
             router.replace('/product-category/alldevices');
             return;
         }
@@ -531,6 +536,7 @@ export default function UsersList() {
 
             const result = await sendEmail({
                 to: userEmail,
+                cc: AprovedUserCC,
                 subject: template.subject,
                 text: template.text,
                 html: template.html,
@@ -580,6 +586,7 @@ export default function UsersList() {
 
             const result = await sendEmail({
                 to: userEmail,
+                cc: "",
                 subject: template.subject,
                 text: template.text,
                 html: template.html,
@@ -811,10 +818,10 @@ export default function UsersList() {
                                     >
                                         Copy email
                                     </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
 
                                     {smRole !== profile?.role && (
                                         <>
+                                            <DropdownMenuSeparator />
                                             <DropdownMenuItem
                                                 className="cursor-pointer"
                                                 onClick={() => handleEditUser(user)}
@@ -829,26 +836,25 @@ export default function UsersList() {
                                                 <Key className="mr-2 h-4 w-4" />
                                                 Change Role
                                             </DropdownMenuItem>
+                                            {!user.isVerified ? (
+                                                <DropdownMenuItem
+                                                    onClick={() => handleVerifyUser(user.id, user.email)}
+                                                    className="text-green-600 cursor-pointer"
+                                                >
+                                                    <CheckCircle className="mr-2 h-4 w-4" />
+                                                    Approve User
+                                                </DropdownMenuItem>
+                                            ) : (
+                                                <DropdownMenuItem
+                                                    onClick={() => handleUnverifyUser(user.id, user.email)}
+                                                    className="text-red-600 cursor-pointer"
+                                                >
+                                                    <XCircle className="mr-2 h-4 w-4" />
+                                                    Reject User
+                                                </DropdownMenuItem>
+                                            )}
                                         </>
                                     )}
-                                    {!user.isVerified ? (
-                                        <DropdownMenuItem
-                                            onClick={() => handleVerifyUser(user.id, user.email)}
-                                            className="text-green-600 cursor-pointer"
-                                        >
-                                            <CheckCircle className="mr-2 h-4 w-4" />
-                                            Approve User
-                                        </DropdownMenuItem>
-                                    ) : (
-                                        <DropdownMenuItem
-                                            onClick={() => handleUnverifyUser(user.id, user.email)}
-                                            className="text-red-600 cursor-pointer"
-                                        >
-                                            <XCircle className="mr-2 h-4 w-4" />
-                                            Reject User
-                                        </DropdownMenuItem>
-                                    )}
-
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
@@ -1329,7 +1335,7 @@ export default function UsersList() {
                                             }
                                         }}
                                         disabled={!table.getCanPreviousPage()}
-                                    >   
+                                    >
                                         Previous
                                     </Button>
                                     <Button

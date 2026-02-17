@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/client";
 import { emailTemplates, sendCronEmail } from "@/lib/email";
 import { logActivity, logEmail } from "@/lib/logger";
+import { OverDueReminderEmail } from "@/lib/emailconst";
 
 export async function GET(request: NextRequest) {
     try {
@@ -243,10 +244,11 @@ export async function GET(request: NextRequest) {
                     contactEmail: emailData.contactEmail,
                     shippedDate: emailData.shippedDate
                 });
-
+                const mergedEmails = [order.users.email, ...OverDueReminderEmail];
                 // 5️⃣ Send email
                 const emailResult = await sendCronEmail({
-                    to: order.users.email,
+                    to: mergedEmails,
+                    cc: "",
                     subject: template.subject,
                     text: template.text,
                     html: template.html,

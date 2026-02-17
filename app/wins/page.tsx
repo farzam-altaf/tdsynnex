@@ -934,6 +934,7 @@ export default function Page() {
 
             const result = await sendEmail({
                 to: oData.submitted_by,
+                cc: "",
                 subject: template.subject,
                 text: template.text,
                 html: template.html,

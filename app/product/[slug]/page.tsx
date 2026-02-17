@@ -31,6 +31,7 @@ import { BiRadioCircle } from "react-icons/bi";
 import { useCart } from "@/app/context/CartContext";
 import { FaBell } from "react-icons/fa";
 import { emailTemplates, sendEmail } from "@/lib/email";
+import { WaitlistEmailCC } from "@/lib/emailconst";
 
 // Loading skeleton component
 const ProductSkeleton = () => {
@@ -290,6 +291,7 @@ export default function Page() {
 
             await sendEmail({
                 to: profile?.email || "",
+                cc: WaitlistEmailCC,
                 subject: template.subject,
                 text: template.text,
                 html: template.html,

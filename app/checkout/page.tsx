@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { emailTemplates, sendEmail } from "@/lib/email";
 import { logActivity, logError, logSuccess, logInfo, logWarning } from "@/lib/logger";
+import { NewOrderEmail } from "@/lib/emailconst";
 
 export default function Page() {
   const router = useRouter();
@@ -680,6 +681,7 @@ export default function Page() {
 
       await sendEmail({
         to: myMail,
+        cc: "",
         subject: template.subject,
         text: template.text,
         html: template.html,
@@ -743,8 +745,8 @@ export default function Page() {
       console.log(adminEmails)
 
       await sendEmail({
-        to: "farzamaltaf888@gmail.com",
-        // to: adminEmails.length > 0 ? adminEmails : "farzamaltaf888@gmail.com",
+        to: NewOrderEmail,
+        cc: "",
         subject: template.subject,
         text: template.text,
         html: template.html,
@@ -1686,7 +1688,7 @@ export default function Page() {
                         target="_blank"
                         className="text-[#0A4647] hover:text-[#093c3d] hover:underline font-medium underline"
                         onClick={(e) => e.stopPropagation()}
-                      > 
+                      >
                         Terms & Conditions
                       </Link>{' '}
                       <span className="text-red-600">*</span>

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import HowItWorks from "../components/how-it-works-section";
 import { useAuth } from "../context/AuthContext";
 import { useEffect } from "react";
+import LoginForm from "../login/LoginForm";
 
 export default function Page() {
     const { profile, isLoggedIn, loading, user } = useAuth();
@@ -19,7 +20,11 @@ export default function Page() {
     }, [loading, isLoggedIn, profile, router]);
     return (
         <>
-            <HowItWorks />
+            {isLoggedIn ? (
+                <HowItWorks />
+            ) : (
+                <LoginForm />
+            )}
         </>
     )
 }

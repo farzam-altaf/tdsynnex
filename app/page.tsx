@@ -8,6 +8,7 @@ import HowItWorks from "./components/how-it-works-section";
 import { useEffect } from "react";
 import { useAuth } from "./context/AuthContext";
 import { useRouter } from "next/navigation";
+import LoginForm from "./login/LoginForm";
 
 export default function Home() {
 
@@ -26,10 +27,16 @@ export default function Home() {
 
   return (
     <>
-      <Banner />
-      <Laptop />
-      <ImageBanner />
-      <HowItWorks />
+      {isLoggedIn ? (
+        <>
+          <Banner />
+          <Laptop />
+          <ImageBanner />
+          <HowItWorks />
+        </>
+      ) : (
+        <LoginForm />
+      )}
     </>
   );
 }

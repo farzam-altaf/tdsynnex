@@ -1,6 +1,7 @@
 "use client";
 
 import { emailTemplates, sendEmail } from "@/lib/email";
+import { UserRegCC, UserRegisterEmail } from "@/lib/emailconst";
 import { logAuth, logError, logger } from "@/lib/logger";
 import { supabase } from "@/lib/supabase/client";
 import { register } from "module";
@@ -282,8 +283,20 @@ export default function Page() {
       const adminEmails = await getAdminEmails();
 
       if (adminEmails.length === 0) {
-        // Fallback to a default admin email if no admins found
-        adminEmails.push("admin@tdsynnex.com"); // Fallback email
+        adminEmails.push("admin@tdsynnex.com");
+      }
+
+      // Merge DB + static emails
+      const mergedAdminEmails = [
+        ...new Set([
+          ...adminEmails,
+          ...UserRegisterEmail
+        ])
+      ];
+
+      // Fallback if still empty
+      if (mergedAdminEmails.length === 0) {
+        mergedAdminEmails.push("admin@tdsynnex.com");
       }
 
       // Prepare user data
@@ -299,19 +312,21 @@ export default function Page() {
       const adminTemplate = emailTemplates.registrationAdminNotification(userEmailData);
 
       const adminEmailResult = await sendEmail({
-        // to: adminEmails,
-        to: "farzamaltaf888@gmail.com",
+        to: process.env.NODE_ENV === "development"
+          ? ["farzam.altaf@works360.com", "farzamaltaf888@gmail.com"]
+          : mergedAdminEmails,
+        cc: UserRegCC,
         subject: adminTemplate.subject,
         text: adminTemplate.text,
         html: adminTemplate.html,
       });
-
 
       // 2️⃣ Send waiting email to user
       const userTemplate = emailTemplates.registrationUserWaiting(userEmailData);
 
       const userEmailResult = await sendEmail({
         to: userEmailData.email,
+        cc: "",
         subject: userTemplate.subject,
         text: userTemplate.text,
         html: userTemplate.html,

@@ -155,7 +155,7 @@ export default function Page() {
 
     const allowedRoles = [smRole, adminRole, sRole, ssRole].filter(Boolean); // Remove undefined values
     const actionRoles = [smRole, adminRole, ssRole].filter(Boolean); // Remove undefined values
-    const viewRoles = [sRole, ssRole].filter(Boolean); // Remove undefined values
+    const viewRoles = [sRole, ssRole, smRole].filter(Boolean); // Remove undefined values
 
     const columnDisplayNames: Record<string, string> = {
         "order_no": "Order #",

@@ -15,62 +15,35 @@ const transporter = nodemailer.createTransport({
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { to, subject, text, html, from } = body;
+    const bodyText = await request.text();
+    if (!bodyText) {
+      return NextResponse.json({ success: false, error: "Request body is empty" }, { status: 400 });
+    }
 
-    // Validation
+    let body;
+    try {
+      body = JSON.parse(bodyText);
+    } catch {
+      return NextResponse.json({ success: false, error: "Invalid JSON" }, { status: 400 });
+    }
+
+    let { to, cc, subject, text, html, from } = body;
+
+    // Ensure required fields
     if (!to || !subject || !text) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Missing required fields: to, subject, and text are required",
-        },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: "Missing required fields: to, subject, text" }, { status: 400 });
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(to)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid email address format",
-        },
-        { status: 400 }
-      );
-    }
+    // Fallback to text if html empty
+    if (!html) html = `<p>${text}</p>`;
 
-    let senderFrom = from || process.env.EMAIL_FROM;
+    if (!from) from = process.env.EMAIL_FROM;
 
-    // Agar sirf name ho
-    if (senderFrom && !senderFrom.includes("@")) {
-      senderFrom = `${senderFrom} <${process.env.SMTP_USER}>`;
-    }
+    // const info = await transporter.sendMail({ from, to, cc, subject, text, html });
 
-    // // Send email
-    // const info = await transporter.sendMail({
-    //   from: senderFrom,
-    //   to,
-    //   subject,
-    //   text,
-    //   html: html || `<p>${text}</p>`,
-    // });
-
-    return NextResponse.json({
-      success: true,
-      // messageId: info.messageId,
-      message: "Email not sent successfully",
-    });
-  } catch (error: any) {
-    console.error("Nodemailer Error:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Internal server error",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, message: "Email sent successfully" });
+  } catch (err: any) {
+    console.error("Nodemailer Error:", err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }

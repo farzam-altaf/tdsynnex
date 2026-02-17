@@ -89,7 +89,7 @@ export default function Page() {
     const subscriberRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
 
     const allowedRoles = [smRole, adminRole, superSubscriberRole].filter(Boolean);
-    const viewRoles = [subscriberRole, superSubscriberRole].filter(Boolean);
+    const viewRoles = [subscriberRole, superSubscriberRole, smRole].filter(Boolean);
     const isViewAuthorized = profile?.role && viewRoles.includes(profile.role);
 
 

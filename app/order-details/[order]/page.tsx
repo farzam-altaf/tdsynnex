@@ -34,6 +34,7 @@ import { emailTemplates, sendEmail } from "@/lib/email"
 import { logActivity, logError, logSuccess, logInfo, logWarning } from "@/lib/logger";
 import { toast } from "sonner"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { ApprovedEmail, ReturnedEmail, ShippedEmail } from "@/lib/emailconst"
 
 export type Product = {
     id: string;
@@ -44,7 +45,7 @@ export type Product = {
     withCustomer: string;
     processor?: string | null;
     form_factor?: string | null;
-    slug?: string | null; // Add slug property
+    slug?: string | null;
 }
 
 export type Order = {
@@ -61,7 +62,7 @@ export type Order = {
     shipped_date: string | null
     returned_date: string | null
     vertical: string | null
-    quantity: number | null // Now directly a number, not string
+    quantity: number | null
     segment: string | null
     order_month: string | null
     order_quarter: string | null
@@ -96,9 +97,8 @@ export type Order = {
     zip: string | null
     desired_date: string | null
     notes: string | null
-    product_id: string | null // Now a single UUID, not array
-    products?: Product // Single product from join
-    // For backward compatibility (optional)
+    product_id: string | null
+    products?: Product
     product_ids_array?: string[]
     quantities_array?: number[]
     products_array?: Product[]
@@ -126,7 +126,6 @@ export type Order = {
         created_at: string;
     }[];
 }
-
 
 export default function Page() {
     const router = useRouter();
@@ -163,7 +162,59 @@ export default function Page() {
         isDamaged: boolean;
     }[]>([]);
 
+    // Role constants from environment variables
+    const smRole = process.env.NEXT_PUBLIC_SHOPMANAGER;
+    const adminRole = process.env.NEXT_PUBLIC_ADMINISTRATOR;
+    const ssRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
+    const sRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
 
+    const allowedRoles = [smRole, adminRole, sRole, ssRole].filter(Boolean);
+
+    // Permission levels
+    const isAdmin = profile?.role === adminRole;
+    const isSSRole = profile?.role === ssRole;
+    const isSMRole = profile?.role === smRole;
+    const isSubscriber = profile?.role === sRole;
+
+    // Action permissions
+    const canApproveReject = isAdmin || isSSRole;
+    const canEditAll = isAdmin;
+    const canEditSMFields = isSMRole;
+    const canEditProduct = isAdmin || isSMRole;
+    const canEditStatus = isAdmin || isSMRole;
+    const canEditTracking = isAdmin || isSMRole;
+    const canUploadReturnLabel = isAdmin || isSMRole;
+    const canViewOnly = isSubscriber;
+
+    // Check if current user is authorized
+    const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
+
+    // Order status options from environment variables
+    const statusOptions = [
+        { value: `${process.env.NEXT_PUBLIC_STATUS_AWAITING}`, label: "Awaiting Approval" },
+        { value: `${process.env.NEXT_PUBLIC_STATUS_PROCESSING}`, label: "Processing" },
+        { value: `${process.env.NEXT_PUBLIC_STATUS_SHIPPED}`, label: "Shipped" },
+        { value: `${process.env.NEXT_PUBLIC_STATUS_EXTENSION}`, label: "Shipped (Order Extension)" },
+        { value: `${process.env.NEXT_PUBLIC_IN_TRANSIT}`, label: "Return In transit" },
+        { value: `${process.env.NEXT_PUBLIC_FEDEX_DELIVERED}`, label: "Delivered to warehouse" },
+        { value: `${process.env.NEXT_PUBLIC_STATUS_RETURNED}`, label: "Returned" },
+        { value: `${process.env.NEXT_PUBLIC_STATUS_REJECTED}`, label: "Rejected" }
+    ];
+
+    // Handle auth check
+    useEffect(() => {
+        if (loading) return;
+
+        if (!isLoggedIn || !profile?.isVerified) {
+            router.replace(`/login/?redirect_to=order-details/${orderHash}`);
+            return;
+        }
+
+        if (!isAuthorized) {
+            router.replace('/product-category/alldevices');
+            return;
+        }
+    }, [loading, isLoggedIn, profile, router, isAuthorized, orderHash]);
 
     // Helper function to handle status change to Returned
     const handleStatusChangeToReturned = (field: string, value: string, rowId: string = "order") => {
@@ -174,8 +225,8 @@ export default function Page() {
             return;
         }
 
-        if (!order || !isActionAuthorized) {
-            console.log('No order or not authorized:', { hasOrder: !!order, isActionAuthorized });
+        if (!order || !canEditStatus) {
+            console.log('No order or not authorized:', { hasOrder: !!order, canEditStatus });
             return;
         }
 
@@ -194,14 +245,13 @@ export default function Page() {
             productId: order.products.id,
             productName: order.products.product_name,
             shippedQuantity: order.quantity || 0,
-            returnedQuantity: order.quantity || 0, // Initially all returned
+            returnedQuantity: order.quantity || 0,
             isDamaged: false
         }];
 
         console.log('Setting returned products:', productsData);
         setReturnedProducts(productsData);
 
-        // Store the pending status change
         const pendingChange = {
             field: field,
             value: value,
@@ -210,51 +260,9 @@ export default function Page() {
         console.log('Setting pending status change:', pendingChange);
         setPendingStatusChange(pendingChange);
 
-        // Open the modal
         console.log('Opening return modal');
         setIsReturnModalOpen(true);
     };
-
-    // Order status options from environment variables
-    const statusOptions = [
-        { value: `${process.env.NEXT_PUBLIC_STATUS_AWAITING}`, label: "Awaiting Approval" },
-        { value: `${process.env.NEXT_PUBLIC_STATUS_PROCESSING}`, label: "Processing" },
-        { value: `${process.env.NEXT_PUBLIC_STATUS_SHIPPED}`, label: "Shipped" },
-        { value: `${process.env.NEXT_PUBLIC_STATUS_EXTENSION}`, label: "Shipped (Order Extension)" },
-        { value: `${process.env.NEXT_PUBLIC_IN_TRANSIT}`, label: "Return In transit" },
-        { value: `${process.env.NEXT_PUBLIC_FEDEX_DELIVERED}`, label: "Delivered to warehouse" },
-        { value: `${process.env.NEXT_PUBLIC_STATUS_RETURNED}`, label: "Returned" },
-        { value: `${process.env.NEXT_PUBLIC_STATUS_REJECTED}`, label: "Rejected" }
-    ];
-
-    // Role constants from environment variables
-    const smRole = process.env.NEXT_PUBLIC_SHOPMANAGER;
-    const adminRole = process.env.NEXT_PUBLIC_ADMINISTRATOR;
-    const ssRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
-    const sRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
-
-    const allowedRoles = [smRole, adminRole, sRole, ssRole].filter(Boolean);
-    const actionRoles = [smRole, adminRole].filter(Boolean);
-
-    // Check if current user is authorized
-    const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
-    const isActionAuthorized = profile?.role && actionRoles.includes(profile.role);
-
-    // Handle auth check
-    useEffect(() => {
-        if (loading) return;
-
-        if (!isLoggedIn || !profile?.isVerified) {
-            router.replace(`/login/?redirect_to=order-details/${orderHash}`);
-            return;
-        }
-
-        if (!isAuthorized) {
-            router.replace('/product-category/alldevices');
-            return;
-        }
-
-    }, [loading, isLoggedIn, profile, router, isAuthorized, orderHash]);
 
     // Fetch all products for the product selector
     const fetchAllProducts = async () => {
@@ -285,8 +293,7 @@ export default function Page() {
             userId: profile?.id || null,
             details: {
                 orderHash,
-                userRole: profile?.role,
-                isActionAuthorized
+                userRole: profile?.role
             }
         });
 
@@ -296,7 +303,6 @@ export default function Page() {
 
             console.log('🔍 Fetching order details...');
 
-            // Fetch order with product details using join
             let query = supabase
                 .from('orders')
                 .select(`
@@ -319,24 +325,18 @@ export default function Page() {
             if (data && data.length > 0) {
                 console.log("📦 Fetched raw data:", data[0]);
 
-                // Check if user is authorized to view this order
                 if (sRole === profile?.role && data[0].order_by !== profile?.id) {
                     console.warn('⚠️ Unauthorized access attempt');
                     router.back();
                     return;
                 }
 
-                // Process the order - product_id is now a UUID reference
                 const processedOrder: Order = {
                     ...data[0],
-                    // product_id is already a UUID string from the join
                     product_id: data[0].product_id,
-                    // quantity is now a simple number
                     quantity: data[0].quantity,
-                    // For backward compatibility, create arrays if needed
                     product_ids_array: [data[0].product_id],
                     quantities_array: [data[0].quantity],
-                    // Products array for multiple products (if needed in future)
                     products_array: data[0].products ? [data[0].products] : [],
                     approved_user: data[0].approved_user ? {
                         id: data[0].approved_user.id,
@@ -361,7 +361,6 @@ export default function Page() {
                 console.log("✅ Processed order:", processedOrder);
                 setOrders([processedOrder]);
 
-                // Initialize tracking data
                 setTrackingData({
                     tracking: processedOrder.tracking || "",
                     return_tracking: processedOrder.return_tracking || "",
@@ -403,6 +402,13 @@ export default function Page() {
         }
     };
 
+    // Fetch data when authorized
+    useEffect(() => {
+        if (!loading && isLoggedIn && profile?.isVerified && isAuthorized) {
+            fetchOrders();
+            fetchAllProducts();
+        }
+    }, [loading, isLoggedIn, profile, isAuthorized]);
 
     const renderAllProducts = () => {
         if (!order.products) {
@@ -415,26 +421,82 @@ export default function Page() {
             );
         }
 
+        const isEditing = editingField === "product_id" && editingRowId === "product";
+
         return (
             <>
                 <TableRow>
                     <TableCell className="w-[85%]">
-                        <div className="flex items-center gap-2">
-                            {order.products?.slug ? (
-                                <Link
-                                    href={`/product/${order.products.slug}`}
-                                    target="_blank"
-                                    className="text-blue-600 hover:underline cursor-pointer"
+                        {isEditing ? (
+                            <div className="flex items-center gap-2">
+                                <Select
+                                    value={editedValue}
+                                    onValueChange={setEditedValue}
                                 >
-                                    {order.products?.product_name}
-                                </Link>
-                            ) : (
-                                <span>{order.products?.product_name}</span>
-                            )}
-                            {order.products?.sku && (
-                                <span className="text-xs text-gray-500">(SKU: {order.products.sku})</span>
-                            )}
-                        </div>
+                                    <SelectTrigger className="flex-1">
+                                        <SelectValue placeholder="Select product" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {allProducts.map(product => (
+                                            <SelectItem key={product.id} value={product.id}>
+                                                {product.product_name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button
+                                    size="sm"
+                                    onClick={() => handleProductSelect(editedValue)}
+                                    className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                                    disabled={!(isAdmin || isSMRole)}
+                                >
+                                    Save
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleCancelEdit}
+                                    className="cursor-pointer"
+                                    disabled={!(isAdmin || isSMRole)}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-between group">
+                                <div className="flex items-center gap-2">
+                                    {order.products?.slug ? (
+                                        <Link
+                                            href={`/product/${order.products.slug}`}
+                                            target="_blank"
+                                            className="text-blue-600 hover:underline cursor-pointer"
+                                        >
+                                            {order.products?.product_name}
+                                        </Link>
+                                    ) : (
+                                        <span>{order.products?.product_name}</span>
+                                    )}
+                                    {order.products?.sku && (
+                                        <span className="text-xs text-gray-500">(SKU: {order.products.sku})</span>
+                                    )}
+                                </div>
+                                {(isAdmin || isSMRole) && (
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 cursor-pointer"
+                                        onClick={() => {
+                                            console.log('Product edit clicked');
+                                            setEditingField("product_id");
+                                            setEditedValue(order.product_id || "");
+                                            setEditingRowId("product");
+                                        }}
+                                    >
+                                        <Pencil className="h-3 w-3" />
+                                    </Button>
+                                )}
+                            </div>
+                        )}
                     </TableCell>
                     <TableCell className="w-[15%] border-l text-center">
                         {order.quantity || 0}
@@ -444,79 +506,10 @@ export default function Page() {
         );
     };
 
-    // Helper function to render product selector for editing
-    const renderProductSelector = (field: string, currentProduct: any, rowId: string = "order") => {
-        const isEditing = editingField === field && editingRowId === rowId;
-
-        if (isEditing) {
-            return (
-                <div className="flex items-center gap-2">
-                    <Select
-                        value={editedValue}
-                        onValueChange={setEditedValue}
-                    >
-                        <SelectTrigger className="flex-1">
-                            <SelectValue placeholder="Select product" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {allProducts.map(product => (
-                                <SelectItem key={product.id} value={product.id}>
-                                    {product.product_name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Button
-                        size="sm"
-                        onClick={() => handleProductSelect(editedValue)}
-                        className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
-                    >
-                        Save
-                    </Button>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleCancelEdit}
-                        className="cursor-pointer"
-                    >
-                        Cancel
-                    </Button>
-                </div>
-            );
-        }
-
-        // Display product name
-        let displayText = "-";
-        if (order.products) {
-            displayText = order.products.product_name;
-        }
-
-        return (
-            <div className="flex items-center justify-between group">
-                <span>{displayText}</span>
-                {isActionAuthorized && (
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 cursor-pointer"
-                        onClick={() => {
-                            setEditingField(field);
-                            setEditedValue(order.product_id || "");
-                            setEditingRowId(rowId);
-                        }}
-                    >
-                        <Pencil className="h-3 w-3" />
-                    </Button>
-                )}
-            </div>
-        );
-    };
-
     // Handle returned quantity change
     const handleReturnedQuantityChange = (index: number, value: number) => {
         setReturnedProducts(prev => prev.map((product, i) => {
             if (i === index) {
-                // Ensure returned quantity doesn't exceed shipped quantity
                 const maxAllowed = product.shippedQuantity;
                 const newQuantity = Math.min(Math.max(0, value), maxAllowed);
                 return { ...product, returnedQuantity: newQuantity };
@@ -525,8 +518,6 @@ export default function Page() {
         }));
     };
 
-
-    // Add this interface near your other interfaces
     interface ReturnApiResponse {
         success: boolean;
         message: string;
@@ -538,16 +529,14 @@ export default function Page() {
     const handleReturnSubmit = async () => {
         console.log('handleReturnSubmit called');
 
-        if (!order || !isActionAuthorized) {
+        if (!order || !canEditStatus) {
             console.log('Condition failed');
             toast.error("Not authorized or no order");
             return;
         }
 
-
         const startTime = Date.now();
 
-        // Log return submission attempt
         await logActivity({
             type: 'order',
             level: 'info',
@@ -564,20 +553,15 @@ export default function Page() {
         });
 
         try {
-            // ✅ Loading toast
             toast.loading("Processing return...");
 
-            // ✅ DIRECT SUPA-BASE CALL
             const currentDate = new Date().toISOString().split('T')[0];
 
-            // Step 1: Update product quantities
             for (const returnedProduct of returnedProducts) {
                 if (returnedProduct.returnedQuantity > 0) {
-                    // Find the product in order.products (single product now)
                     const product = order.products;
 
                     if (product && product.id === returnedProduct.productId) {
-                        // Calculate new quantities
                         const currentStock = parseInt(product.stock_quantity) || 0;
                         const currentWithCustomer = parseInt(product.withCustomer) || 0;
 
@@ -594,7 +578,6 @@ export default function Page() {
                             newWithCustomer
                         });
 
-                        // Update product in database
                         const { error: productError } = await supabase
                             .from('products')
                             .update({
@@ -614,7 +597,6 @@ export default function Page() {
                 }
             }
 
-            // Step 2: Order status update
             const returnStatus = process.env.NEXT_PUBLIC_STATUS_RETURNED || "Returned";
 
             const { error: orderError } = await supabase
@@ -631,7 +613,6 @@ export default function Page() {
 
             console.log('✅ Order status updated to Returned');
 
-            // Step 3: Send email
             if (order.order_by_user?.email) {
                 try {
                     await sendReturnedOrderEmail({
@@ -645,23 +626,16 @@ export default function Page() {
                 }
             }
 
-            // ✅ Loading toast dismiss
             toast.dismiss();
-
-            // ✅ Success toast
             toast.success("Return processed successfully!");
 
-            // ✅ Close modal
             setIsReturnModalOpen(false);
-
-            // ✅ Reset state
             setReturnedProducts([]);
             setPendingStatusChange(null);
             setEditingField(null);
             setEditingRowId(null);
             setEditedValue("");
 
-            // ✅ Log success
             await logActivity({
                 type: 'order',
                 level: 'success',
@@ -679,7 +653,6 @@ export default function Page() {
                 status: 'completed'
             });
 
-            // ✅ Refresh data
             console.log('✅ Refreshing data immediately...');
             await fetchOrders();
             await fetchAllProducts();
@@ -688,13 +661,9 @@ export default function Page() {
             console.error('Error in handleReturnSubmit:', err);
             console.error('Error stack:', err.stack);
 
-            // ✅ Dismiss loading toast
             toast.dismiss();
-
-            // ✅ Show error toast
             toast.error(err.message || "Failed to process return");
 
-            // Log error
             await logActivity({
                 type: 'order',
                 level: 'error',
@@ -721,21 +690,16 @@ export default function Page() {
             const date = new Date(dateTimeString);
             if (isNaN(date.getTime())) return "-";
 
-            // Format: dd-MMM-yyyy (HH:MM AM/PM)
             const day = date.getDate().toString().padStart(2, '0');
             const month = date.toLocaleString('default', { month: 'short' });
             const year = date.getFullYear();
 
-            // Extract time parts
             let hours = date.getHours();
             const minutes = String(date.getMinutes()).padStart(2, '0');
-
-            // Convert to 12-hour format with AM/PM
             const ampm = hours >= 12 ? 'PM' : 'AM';
             hours = hours % 12;
             hours = hours ? hours : 12;
 
-            // Format: dd-MMM-yyyy (hh:mm AM/PM)
             return `${day}-${month}-${year} (${hours}:${minutes} ${ampm})`;
         } catch (error) {
             console.error('Error formatting action_date:', error);
@@ -750,22 +714,19 @@ export default function Page() {
                 onOpenChange={(open) => {
                     console.log('Modal open state changed:', open);
 
-                    // Only reset if modal is being closed
                     if (!open) {
                         console.log('Closing modal by user action');
 
-                        // Ask for confirmation if there are selected products
                         const hasSelectedProducts = returnedProducts.some(p => p.returnedQuantity > 0);
                         if (hasSelectedProducts) {
                             const confirmed = window.confirm(
                                 "You have selected products to return. Are you sure you want to cancel?"
                             );
                             if (!confirmed) {
-                                return; // Don't close the modal
+                                return;
                             }
                         }
 
-                        // Reset only when user explicitly closes modal
                         setIsReturnModalOpen(false);
                         setReturnedProducts([]);
                     }
@@ -834,7 +795,6 @@ export default function Page() {
                             </Table>
                         </div>
 
-                        {/* Summary Section */}
                         <div className="bg-gray-50 p-4 rounded">
                             <h4 className="font-semibold mb-3 text-lg">Return Summary</h4>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
@@ -862,13 +822,11 @@ export default function Page() {
                                 </div>
                             </div>
 
-                            {/* Quick Actions */}
                             <div className="mt-4 flex flex-wrap gap-2">
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     onClick={() => {
-                                        // Return all
                                         setReturnedProducts(prev => prev.map(p => ({
                                             ...p,
                                             returnedQuantity: p.shippedQuantity,
@@ -883,7 +841,6 @@ export default function Page() {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => {
-                                        // Return none
                                         setReturnedProducts(prev => prev.map(p => ({
                                             ...p,
                                             returnedQuantity: 0,
@@ -930,19 +887,18 @@ export default function Page() {
                                 console.log('=== CONFIRM RETURN CLICKED ===');
                                 console.log('Current state:', {
                                     order: order?.id,
-                                    isActionAuthorized,
+                                    canEditStatus,
                                     returnedProductsCount: returnedProducts.length,
                                     returnedProducts
                                 });
 
-                                // Check all conditions
                                 if (!order) {
                                     console.error('❌ No order');
                                     toast.error("No order data");
                                     return;
                                 }
 
-                                if (!isActionAuthorized) {
+                                if (!canEditStatus) {
                                     console.error('❌ Not authorized');
                                     toast.error("You are not authorized");
                                     return;
@@ -952,7 +908,7 @@ export default function Page() {
                                 handleReturnSubmit();
                             }}
                             className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
-                            disabled={!order || !isActionAuthorized}
+                            disabled={!order || !canEditStatus}
                         >
                             Confirm Return
                         </Button>
@@ -962,21 +918,11 @@ export default function Page() {
         );
     };
 
-
-    // Fetch data when authorized
-    useEffect(() => {
-        if (!loading && isLoggedIn && profile?.isVerified && isAuthorized) {
-            fetchOrders();
-            fetchAllProducts();
-        }
-    }, [loading, isLoggedIn, profile, isAuthorized]);
-
     const handleApprove = async () => {
-        if (!order || !isActionAuthorized) return;
+        if (!order || !canApproveReject) return;
 
         const startTime = Date.now();
 
-        // Log approve attempt
         await logActivity({
             type: 'order',
             level: 'info',
@@ -994,7 +940,6 @@ export default function Page() {
         });
 
         try {
-            // Update order status
             const { error } = await supabase
                 .from('orders')
                 .update({
@@ -1005,7 +950,6 @@ export default function Page() {
                 .eq('id', order.id);
 
             if (error) {
-                // Log approve error
                 await logActivity({
                     type: 'order',
                     level: 'error',
@@ -1043,9 +987,7 @@ export default function Page() {
                 status: 'completed'
             });
 
-            // Refresh data
             await fetchOrders();
-            // ✅ Send approved order email (after successful approval)
             sendApprovedOrderEmail(order);
 
             await logActivity({
@@ -1089,7 +1031,6 @@ export default function Page() {
         const shipped = new Date(shippedDate);
         const today = new Date();
 
-        // Calculate difference in days
         const diffTime = Math.abs(today.getTime() - shipped.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -1110,7 +1051,6 @@ export default function Page() {
         const date = calculateEstimatedReturnDate(shippedDate);
         if (!date) return "-";
 
-        // Format to dd-MMM-yyyy
         const day = date.getDate().toString().padStart(2, '0');
         const month = date.toLocaleString('default', { month: 'short' });
         const year = date.getFullYear();
@@ -1125,7 +1065,6 @@ export default function Page() {
         if (!estimatedReturnDate) return false;
 
         const today = new Date();
-        // Set both dates to midnight for accurate day comparison
         const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
         const returnDateMidnight = new Date(
             estimatedReturnDate.getFullYear(),
@@ -1136,7 +1075,6 @@ export default function Page() {
         return returnDateMidnight < todayMidnight;
     };
 
-    // Helper function to format date to dd-MMM-yyyy
     const formatDateToCustomFormat = (dateString: string | null) => {
         if (!dateString) return "-";
 
@@ -1163,11 +1101,10 @@ export default function Page() {
     };
 
     const handleReject = async () => {
-        if (!order || !isActionAuthorized) return;
+        if (!order || !canApproveReject) return;
 
         const startTime = Date.now();
 
-        // Log reject attempt
         await logActivity({
             type: 'order',
             level: 'info',
@@ -1187,7 +1124,6 @@ export default function Page() {
         try {
             const currentDate = new Date().toISOString().split('T')[0];
 
-            // Only update product quantities if current status is one of the allowed statuses
             const allowedPreviousStatuses = [
                 process.env.NEXT_PUBLIC_STATUS_AWAITING,
                 process.env.NEXT_PUBLIC_STATUS_PROCESSING,
@@ -1201,26 +1137,22 @@ export default function Page() {
                 const orderQuantity = order.quantity || 0;
 
                 if (orderQuantity > 0) {
-                    // Parse current product quantities
                     const currentStockQty = parseInt(order.products.stock_quantity) || 0;
                     const currentWithCustomerQty = parseInt(order.products.withCustomer) || 0;
 
-                    // Calculate new quantities
-                    const newStockQty = currentStockQty + orderQuantity; // Increase stock
-                    const newWithCustomerQty = currentWithCustomerQty - orderQuantity; // Decrease withCustomer
+                    const newStockQty = currentStockQty + orderQuantity;
+                    const newWithCustomerQty = currentWithCustomerQty - orderQuantity;
 
-                    // Ensure quantities don't go negative
                     const finalStockQty = Math.max(0, newStockQty).toString();
                     const finalWithCustomerQty = Math.max(0, newWithCustomerQty).toString();
 
-                    // Update product quantities
                     const { error: productUpdateError } = await supabase
                         .from('products')
                         .update({
                             stock_quantity: finalStockQty,
                             withCustomer: finalWithCustomerQty
                         })
-                        .eq('id', order.product_id); // Now directly using product_id
+                        .eq('id', order.product_id);
 
                     if (productUpdateError) {
                         await logActivity({
@@ -1263,7 +1195,6 @@ export default function Page() {
                 }
             }
 
-            // Update order status
             const updateData: any = {
                 order_status: `${process.env.NEXT_PUBLIC_STATUS_REJECTED}`,
                 rejected_by: profile?.id,
@@ -1296,22 +1227,23 @@ export default function Page() {
                 throw error;
             }
 
-            // ✅ Update local state immediately
+            // FIX: Use undefined instead of null for rejected_user
             setOrders(prev => prev.map(o =>
                 o.id === order.id ? {
                     ...o,
                     order_status: `${process.env.NEXT_PUBLIC_STATUS_REJECTED}`,
-                    rejected_by: profile?.id,
-                    rejectedBy: profile?.id,
+                    rejected_by: profile?.id || null,
+                    rejectedBy: profile?.id || null,
                     action_date: currentDate,
                     shipped_date: null,
                     returned_date: null,
+                    // Change null to undefined to match the Order type
                     rejected_user: profile ? {
                         id: profile.id,
                         email: profile.email,
-                        firstName: profile.firstName,
-                        lastName: profile.lastName
-                    } : undefined
+                        firstName: profile.firstName || '',
+                        lastName: profile.lastName || ''
+                    } : undefined // Changed from null to undefined
                 } : o
             ));
 
@@ -1336,7 +1268,6 @@ export default function Page() {
                 status: 'completed'
             });
 
-            // Send rejected email
             sendRejectedOrderEmail({ ...order, ...updateData });
 
             await logActivity({
@@ -1376,23 +1307,79 @@ export default function Page() {
         }
     };
 
-    // Edit functionality
     const handleEditClick = (field: string, value: string, rowId: string) => {
-        if (!isActionAuthorized) return;
+        // Check if user can edit this specific field based on their role
+        let canEdit = false;
+
+        // Admin can edit everything
+        if (isAdmin) {
+            canEdit = true;
+        }
+        // SM Role can edit specific fields
+        else if (isSMRole) {
+            // Fields that SM Role can edit
+            const smEditableFields = [
+                "order_status",
+                "tracking",
+                "return_tracking",
+                "tracking_link",
+                "return_tracking_link",
+                "username",
+                "case_type",
+                "password",
+                "product_id"
+            ];
+
+            if (smEditableFields.includes(field)) {
+                canEdit = true;
+            }
+        }
+
+        if (!canEdit) {
+            console.log('User cannot edit this field:', field);
+            return;
+        }
+
+        console.log('Setting editing field:', field, 'with value:', value);
         setEditingField(field);
         setEditedValue(value || "");
         setEditingRowId(rowId);
     };
 
     const handleSaveEdit = async (field: string) => {
-        if (!order || !isActionAuthorized || editingField !== field) return;
+        if (!order || editingField !== field) return;
+
+        // Check if user can edit this specific field
+        let canEdit = false;
+
+        // Admin can edit everything
+        if (isAdmin) {
+            canEdit = true;
+        }
+        // SM Role can edit specific fields
+        else if (isSMRole) {
+            const smEditableFields = [
+                "order_status",
+                "tracking",
+                "return_tracking",
+                "tracking_link",
+                "return_tracking_link",
+                "username",
+                "case_type",
+                "password",
+                "product_id"
+            ];
+
+            if (smEditableFields.includes(field)) {
+                canEdit = true;
+            }
+        }
+
+        if (!canEdit) return;
 
         const startTime = Date.now();
-
-        // Store the old value in case we need to revert
         const oldValue = order[field as keyof Order];
 
-        // Log edit attempt
         await logActivity({
             type: 'order',
             level: 'info',
@@ -1409,37 +1396,27 @@ export default function Page() {
             }
         });
 
+
         try {
             const updateData: any = { [field]: editedValue };
 
-            // 🔴 FIX 1: SPECIAL HANDLING FOR REJECTED STATUS - USE handleReject FUNCTION
             if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_REJECTED) {
                 console.log('Rejecting order via dropdown...');
-
-                // Call handleReject directly for consistent behavior
                 await handleReject();
-
-                // Reset editing state
                 setEditingField(null);
                 setEditingRowId(null);
                 setEditedValue("");
-                return; // Exit early since handleReject handles everything
+                return;
             }
 
-            // 🔴 FIX 2: Handle Processing status
             if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
-
-                // Call handleReject directly for consistent behavior
                 await handleApprove();
-
-                // Reset editing state
                 setEditingField(null);
                 setEditingRowId(null);
                 setEditedValue("");
-                return; // Exit early since handleReject handles everything
+                return;
             }
 
-            // Calculate revenue opportunity if device opportunity or budget is changed
             if (field === "dev_opportunity" || field === "dev_budget") {
                 const devOpportunity = field === "dev_opportunity" ? parseInt(editedValue) : order.dev_opportunity;
                 const devBudget = field === "dev_budget" ? parseFloat(editedValue) : order.dev_budget;
@@ -1465,9 +1442,7 @@ export default function Page() {
                 }
             }
 
-            // 🔴 FIX 3: Handle Shipped status with tracking validation
             if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED) {
-                // Check if tracking details are missing
                 if (!order.tracking || !order.tracking_link || !order.return_tracking || !order.return_tracking_link) {
                     await logActivity({
                         type: 'validation',
@@ -1492,38 +1467,31 @@ export default function Page() {
                         duration: 5000,
                     });
 
-                    // Open the tracking modal
                     setIsModalOpen(true);
-
-                    // Store the pending status change
                     setPendingStatusChange({
                         field: field,
                         value: editedValue,
                         rowId: editingRowId || "order"
                     });
 
-                    return; // Don't proceed with status change
+                    return;
                 }
             }
 
-            // 🔴 FIX 4: Handle Returned status via modal
             if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
                 handleStatusChangeToReturned(field, editedValue);
                 return;
             }
 
-            // 🔴 FIX 5: Update dates based on status changes
             if (field === "order_status") {
                 const currentDate = new Date().toISOString().split('T')[0];
 
-                // If changing to Shipped/Extension, set shipped_date
                 if (editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED ||
                     editedValue === process.env.NEXT_PUBLIC_STATUS_EXTENSION) {
                     updateData.shipped_date = currentDate;
                     updateData.returned_date = null;
                 }
 
-                // If changing to other statuses, clear dates
                 if (editedValue === process.env.NEXT_PUBLIC_STATUS_REJECTED ||
                     editedValue === process.env.NEXT_PUBLIC_STATUS_AWAITING ||
                     editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
@@ -1532,43 +1500,80 @@ export default function Page() {
                 }
             }
 
-            // 🔴 FIX 6: Clean optimistic update
             setOrders(prev => {
                 const updatedOrder = prev.map(o => {
                     if (o.id === order.id) {
                         const updated = { ...o, [field]: editedValue };
 
-                        // Update action_date and user fields
+                        // Find this section in handleSaveEdit function
                         if (field === "order_status") {
-                            if (editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
-                                updated.approvedBy = profile?.id;
-                                updated.action_date = new Date().toISOString().split('T')[0];
-                                updated.rejectedBy = null;
-                            }
+                            const currentDate = new Date().toISOString().split('T')[0];
 
-                            // Update dates
                             if (editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED ||
                                 editedValue === process.env.NEXT_PUBLIC_STATUS_EXTENSION) {
-                                updated.shipped_date = new Date().toISOString().split('T')[0];
-                                updated.returned_date = null;
-                            } else if (editedValue === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
-                                updated.returned_date = new Date().toISOString().split('T')[0];
-                                updated.shipped_date = null;
-                            } else if (editedValue === process.env.NEXT_PUBLIC_STATUS_REJECTED ||
+                                updateData.shipped_date = currentDate;
+                                updateData.returned_date = null;
+                            }
+
+                            if (editedValue === process.env.NEXT_PUBLIC_STATUS_REJECTED ||
                                 editedValue === process.env.NEXT_PUBLIC_STATUS_AWAITING ||
                                 editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
-                                updated.shipped_date = null;
-                                updated.returned_date = null;
+                                updateData.shipped_date = null;
+                                updateData.returned_date = null;
                             }
                         }
 
-                        // Handle product_id field
+                        setOrders(prev => {
+                            const updatedOrder = prev.map(o => {
+                                if (o.id === order.id) {
+                                    const updated = { ...o, [field]: editedValue };
+
+                                    if (field === "order_status") {
+                                        if (editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
+                                            // FIX: Convert undefined to null
+                                            updated.approvedBy = profile?.id || null; // Changed from profile?.id
+                                            updated.action_date = new Date().toISOString().split('T')[0];
+                                            updated.rejectedBy = null;
+                                        }
+
+                                        if (editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED ||
+                                            editedValue === process.env.NEXT_PUBLIC_STATUS_EXTENSION) {
+                                            updated.shipped_date = new Date().toISOString().split('T')[0];
+                                            updated.returned_date = null;
+                                        } else if (editedValue === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
+                                            updated.returned_date = new Date().toISOString().split('T')[0];
+                                            updated.shipped_date = null;
+                                        } else if (editedValue === process.env.NEXT_PUBLIC_STATUS_REJECTED ||
+                                            editedValue === process.env.NEXT_PUBLIC_STATUS_AWAITING ||
+                                            editedValue === process.env.NEXT_PUBLIC_STATUS_PROCESSING) {
+                                            updated.shipped_date = null;
+                                            updated.returned_date = null;
+                                        }
+                                    }
+
+                                    if (field === "product_id") {
+                                        updateData.product_id = editedValue;
+                                    }
+
+                                    if (field === "dev_opportunity" || field === "dev_budget") {
+                                        const devOpportunity = field === "dev_opportunity" ? parseInt(editedValue) : order.dev_opportunity;
+                                        const devBudget = field === "dev_budget" ? parseFloat(editedValue) : order.dev_budget;
+
+                                        if (devOpportunity && devBudget) {
+                                            updated.rev_opportunity = devOpportunity * devBudget;
+                                        }
+                                    }
+                                    return updated;
+                                }
+                                return o;
+                            });
+                            return updatedOrder;
+                        });
+
                         if (field === "product_id") {
-                            // For single product, just set the product_id directly
                             updateData.product_id = editedValue;
                         }
 
-                        // Update revenue opportunity if needed
                         if (field === "dev_opportunity" || field === "dev_budget") {
                             const devOpportunity = field === "dev_opportunity" ? parseInt(editedValue) : order.dev_opportunity;
                             const devBudget = field === "dev_budget" ? parseFloat(editedValue) : order.dev_budget;
@@ -1584,14 +1589,12 @@ export default function Page() {
                 return updatedOrder;
             });
 
-            // 🔴 FIX 7: Clean database update
             const { error } = await supabase
                 .from('orders')
                 .update(updateData)
                 .eq('id', order.id);
 
             if (error) {
-                // Revert optimistic update on error
                 setOrders(prev => prev.map(o =>
                     o.id === order.id ? { ...o, [field]: oldValue } : o
                 ));
@@ -1615,7 +1618,6 @@ export default function Page() {
                 throw error;
             }
 
-            // Log success
             await logActivity({
                 type: 'order',
                 level: 'success',
@@ -1634,7 +1636,6 @@ export default function Page() {
                 status: 'completed'
             });
 
-            // Send emails for status changes
             if (field === "order_status") {
                 const updatedOrder = { ...order, ...updateData };
 
@@ -1643,10 +1644,8 @@ export default function Page() {
                 } else if (editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED) {
                     sendShippedOrderEmail(updatedOrder);
                 }
-                // Rejected email already sent by handleReject function
             }
 
-            // Reset editing state
             setEditingField(null);
             setEditingRowId(null);
             setEditedValue("");
@@ -1687,7 +1686,6 @@ export default function Page() {
 
     useEffect(() => {
         if (!isModalOpen && pendingStatusChange) {
-            // User closed modal without saving - reset everything
             setPendingStatusChange(null);
             setEditingField(null);
             setEditingRowId(null);
@@ -1696,11 +1694,10 @@ export default function Page() {
     }, [isModalOpen, pendingStatusChange]);
 
     const handleTrackingUpdate = async () => {
-        if (!order || !isActionAuthorized) return;
+        if (!order || !canEditTracking) return;
 
         const startTime = Date.now();
 
-        // Log tracking update attempt
         await logActivity({
             type: 'order',
             level: 'info',
@@ -1716,7 +1713,6 @@ export default function Page() {
         });
 
         try {
-            // First update tracking data
             const { error } = await supabase
                 .from('orders')
                 .update({
@@ -1749,7 +1745,6 @@ export default function Page() {
                 throw error;
             }
 
-            // ✅ IMPORTANT: Update local state immediately
             setOrders(prev => prev.map(o =>
                 o.id === order.id ? {
                     ...o,
@@ -1781,15 +1776,11 @@ export default function Page() {
                 status: 'completed'
             });
 
-            // ✅ Check if there's a pending status change to Shipped
             if (pendingStatusChange && pendingStatusChange.field === "order_status") {
-                // Close modal first
                 setIsModalOpen(false);
 
-                // Show success toast
                 toast.success("Tracking details saved. Now updating status to Shipped...");
 
-                // Create updated order data with BOTH tracking and status
                 const updatedOrderData = {
                     ...order,
                     tracking: trackingData.tracking,
@@ -1803,7 +1794,6 @@ export default function Page() {
                     shipped_date: new Date().toISOString().split('T')[0]
                 };
 
-                // Now update the status
                 const { error: statusError } = await supabase
                     .from('orders')
                     .update({
@@ -1831,7 +1821,6 @@ export default function Page() {
                     throw statusError;
                 }
 
-                // ✅ Update local state for status change as well
                 setOrders(prev => prev.map(o =>
                     o.id === order.id ? {
                         ...o,
@@ -1839,10 +1828,8 @@ export default function Page() {
                     } : o
                 ));
 
-                // Send shipped email with the COMPLETE updated data
                 sendShippedOrderEmail(updatedOrderData);
 
-                // Log shipped email sent
                 await logActivity({
                     type: 'email',
                     level: 'info',
@@ -1858,7 +1845,6 @@ export default function Page() {
                     status: 'sent'
                 });
 
-                // Reset everything
                 setEditingField(null);
                 setEditingRowId(null);
                 setEditedValue("");
@@ -1866,7 +1852,6 @@ export default function Page() {
 
                 toast.success("Status updated to Shipped successfully!");
             } else {
-                // Close modal
                 setIsModalOpen(false);
                 toast.success("Tracking details updated successfully");
             }
@@ -1891,25 +1876,18 @@ export default function Page() {
         }
     };
 
-    // Function to send approved order email
+    // Email sending functions
     const sendApprovedOrderEmail = async (orderData: Order) => {
         try {
-            // Check if order has all required data
-            if (!orderData.order_by_user?.email) {
+            if (!orderData.order_by_user?.email || !orderData.products_array || orderData.products_array.length === 0) {
                 return;
             }
 
-            if (!orderData.products_array || orderData.products_array.length === 0) {
-                return;
-            }
-
-            // Prepare products array for email template
             const productsForEmail = orderData.products_array.map((product, index) => ({
                 name: product.product_name || `Product ${index + 1}`,
-                quantity: orderData.quantities_array?.[index] || 0 // Changed from quantity_array to quantities_array
+                quantity: orderData.quantities_array?.[index] || 0
             }));
 
-            // Calculate total quantity
             const totalQuantity = productsForEmail.reduce((sum, product) => sum + product.quantity, 0);
 
             const template = emailTemplates.approvedOrderEmail({
@@ -1917,16 +1895,13 @@ export default function Page() {
                 orderDate: orderData.order_date,
                 customerName: orderData.contact_name || "Customer",
                 customerEmail: orderData.order_by_user?.email,
-
                 products: productsForEmail,
                 totalQuantity: totalQuantity,
-
                 salesExecutive: orderData.sales_executive || "",
                 salesExecutiveEmail: orderData.se_email || "",
                 salesManager: orderData.sales_manager || "",
                 salesManagerEmail: orderData.sm_email || "",
                 reseller: orderData.reseller || "",
-
                 companyName: orderData.company_name || "",
                 contactName: orderData.contact_name || "",
                 contactEmail: orderData.email || "",
@@ -1935,7 +1910,6 @@ export default function Page() {
                 state: orderData.state || "",
                 zip: orderData.zip || "",
                 deliveryDate: orderData.desired_date || "",
-
                 deviceUnits: orderData.dev_opportunity || 0,
                 budgetPerDevice: orderData.dev_budget || 0,
                 revenue: orderData.rev_opportunity || 0,
@@ -1948,12 +1922,13 @@ export default function Page() {
                 usingCopilot: orderData.isCopilot || "",
                 securityFactor: orderData.isSecurity || "",
                 deviceProtection: orderData.current_protection || "",
-
                 note: orderData.notes || "",
             });
 
-            const result = await sendEmail({
-                to: orderData.order_by_user?.email,
+            const mergedEmails = [orderData.order_by_user?.email, ...ApprovedEmail];
+            await sendEmail({
+                to: mergedEmails,
+                cc: "",
                 subject: template.subject,
                 text: template.text,
                 html: template.html,
@@ -1963,25 +1938,17 @@ export default function Page() {
         }
     };
 
-    // Function to send rejected order email
     const sendRejectedOrderEmail = async (orderData: Order) => {
         try {
-            // Check if order has all required data
-            if (!orderData.order_by_user?.email) {
+            if (!orderData.order_by_user?.email || !orderData.products_array || orderData.products_array.length === 0) {
                 return;
             }
 
-            if (!orderData.products_array || orderData.products_array.length === 0) {
-                return;
-            }
-
-            // Prepare products array for email template
             const productsForEmail = orderData.products_array.map((product, index) => ({
                 name: product.product_name || `Product ${index + 1}`,
-                quantity: orderData.quantities_array?.[index] || 0 // Changed from quantity_array to quantities_array
+                quantity: orderData.quantities_array?.[index] || 0
             }));
 
-            // Calculate total quantity
             const totalQuantity = productsForEmail.reduce((sum, product) => sum + product.quantity, 0);
 
             const template = emailTemplates.rejectedOrderEmail({
@@ -1989,16 +1956,13 @@ export default function Page() {
                 orderDate: orderData.order_date,
                 customerName: orderData.contact_name || "Customer",
                 customerEmail: orderData.order_by_user?.email,
-
                 products: productsForEmail,
                 totalQuantity: totalQuantity,
-
                 salesExecutive: orderData.sales_executive || "",
                 salesExecutiveEmail: orderData.se_email || "",
                 salesManager: orderData.sales_manager || "",
                 salesManagerEmail: orderData.sm_email || "",
                 reseller: orderData.reseller || "",
-
                 companyName: orderData.company_name || "",
                 contactName: orderData.contact_name || "",
                 contactEmail: orderData.email || "",
@@ -2007,7 +1971,6 @@ export default function Page() {
                 state: orderData.state || "",
                 zip: orderData.zip || "",
                 deliveryDate: orderData.desired_date || "",
-
                 deviceUnits: orderData.dev_opportunity || 0,
                 budgetPerDevice: orderData.dev_budget || 0,
                 revenue: orderData.rev_opportunity || 0,
@@ -2020,12 +1983,12 @@ export default function Page() {
                 usingCopilot: orderData.isCopilot || "",
                 securityFactor: orderData.isSecurity || "",
                 deviceProtection: orderData.current_protection || "",
-
                 note: orderData.notes || "",
             });
 
-            const result = await sendEmail({
+            await sendEmail({
                 to: orderData.order_by_user?.email,
+                cc: "",
                 subject: template.subject,
                 text: template.text,
                 html: template.html,
@@ -2035,21 +1998,14 @@ export default function Page() {
         }
     };
 
-    // Function to send returned order email - UPDATED VERSION
     const sendReturnedOrderEmail = async (orderData: Order, returnedProductsData: typeof returnedProducts) => {
         try {
-            // Check if order has all required data
-            if (!orderData.order_by_user?.email) {
+            if (!orderData.order_by_user?.email || !orderData.products_array || orderData.products_array.length === 0) {
                 return;
             }
 
-            if (!orderData.products_array || orderData.products_array.length === 0) {
-                return;
-            }
-
-            // Prepare products array for email template with returned quantities
             const productsForEmail = orderData.products_array.map((product, index) => {
-                const shippedQuantity = orderData.quantities_array?.[index] || 0; // Changed from quantity_array to quantities_array
+                const shippedQuantity = orderData.quantities_array?.[index] || 0;
                 const returnedProduct = returnedProductsData.find(rp => rp.productId === product.id);
                 const returnedQuantity = returnedProduct?.returnedQuantity || 0;
                 const leftWithCustomer = shippedQuantity - returnedQuantity;
@@ -2062,7 +2018,6 @@ export default function Page() {
                 };
             });
 
-            // Calculate totals
             const totalShipped = productsForEmail.reduce((sum, product) => sum + product.shippedQuantity, 0);
             const totalReturned = productsForEmail.reduce((sum, product) => sum + product.returnedQuantity, 0);
             const totalLeft = totalShipped - totalReturned;
@@ -2072,18 +2027,15 @@ export default function Page() {
                 orderDate: orderData.order_date,
                 customerName: orderData.contact_name || "Customer",
                 customerEmail: orderData.order_by_user?.email,
-
                 products: productsForEmail,
                 totalQuantity: totalShipped,
                 totalReturned: totalReturned,
                 totalLeft: totalLeft,
-
                 salesExecutive: orderData.sales_executive || "",
                 salesExecutiveEmail: orderData.se_email || "",
                 salesManager: orderData.sales_manager || "",
                 salesManagerEmail: orderData.sm_email || "",
                 reseller: orderData.reseller || "",
-
                 companyName: orderData.company_name || "",
                 contactName: orderData.contact_name || "",
                 contactEmail: orderData.email || "",
@@ -2092,7 +2044,6 @@ export default function Page() {
                 state: orderData.state || "",
                 zip: orderData.zip || "",
                 deliveryDate: orderData.desired_date || "",
-
                 deviceUnits: orderData.dev_opportunity || 0,
                 budgetPerDevice: orderData.dev_budget || 0,
                 revenue: orderData.rev_opportunity || 0,
@@ -2105,12 +2056,14 @@ export default function Page() {
                 usingCopilot: orderData.isCopilot || "",
                 securityFactor: orderData.isSecurity || "",
                 deviceProtection: orderData.current_protection || "",
-
                 note: orderData.notes || "",
             });
 
-            const result = await sendEmail({
-                to: orderData.order_by_user?.email,
+            const mergedEmails = [orderData.order_by_user?.email, ...ReturnedEmail];
+
+            await sendEmail({
+                to: mergedEmails,
+                cc: "",
                 subject: template.subject,
                 text: template.text,
                 html: template.html,
@@ -2120,25 +2073,17 @@ export default function Page() {
         }
     };
 
-    // Function to send shipped order email
     const sendShippedOrderEmail = async (orderData: Order) => {
         try {
-            // Check if order has all required data
-            if (!orderData.order_by_user?.email) {
+            if (!orderData.order_by_user?.email || !orderData.products_array || orderData.products_array.length === 0) {
                 return;
             }
 
-            if (!orderData.products_array || orderData.products_array.length === 0) {
-                return;
-            }
-
-            // Prepare products array for email template
             const productsForEmail = orderData.products_array.map((product, index) => ({
                 name: product.product_name || `Product ${index + 1}`,
-                quantity: orderData.quantities_array?.[index] || 0 // Changed from quantity_array to quantities_array
+                quantity: orderData.quantities_array?.[index] || 0
             }));
 
-            // Calculate total quantity
             const totalQuantity = productsForEmail.reduce((sum, product) => sum + product.quantity, 0);
 
             const template = emailTemplates.shippedOrderEmail({
@@ -2146,23 +2091,19 @@ export default function Page() {
                 orderDate: orderData.order_date,
                 customerName: orderData.contact_name || "Customer",
                 customerEmail: orderData.order_by_user?.email,
-
                 orderTracking: orderData.tracking || "",
                 orderTrackingLink: orderData.tracking_link || "",
                 returnTracking: orderData.return_tracking || "",
                 returnTrackingLink: orderData.return_tracking_link || "",
                 caseType: orderData.case_type || "",
                 fileLink: orderData.return_label || "",
-
                 products: productsForEmail,
                 totalQuantity: totalQuantity,
-
                 salesExecutive: orderData.sales_executive || "",
                 salesExecutiveEmail: orderData.se_email || "",
                 salesManager: orderData.sales_manager || "",
                 salesManagerEmail: orderData.sm_email || "",
                 reseller: orderData.reseller || "",
-
                 companyName: orderData.company_name || "",
                 contactName: orderData.contact_name || "",
                 contactEmail: orderData.email || "",
@@ -2171,7 +2112,6 @@ export default function Page() {
                 state: orderData.state || "",
                 zip: orderData.zip || "",
                 deliveryDate: orderData.desired_date || "",
-
                 deviceUnits: orderData.dev_opportunity || 0,
                 budgetPerDevice: orderData.dev_budget || 0,
                 revenue: orderData.rev_opportunity || 0,
@@ -2184,16 +2124,19 @@ export default function Page() {
                 usingCopilot: orderData.isCopilot || "",
                 securityFactor: orderData.isSecurity || "",
                 deviceProtection: orderData.current_protection || "",
-
                 note: orderData.notes || "",
             });
 
-            const result = await sendEmail({
-                to: orderData.order_by_user?.email,
+            const mergedEmails = [orderData.order_by_user?.email, ...ShippedEmail];
+
+            await sendEmail({
+                to: mergedEmails,
+                cc: "",
                 subject: template.subject,
                 text: template.text,
                 html: template.html,
             });
+
         } catch (error) {
             console.error('Error sending shipped order email:', error);
         }
@@ -2201,14 +2144,13 @@ export default function Page() {
 
     // Handle file upload for return label
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (!order || !isActionAuthorized) return;
+        if (!order || !canUploadReturnLabel) return;
 
         const file = event.target.files?.[0];
         if (!file) return;
 
         const startTime = Date.now();
 
-        // Log file upload attempt
         await logActivity({
             type: 'order',
             level: 'info',
@@ -2225,7 +2167,6 @@ export default function Page() {
             }
         });
 
-        // Check if file is PDF
         if (
             file.type !== 'application/pdf' &&
             !file.name.toLowerCase().endsWith('.pdf')
@@ -2258,8 +2199,6 @@ export default function Page() {
             const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
             const filePath = `return-labels/${order.order_no}/${fileName}`;
 
-
-            // Upload file to Supabase storage
             const { error: uploadError } = await supabase.storage
                 .from('TdSynnex')
                 .upload(filePath, file, {
@@ -2287,13 +2226,10 @@ export default function Page() {
                 throw uploadError;
             }
 
-            // Get public URL
             const { data: { publicUrl } } = supabase.storage
                 .from('TdSynnex')
                 .getPublicUrl(filePath);
 
-
-            // Update order with the file URL
             const { error: updateError } = await supabase
                 .from('orders')
                 .update({ return_label: publicUrl })
@@ -2337,13 +2273,10 @@ export default function Page() {
                 status: 'completed'
             });
 
-
-            // Update local state
             setOrders(prev => prev.map(o =>
                 o.id === order.id ? { ...o, return_label: publicUrl } : o
             ));
 
-            // Clear the file input
             event.target.value = '';
 
         } catch (err: any) {
@@ -2369,13 +2302,16 @@ export default function Page() {
         }
     };
 
-    // Handle product selection - now updates single product
+    // Handle product selection
     const handleProductSelect = async (productId: string) => {
-        if (!order || !isActionAuthorized) return;
+        // Both Admin and SM Role can change product
+        if (!order || !(isAdmin || isSMRole)) {
+            toast.error("You don't have permission to change product");
+            return;
+        }
 
         const startTime = Date.now();
 
-        // Log product selection attempt
         await logActivity({
             type: 'order',
             level: 'info',
@@ -2393,11 +2329,10 @@ export default function Page() {
         });
 
         try {
-            // Update the order with the new product ID (single product)
             const { error } = await supabase
                 .from('orders')
                 .update({
-                    product_id: productId // Store as single UUID, not JSON
+                    product_id: productId
                 })
                 .eq('id', order.id);
 
@@ -2439,10 +2374,8 @@ export default function Page() {
                 status: 'completed'
             });
 
-            // Refresh data to get updated product info
+            toast.success("Product updated successfully!");
             await fetchOrders();
-
-            // Reset editing state AFTER successful update
             setEditingField(null);
             setEditingRowId(null);
             setEditedValue("");
@@ -2463,6 +2396,7 @@ export default function Page() {
                 },
                 status: 'failed'
             });
+            toast.error("Failed to update product");
         }
     };
 
@@ -2506,6 +2440,28 @@ export default function Page() {
         const displayValue = value || "-";
         const isEditing = editingField === field && editingRowId === rowId;
 
+        // Check if user can edit this field
+        let canEdit = false;
+
+        if (isAdmin) {
+            canEdit = true;
+        } else if (isSMRole) {
+            // SM Role can edit these specific fields
+            const smEditableFields = [
+                "tracking",
+                "return_tracking",
+                "tracking_link",
+                "return_tracking_link",
+                "username",
+                "case_type",
+                "password"
+            ];
+
+            if (smEditableFields.includes(field)) {
+                canEdit = true;
+            }
+        }
+
         if (isEditing) {
             return (
                 <div className="flex items-center gap-2">
@@ -2519,6 +2475,7 @@ export default function Page() {
                         size="sm"
                         onClick={() => handleSaveEdit(field)}
                         className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                        disabled={!canEdit}
                     >
                         Save
                     </Button>
@@ -2527,6 +2484,7 @@ export default function Page() {
                         variant="outline"
                         onClick={handleCancelEdit}
                         className="cursor-pointer"
+                        disabled={!canEdit}
                     >
                         Cancel
                     </Button>
@@ -2537,7 +2495,7 @@ export default function Page() {
         return (
             <div className="flex items-center justify-between group">
                 <span>{displayValue}</span>
-                {isActionAuthorized && (
+                {canEdit && (
                     <Button
                         size="sm"
                         variant="ghost"
@@ -2552,10 +2510,8 @@ export default function Page() {
     };
 
     const renderStatusDropdown = (field: string, value: any, rowId: string = "order") => {
-        const displayValue = value || "-";
         const isEditing = editingField === field && editingRowId === rowId;
 
-        // Check if there's a pending status change for this field
         const isPendingShipped = pendingStatusChange &&
             pendingStatusChange.field === field &&
             pendingStatusChange.value === process.env.NEXT_PUBLIC_STATUS_SHIPPED &&
@@ -2573,7 +2529,6 @@ export default function Page() {
                         value={isPendingShipped || isPendingReturned ? pendingStatusChange!.value : editedValue}
                         onValueChange={(val) => {
                             console.log('Status dropdown value changed:', val);
-                            // Special handling for Returned status
                             if (val === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
                                 console.log('Returned status selected, calling handleStatusChangeToReturned');
                                 handleStatusChangeToReturned(field, val, rowId);
@@ -2598,7 +2553,6 @@ export default function Page() {
                         size="sm"
                         onClick={() => {
                             console.log('Save button clicked in status dropdown');
-                            // If it's Rejected, handleReject will be called via handleSaveEdit
                             if (editedValue !== process.env.NEXT_PUBLIC_STATUS_RETURNED) {
                                 console.log('Saving non-return status');
                                 handleSaveEdit(field);
@@ -2607,6 +2561,7 @@ export default function Page() {
                             }
                         }}
                         className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                        disabled={!canEditStatus}
                     >
                         {isPendingShipped ? "Awaiting Tracking..." :
                             isPendingReturned ? "Processing Return..." : "Save"}
@@ -2623,6 +2578,7 @@ export default function Page() {
                             handleCancelEdit();
                         }}
                         className="cursor-pointer"
+                        disabled={!canEditStatus}
                     >
                         Cancel
                     </Button>
@@ -2645,14 +2601,18 @@ export default function Page() {
         return (
             <div className="flex items-center justify-between group">
                 <span>{statusLabel}</span>
-                {isActionAuthorized && (
+                {canEditStatus && (
                     <Button
                         size="sm"
                         variant="ghost"
                         className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 cursor-pointer"
+                        // In renderStatusDropdown function, update the onClick handler
                         onClick={() => {
                             console.log('Edit button clicked for status');
-                            handleEditClick(field, value, rowId);
+                            // Directly call handleEditClick instead of going through the function
+                            setEditingField(field);
+                            setEditedValue(value || "");
+                            setEditingRowId(rowId);
                         }}
                     >
                         <Pencil className="h-3 w-3" />
@@ -2687,7 +2647,7 @@ export default function Page() {
                     </div>
                 )}
 
-                {isActionAuthorized && (
+                {canUploadReturnLabel && (
                     <div className="mt-2">
                         <input
                             type="file"
@@ -2725,6 +2685,7 @@ export default function Page() {
                         size="sm"
                         onClick={() => handleSaveEdit("notes")}
                         className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                        disabled={!canEditAll}
                     >
                         Save
                     </Button>
@@ -2733,6 +2694,7 @@ export default function Page() {
                         variant="outline"
                         onClick={handleCancelEdit}
                         className="cursor-pointer"
+                        disabled={!canEditAll}
                     >
                         Cancel
                     </Button>
@@ -2748,7 +2710,7 @@ export default function Page() {
                         {order.notes || "No notes available"}
                     </div>
                 </div>
-                {isActionAuthorized && (
+                {canEditAll && (
                     <Button
                         size="sm"
                         variant="ghost"
@@ -2795,7 +2757,7 @@ export default function Page() {
                                                 <span className="text-gray-500">No tracking available</span>
                                             )}
                                         </div>
-                                        {isActionAuthorized && (
+                                        {canEditTracking && (
                                             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                                                 <DialogTrigger asChild>
                                                     <Button
@@ -2882,6 +2844,7 @@ export default function Page() {
                                                         <Button
                                                             onClick={handleTrackingUpdate}
                                                             className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                                                            disabled={!canEditTracking}
                                                         >
                                                             Save Changes
                                                         </Button>
@@ -2951,11 +2914,8 @@ export default function Page() {
                 </>
             )}
 
-            {/* Main content with 70/30 split */}
             <div className="flex flex-col lg:flex-row gap-6">
-                {/* Left column - 75% */}
                 <div className="lg:w-[72%] space-y-6">
-                    {/* Orders Section with Approve/Reject Buttons */}
                     <div>
                         {order.order_status !== process.env.NEXT_PUBLIC_STATUS_AWAITING && profile?.role !== process.env.NEXT_PUBLIC_SUBSCRIBER && (
                             <>
@@ -2964,33 +2924,35 @@ export default function Page() {
                         )}
                         {order.order_status === process.env.NEXT_PUBLIC_STATUS_AWAITING && profile?.role !== process.env.NEXT_PUBLIC_SUBSCRIBER ? (
                             <>
-                                <Table className="hover:bg-white">
-                                    <TableBody>
-                                        <TableRow>
-                                            <TableCell colSpan={2}>
-                                                <div className="flex">
-                                                    <Button
-                                                        onClick={handleApprove}
-                                                        className="bg-[#0A4647] hover:bg-[#093131] text-white cursor-pointer flex items-center gap-2"
-                                                        disabled={!isActionAuthorized}
-                                                    >
-                                                        <CheckCircle size={18} />
-                                                        Approve Order
-                                                    </Button>
-                                                    <Button
-                                                        onClick={handleReject}
-                                                        className="bg-red-700 hover:bg-red-800 text-white cursor-pointer mx-4 flex items-center gap-2"
-                                                        variant="destructive"
-                                                        disabled={!isActionAuthorized}
-                                                    >
-                                                        <XCircle size={18} />
-                                                        Reject Order
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    </TableBody>
-                                </Table>
+                                {canApproveReject && (
+                                    <Table className="hover:bg-white">
+                                        <TableBody>
+                                            <TableRow>
+                                                <TableCell colSpan={2}>
+                                                    <div className="flex">
+                                                        <Button
+                                                            onClick={handleApprove}
+                                                            className="bg-[#0A4647] hover:bg-[#093131] text-white cursor-pointer flex items-center gap-2"
+                                                            disabled={!canApproveReject}
+                                                        >
+                                                            <CheckCircle size={18} />
+                                                            Approve Order
+                                                        </Button>
+                                                        <Button
+                                                            onClick={handleReject}
+                                                            className="bg-red-700 hover:bg-red-800 text-white cursor-pointer mx-4 flex items-center gap-2"
+                                                            variant="destructive"
+                                                            disabled={!canApproveReject}
+                                                        >
+                                                            <XCircle size={18} />
+                                                            Reject Order
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                )}
                                 <div className="my-6">
                                     <h1 className="text-2xl font-bold">Order #{order.order_no}</h1>
                                     <p className="text-gray-600 mt-2">Order Date: {formatDateToCustomFormat(order.order_date)}</p>
@@ -3056,7 +3018,6 @@ export default function Page() {
                             </TableHeader>
                             <TableBody>
                                 {renderAllProducts()}
-                                {/* Single Total row - removed duplicate */}
                             </TableBody>
                         </Table>
                     </div>
@@ -3259,7 +3220,6 @@ export default function Page() {
                     </div>
                 </div>
 
-                {/* Right column - 25% */}
                 <div className="lg:w-[28%] space-y-6">
                     <div>
                         <h2 className="text-lg font-semibold mb-4">Shipping Details</h2>
@@ -3278,7 +3238,6 @@ export default function Page() {
                                                 : order.order_status
                                             : renderStatusDropdown("order_status", order.order_status, "status")
                                         }
-
                                     </TableCell>
                                 </TableRow>
                             </TableBody>
@@ -3287,7 +3246,6 @@ export default function Page() {
 
                     {renderTrackingSection()}
 
-                    {/* Days Since Shipped & Overdue Status Section */}
                     {order.shipped_date && (
                         <div>
                             <Table className="border">
@@ -3376,7 +3334,6 @@ export default function Page() {
                                                     )}
                                                 </div>
 
-                                                {/* Agar multiple wins hain toh dropdown show karein */}
                                                 {order.wins && order.wins.length > 1 && (
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
@@ -3416,6 +3373,6 @@ export default function Page() {
                 </div>
             </div>
             {renderReturnModal()}
-        </div >
+        </div>
     )
 }

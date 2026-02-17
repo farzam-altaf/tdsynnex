@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
-import { emailTemplates, sendEmail } from "@/lib/email";
 import { logger, logAuth, logError, logSuccess } from "@/lib/logger";
 import crypto from 'crypto';
 
@@ -512,7 +511,6 @@ export default function LoginForm() {
     });
     // Send welcome email
     const userName = userData?.firstName || "User";
-    await sendLoginEmail(userName, userEmail, userId);
 
     // Reset form
     setEmail("");
@@ -533,32 +531,6 @@ export default function LoginForm() {
     router.push(redirectPath);
   };
 
-  const sendLoginEmail = async (name: string, userEmail: string, userId?: string) => {
-    try {
-      const template = emailTemplates.welcomeEmail(name, userEmail);
-
-      const result = await sendEmail({
-        to: userEmail,
-        subject: template.subject,
-        text: template.text,
-        html: template.html,
-      });
-
-      if (result.success) {
-        await logger.success('email', 'welcome_email_sent', `Welcome email sent to: ${userEmail}`, {
-          to: userEmail,
-          subject: template.subject
-        }, userId, source);
-      } else {
-        await logger.warning('email', 'welcome_email_failed', `Failed to send welcome email to: ${userEmail}`, {
-          to: userEmail,
-          error: result.error
-        }, userId, source);
-      }
-    } catch (emailError) {
-      await logError('email', 'email_send_exception', `Exception while sending welcome email`, emailError, userId, source);
-    }
-  };
 
   return (
     <div className="relative min-h-screen">

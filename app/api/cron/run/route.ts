@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/client";
 import { emailTemplates, sendCronEmail } from "@/lib/email";
 import { logEmail } from "@/lib/logger";
+import { BackInStockCCEmail } from "@/lib/emailconst";
 
 const CRON_SECRET = process.env.CRON_SECRET!;
 
@@ -60,6 +61,7 @@ export async function GET(request: NextRequest) {
 
         const emailResult = await sendCronEmail({
           to: entry.email,
+          cc: BackInStockCCEmail,
           subject: template.subject,
           html: template.html,
           text: template.text,

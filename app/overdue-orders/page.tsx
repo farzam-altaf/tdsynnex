@@ -691,6 +691,7 @@ export default function Page() {
                     // Send email
                     await sendEmail({
                         to: order.users.email,
+                        cc: "",
                         subject: template.subject,
                         text: template.text,
                         html: template.html,
@@ -1010,10 +1011,9 @@ export default function Page() {
 
     // Define columns for orders
     const columns: ColumnDef<Order>[] = [
-        // Select column
-        {
+        ...(profile?.role !== smRole ? [{
             id: "select",
-            header: ({ table }) => (
+            header: ({ table }: { table: any }) => ( // Add type here
                 <div className="flex justify-center">
                     <button
                         onClick={handleSelectAll}
@@ -1029,8 +1029,8 @@ export default function Page() {
                     </button>
                 </div>
             ),
-            cell: ({ row }) => {
-                const order = row.original;
+            cell: ({ row }: { row: any }) => { // Add type here
+                const order = row.original as Order; // Type assertion
                 return (
                     <div className="flex justify-center">
                         <input
@@ -1044,7 +1044,7 @@ export default function Page() {
             },
             enableSorting: false,
             enableHiding: false,
-        },
+        }] : []),
         {
             accessorKey: "order_no",
             header: ({ column }) => {
@@ -1528,8 +1528,7 @@ export default function Page() {
                 </div>
             </div>
 
-            {/* Send Reminders Button */}
-            {selectedCount > 0 && (
+            {profile?.role !== smRole && selectedCount > 0 && (
                 <div className="mb-6 p-4 rounded-lg">
                     <div className="flex items-center justify-between">
                         <div>
@@ -1543,13 +1542,13 @@ export default function Page() {
                                 onClick={handleSendReminders}
                                 disabled={isSendingReminders}
                                 className="
-                                    flex items-center gap-2
-                                    bg-blue-900 hover:bg-blue-700
-                                    text-white  {/* Changed from text-black */}
-                                    px-4 py-2
-                                    rounded-md
-                                    disabled:opacity-50
-                                "
+                        flex items-center gap-2
+                        bg-blue-900 hover:bg-blue-700
+                        text-white
+                        px-4 py-2
+                        rounded-md
+                        disabled:opacity-50
+                    "
                             >
                                 {isSendingReminders ? "Sending..." : "Send Reminders"}
                             </button>
