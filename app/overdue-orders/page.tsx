@@ -136,7 +136,6 @@ export default function Page() {
 
             return `${day}-${month}-${year}`;
         } catch (error) {
-            console.error('Error formatting date:', error);
             return '-';
         }
     };
@@ -502,7 +501,6 @@ export default function Page() {
             const emailPromises = selectedOrdersData.map(async (order: any) => {
                 // Check if user has email
                 if (!order.users?.email) {
-                    console.warn(`No email found for user with ID: ${order.order_by}`);
                     return {
                         success: false,
                         orderId: order.id,
@@ -517,9 +515,6 @@ export default function Page() {
                     let products: any[] = [];
                     let totalQuantity = 0;
 
-                    // Debug: Check what's in the fields
-                    console.log(`Order ${order.order_no} product_id:`, order.product_id, typeof order.product_id);
-                    console.log(`Order ${order.order_no} quantity:`, order.quantity, typeof order.quantity);
 
                     try {
                         // Handle product_id as JSON array string
@@ -553,10 +548,6 @@ export default function Page() {
                                     quantities.push(1);
                                 }
 
-                                console.log(`Parsed for order ${order.order_no}:`);
-                                console.log('Product IDs:', productIds);
-                                console.log('Quantities:', quantities);
-
                                 // Fetch all products
                                 if (productIds.length > 0) {
                                     const { data: productsData, error: productsError } = await supabase
@@ -581,17 +572,14 @@ export default function Page() {
                                             return sum + (Number(product.quantity) || 1);
                                         }, 0);
 
-                                        console.log(`Successfully processed ${products.length} products for order ${order.order_no}`);
                                     }
                                 }
                             } catch (parseError) {
-                                console.error(`Error parsing product arrays for order ${order.order_no}:`, parseError);
                             }
                         }
 
                         // If no products found, fallback to single product
                         if (products.length === 0) {
-                            console.log(`Using fallback for order ${order.order_no}`);
                             // Try single product ID
                             if (order.product_id && typeof order.product_id === 'string') {
                                 try {
@@ -610,7 +598,6 @@ export default function Page() {
                                         totalQuantity = 1;
                                     }
                                 } catch (singleError) {
-                                    console.error(`Single product fetch error:`, singleError);
                                 }
                             }
 
@@ -625,7 +612,6 @@ export default function Page() {
                             }
                         }
                     } catch (itemsErr) {
-                        console.error(`Error processing products for order ${order.order_no}:`, itemsErr);
                         // Use default product
                         products = [{
                             name: "Standard Device Package",
@@ -747,7 +733,6 @@ export default function Page() {
                         },
                         status: 'failed'
                     });
-                    console.error(`Failed to send email for order ${order.order_no}:`, emailError);
                     return {
                         success: false,
                         orderId: order.id,
@@ -1011,7 +996,7 @@ export default function Page() {
 
     // Define columns for orders
     const columns: ColumnDef<Order>[] = [
-        ...(profile?.role !== smRole ? [{
+        ...(profile?.role !== smRole && profile?.role !== sRole ? [{
             id: "select",
             header: ({ table }: { table: any }) => ( // Add type here
                 <div className="flex justify-center">

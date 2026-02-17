@@ -54,7 +54,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 })
                 .eq('email', authUser.email)
                 
-                console.log(authUser)
         }
 
         const { data, error } = await supabase

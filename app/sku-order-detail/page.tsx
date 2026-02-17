@@ -385,7 +385,6 @@ export default function Page() {
 
             return `${day}-${month}-${year}`;
         } catch (error) {
-            console.error('Error formatting date:', error);
             return '-';
         }
     };
@@ -572,7 +571,6 @@ export default function Page() {
 
             return data || [];
         } catch (error) {
-            console.error('Error fetching product details:', error);
             return [];
         }
     };

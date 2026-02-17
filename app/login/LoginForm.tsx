@@ -267,8 +267,6 @@ export default function LoginForm() {
     return isValid;
   };
 
-  console.log(profile);
-
   const signin = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitted(true);
@@ -282,11 +280,8 @@ export default function LoginForm() {
     setLoading(true);
     const trimmedEmail = email.trim().toLowerCase();
 
-    console.log('🔍 Debug - Login attempt for:', trimmedEmail);
 
     try {
-      // 1. Try normal login first
-      console.log('🔄 Attempting normal Supabase auth...');
 
       const { data: normalAuthData, error: normalAuthError } = await supabase.auth.signInWithPassword({
         email: trimmedEmail,
@@ -294,15 +289,9 @@ export default function LoginForm() {
       });
 
       if (!normalAuthError && normalAuthData?.user) {
-        console.log('✅ Normal auth successful');
         await handleSuccessfulLogin(normalAuthData.user.id, trimmedEmail, startTime, false);
         return;
       }
-
-      console.log('❌ Normal auth failed:', normalAuthError?.message);
-
-      // 2. Use the existing Next.js API route instead of Edge Function
-      console.log('🔄 Falling back to Next.js API route...');
 
       try {
         const verifyResponse = await fetch('/api/user-verification', {
@@ -313,7 +302,6 @@ export default function LoginForm() {
           body: JSON.stringify({ email: trimmedEmail, password }),
         });
 
-        console.log('📡 API Response status:', verifyResponse.status);
 
         if (!verifyResponse.ok) {
           const errorText = await verifyResponse.text();
@@ -330,8 +318,6 @@ export default function LoginForm() {
         }
 
         const verifyData = await verifyResponse.json();
-        console.log('✅ API Response data:', verifyData);
-
         if (!verifyData.success) {
           toast.error(verifyData.error || "Invalid credentials");
           setLoading(false);
@@ -340,7 +326,6 @@ export default function LoginForm() {
 
         // 3. Handle API response
         if (verifyData.existsInAuth) {
-          console.log('🔄 User exists in Auth, trying login again...');
 
           // Try login again with Supabase
           const { data: newAuthData, error: newAuthError } = await supabase.auth.signInWithPassword({
@@ -363,7 +348,6 @@ export default function LoginForm() {
             }
             setLoading(false);
           } else {
-            console.log('✅ Login successful after API migration');
             await handleSuccessfulLogin(newAuthData.user.id, trimmedEmail, startTime, true);
           }
         } else {
@@ -488,8 +472,6 @@ export default function LoginForm() {
         loginCount: userData?.login_count
       }
     }, userId, source);
-
-    console.log(userData);
 
 
     const { error: uErr } = await supabase

@@ -218,24 +218,17 @@ export default function Page() {
 
     // Helper function to handle status change to Returned
     const handleStatusChangeToReturned = (field: string, value: string, rowId: string = "order") => {
-        console.log('handleStatusChangeToReturned called:', { field, value, rowId });
 
         if (field !== "order_status" || value !== process.env.NEXT_PUBLIC_STATUS_RETURNED) {
-            console.log('Not a return status change');
             return;
         }
 
         if (!order || !canEditStatus) {
-            console.log('No order or not authorized:', { hasOrder: !!order, canEditStatus });
             return;
         }
 
         // Check if order has shipped products
         if (!order.shipped_date || !order.products) {
-            console.log('Order not shipped or no products:', {
-                hasShippedDate: !!order.shipped_date,
-                hasProducts: !!order.products
-            });
             toast.error("Order is not shipped or has no products");
             return;
         }
@@ -249,7 +242,6 @@ export default function Page() {
             isDamaged: false
         }];
 
-        console.log('Setting returned products:', productsData);
         setReturnedProducts(productsData);
 
         const pendingChange = {
@@ -257,10 +249,8 @@ export default function Page() {
             value: value,
             rowId: rowId
         };
-        console.log('Setting pending status change:', pendingChange);
         setPendingStatusChange(pendingChange);
 
-        console.log('Opening return modal');
         setIsReturnModalOpen(true);
     };
 
@@ -301,7 +291,6 @@ export default function Page() {
             setIsLoading(true);
             setError(null);
 
-            console.log('🔍 Fetching order details...');
 
             let query = supabase
                 .from('orders')
@@ -318,15 +307,12 @@ export default function Page() {
             const { data, error: supabaseError } = await query;
 
             if (supabaseError) {
-                console.error('Supabase error:', supabaseError);
                 throw supabaseError;
             }
 
             if (data && data.length > 0) {
-                console.log("📦 Fetched raw data:", data[0]);
 
                 if (sRole === profile?.role && data[0].order_by !== profile?.id) {
-                    console.warn('⚠️ Unauthorized access attempt');
                     router.back();
                     return;
                 }
@@ -358,7 +344,6 @@ export default function Page() {
                     } : undefined
                 };
 
-                console.log("✅ Processed order:", processedOrder);
                 setOrders([processedOrder]);
 
                 setTrackingData({
@@ -390,7 +375,6 @@ export default function Page() {
             }
 
         } catch (err: unknown) {
-            console.error('❌ Error in fetchOrders:', err);
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch orders');
             } else {
@@ -398,7 +382,6 @@ export default function Page() {
             }
         } finally {
             setIsLoading(false);
-            console.log('🏁 fetchOrders completed');
         }
     };
 
@@ -486,7 +469,6 @@ export default function Page() {
                                         variant="ghost"
                                         className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 cursor-pointer"
                                         onClick={() => {
-                                            console.log('Product edit clicked');
                                             setEditingField("product_id");
                                             setEditedValue(order.product_id || "");
                                             setEditingRowId("product");
@@ -527,10 +509,8 @@ export default function Page() {
     }
 
     const handleReturnSubmit = async () => {
-        console.log('handleReturnSubmit called');
 
         if (!order || !canEditStatus) {
-            console.log('Condition failed');
             toast.error("Not authorized or no order");
             return;
         }
@@ -568,15 +548,6 @@ export default function Page() {
                         const newStock = currentStock + returnedProduct.returnedQuantity;
                         const newWithCustomer = Math.max(0, currentWithCustomer - returnedProduct.shippedQuantity);
 
-                        console.log(`Updating product ${product.product_name}:`, {
-                            productId: returnedProduct.productId,
-                            currentStock,
-                            currentWithCustomer,
-                            shippedQuantity: returnedProduct.shippedQuantity,
-                            returnedQuantity: returnedProduct.returnedQuantity,
-                            newStock,
-                            newWithCustomer
-                        });
 
                         const { error: productError } = await supabase
                             .from('products')
@@ -590,7 +561,6 @@ export default function Page() {
                             throw new Error(`Failed to update product ${product.product_name}: ${productError.message}`);
                         }
 
-                        console.log(`✅ Product ${product.product_name} updated successfully`);
                     } else {
                         console.warn(`Product ${returnedProduct.productId} not found in order`);
                     }
@@ -611,8 +581,6 @@ export default function Page() {
                 throw new Error(`Failed to update order: ${orderError.message}`);
             }
 
-            console.log('✅ Order status updated to Returned');
-
             if (order.order_by_user?.email) {
                 try {
                     await sendReturnedOrderEmail({
@@ -620,7 +588,6 @@ export default function Page() {
                         order_status: returnStatus,
                         returned_date: currentDate
                     }, returnedProducts);
-                    console.log('✅ Return email sent');
                 } catch (emailError) {
                     console.error('Email sending failed:', emailError);
                 }
@@ -653,13 +620,10 @@ export default function Page() {
                 status: 'completed'
             });
 
-            console.log('✅ Refreshing data immediately...');
             await fetchOrders();
             await fetchAllProducts();
 
         } catch (err: any) {
-            console.error('Error in handleReturnSubmit:', err);
-            console.error('Error stack:', err.stack);
 
             toast.dismiss();
             toast.error(err.message || "Failed to process return");
@@ -702,7 +666,6 @@ export default function Page() {
 
             return `${day}-${month}-${year} (${hours}:${minutes} ${ampm})`;
         } catch (error) {
-            console.error('Error formatting action_date:', error);
             return dateTimeString;
         }
     };
@@ -712,10 +675,8 @@ export default function Page() {
             <Dialog
                 open={isReturnModalOpen}
                 onOpenChange={(open) => {
-                    console.log('Modal open state changed:', open);
 
                     if (!open) {
-                        console.log('Closing modal by user action');
 
                         const hasSelectedProducts = returnedProducts.some(p => p.returnedQuantity > 0);
                         if (hasSelectedProducts) {
@@ -873,7 +834,6 @@ export default function Page() {
                         <Button
                             variant="outline"
                             onClick={() => {
-                                console.log('Cancel button clicked - explicit cancel');
                                 setIsReturnModalOpen(false);
                                 setReturnedProducts([]);
                                 toast.info("Return process cancelled");
@@ -884,27 +844,17 @@ export default function Page() {
                         </Button>
                         <Button
                             onClick={() => {
-                                console.log('=== CONFIRM RETURN CLICKED ===');
-                                console.log('Current state:', {
-                                    order: order?.id,
-                                    canEditStatus,
-                                    returnedProductsCount: returnedProducts.length,
-                                    returnedProducts
-                                });
 
                                 if (!order) {
-                                    console.error('❌ No order');
                                     toast.error("No order data");
                                     return;
                                 }
 
                                 if (!canEditStatus) {
-                                    console.error('❌ Not authorized');
                                     toast.error("You are not authorized");
                                     return;
                                 }
 
-                                console.log('✅ All conditions passed, calling handleReturnSubmit');
                                 handleReturnSubmit();
                             }}
                             className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
@@ -1088,7 +1038,6 @@ export default function Page() {
 
             return `${day}-${month}-${year}`;
         } catch (error) {
-            console.error('Error formatting date:', error);
             return dateString;
         }
     };
@@ -1336,11 +1285,9 @@ export default function Page() {
         }
 
         if (!canEdit) {
-            console.log('User cannot edit this field:', field);
             return;
         }
 
-        console.log('Setting editing field:', field, 'with value:', value);
         setEditingField(field);
         setEditedValue(value || "");
         setEditingRowId(rowId);
@@ -1401,7 +1348,6 @@ export default function Page() {
             const updateData: any = { [field]: editedValue };
 
             if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_REJECTED) {
-                console.log('Rejecting order via dropdown...');
                 await handleReject();
                 setEditingField(null);
                 setEditingRowId(null);
@@ -2528,12 +2474,9 @@ export default function Page() {
                     <Select
                         value={isPendingShipped || isPendingReturned ? pendingStatusChange!.value : editedValue}
                         onValueChange={(val) => {
-                            console.log('Status dropdown value changed:', val);
                             if (val === process.env.NEXT_PUBLIC_STATUS_RETURNED) {
-                                console.log('Returned status selected, calling handleStatusChangeToReturned');
                                 handleStatusChangeToReturned(field, val, rowId);
                             } else {
-                                console.log('Other status selected, setting edited value');
                                 setEditedValue(val);
                             }
                         }}
@@ -2552,9 +2495,7 @@ export default function Page() {
                     <Button
                         size="sm"
                         onClick={() => {
-                            console.log('Save button clicked in status dropdown');
                             if (editedValue !== process.env.NEXT_PUBLIC_STATUS_RETURNED) {
-                                console.log('Saving non-return status');
                                 handleSaveEdit(field);
                             } else {
                                 console.log('Return status - should already be handled by modal');
@@ -2570,9 +2511,7 @@ export default function Page() {
                         size="sm"
                         variant="outline"
                         onClick={() => {
-                            console.log('Cancel button clicked in status dropdown');
                             if (pendingStatusChange) {
-                                console.log('Clearing pending status change:', pendingStatusChange);
                                 setPendingStatusChange(null);
                             }
                             handleCancelEdit();
@@ -2608,7 +2547,6 @@ export default function Page() {
                         className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 cursor-pointer"
                         // In renderStatusDropdown function, update the onClick handler
                         onClick={() => {
-                            console.log('Edit button clicked for status');
                             // Directly call handleEditClick instead of going through the function
                             setEditingField(field);
                             setEditedValue(value || "");

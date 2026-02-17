@@ -132,8 +132,6 @@ export default function Page() {
 
     // Save quantity handler - SIMPLIFIED VERSION
     const handleSaveQuantity = async (productId: string, newQuantity: number) => {
-        console.log('handleSaveQuantity called:', { productId, newQuantity });
-
         if (newQuantity < 1) return;
 
         // Get current item to check stock
@@ -146,7 +144,6 @@ export default function Page() {
         }
 
         try {
-            console.log('Calling updateQuantity:', { productId, newQuantity });
             await updateQuantity(productId, newQuantity);
 
             // Update the input value
@@ -156,9 +153,7 @@ export default function Page() {
             }));
 
             setEditingProductId(null);
-            console.log('Quantity updated successfully');
         } catch (error) {
-            console.error('Error updating quantity:', error);
             // Revert to original value on error
             if (currentItem) {
                 setQuantityInputValues(prev => ({
@@ -170,30 +165,24 @@ export default function Page() {
     };
 
     const handleIncreaseQuantity = async (productId: string) => {
-        console.log('handleIncreaseQuantity called:', productId);
         const currentItem = cartItems.find(item => item.product_id === productId);
         if (!currentItem) {
-            console.log('Item not found:', productId);
             return;
         }
 
         const newQuantity = currentItem.quantity + 1;
-        console.log('Increasing quantity:', { current: currentItem.quantity, new: newQuantity });
 
         // Call the simplified save function
         await handleSaveQuantity(productId, newQuantity);
     };
 
     const handleDecreaseQuantity = async (productId: string) => {
-        console.log('handleDecreaseQuantity called:', productId);
         const currentItem = cartItems.find(item => item.product_id === productId);
         if (!currentItem || currentItem.quantity <= 1) {
-            console.log('Cannot decrease:', { currentQuantity: currentItem?.quantity });
             return;
         }
 
         const newQuantity = currentItem.quantity - 1;
-        console.log('Decreasing quantity:', { current: currentItem.quantity, new: newQuantity });
 
         // Call the simplified save function
         await handleSaveQuantity(productId, newQuantity);

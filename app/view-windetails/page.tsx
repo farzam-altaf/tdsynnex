@@ -144,7 +144,6 @@ export default function Page() {
 
             return `${day}-${month}-${year}`;
         } catch (error) {
-            console.error('Error formatting date:', error);
             return 'N/A';
         }
     };

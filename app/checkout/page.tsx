@@ -688,7 +688,6 @@ export default function Page() {
       });
 
     } catch (error) {
-      console.error('Error sending checkout email:', error);
       toast.error("Failed to send checkout email. Please try again.");
     }
   };
@@ -742,7 +741,6 @@ export default function Page() {
 
       const adminEmails = await getAdminEmails();
 
-      console.log(adminEmails)
 
       await sendEmail({
         to: NewOrderEmail,
@@ -753,7 +751,6 @@ export default function Page() {
       });
 
     } catch (error) {
-      console.error('Error sending new order email:', error);
       toast.error("Failed to send new order email. Please try again.");
     }
   };

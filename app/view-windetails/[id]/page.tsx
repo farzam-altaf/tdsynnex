@@ -65,7 +65,6 @@ export default function WinDetailsPage() {
 
             return `${day}-${month}-${year}`;
         } catch (error) {
-            console.error('Error formatting date:', error);
             return 'N/A';
         }
     };
@@ -93,7 +92,6 @@ export default function WinDetailsPage() {
                 .single();
 
             if (winError) {
-                console.error("Error fetching win:", winError);
                 throw winError;
             }
 
@@ -146,7 +144,6 @@ export default function WinDetailsPage() {
             }
 
         } catch (err: unknown) {
-            console.error("Fetch error:", err);
             if (err instanceof Error) {
                 setError(err.message || 'Failed to fetch win details');
             } else {

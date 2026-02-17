@@ -241,7 +241,6 @@ export default function Page() {
                                 quantity: 1
                             }));
 
-                            console.log("Fetched products:", orderProducts);
                             setProducts(orderProducts);
 
                             // Auto-select the product radio button
@@ -265,7 +264,6 @@ export default function Page() {
                                 }));
                             }
                         } else {
-                            console.error("Error fetching products:", error);
                             setProducts([]);
                         }
                     } else {

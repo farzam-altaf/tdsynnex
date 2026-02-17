@@ -130,7 +130,6 @@ export default function LogsPage() {
             // 🚨 IMPORTANT: Clear previous logs while loading new data
             setLogs([]); // Add this line to clear previous data
 
-            console.log('Fetching logs for page:', { pageIndex, pageSize });
 
             // Start building the query
             let query = supabase
@@ -191,7 +190,6 @@ export default function LogsPage() {
                 throw new Error(errorMessage);
             }
 
-            console.log('Query successful, data length:', data?.length || 0);
 
             if (data) {
                 // Fetch related data
@@ -245,8 +243,6 @@ export default function LogsPage() {
             }
 
         } catch (err: unknown) {
-            console.error('Error in fetchLogs:', err);
-
             let errorMessage = 'Failed to fetch logs';
 
             if (err instanceof Error) {

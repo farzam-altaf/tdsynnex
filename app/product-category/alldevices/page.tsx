@@ -507,8 +507,6 @@ export default function Page() {
                 ? currentValues.filter(v => v !== value)  // Remove if exists
                 : [...currentValues, value];               // Add if doesn't exist
 
-            console.log(`Filter ${filterType}:`, { current: currentValues, new: newValues }); // Debug log
-
             return {
                 ...prev,
                 [filterType]: newValues

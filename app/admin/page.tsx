@@ -42,7 +42,6 @@ export default function MultiSiteDashboard() {
             setSites(sitesRes.data || [])
             setProducts(productsRes.data || [])
         } catch (error) {
-            console.error('Failed to load data:', error)
             toast.error('Failed to load data')
         } finally {
             setLoading(false)
@@ -74,7 +73,6 @@ export default function MultiSiteDashboard() {
                 try {
                     data = JSON.parse(text)
                 } catch (parseError) {
-                    console.error('Failed to parse JSON:', parseError)
                     toast.error('Server returned invalid response')
                     return
                 }
@@ -95,7 +93,6 @@ export default function MultiSiteDashboard() {
                 toast.error((data as any).error || `Failed to add site (HTTP ${response.status})`)
             }
         } catch (error) {
-            console.error('Failed to add site:', error)
             toast.error('Failed to add site')
         }
     }
