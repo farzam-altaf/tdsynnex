@@ -23,7 +23,7 @@ import {
   X,
   Trash,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { logActivity } from "@/lib/logger";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
@@ -130,8 +130,14 @@ export default function Page() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const searchParams = useSearchParams();
+
   const source = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "")}/order-details`;
   // Table states
+
+  const showAwaitingOnly = searchParams.get('_') === 'true';
+
+
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -150,7 +156,6 @@ export default function Page() {
   const allowedRoles = [smRole, adminRole, sRole, ssRole].filter(Boolean); // Remove undefined values
   const actionRoles = [smRole, adminRole, ssRole].filter(Boolean); // Remove undefined values
   const viewRoles = [sRole, ssRole, smRole].filter(Boolean); // Remove undefined values
-
   const columnDisplayNames: Record<string, string> = {
     order_no: "Order #",
     order_date: "Order Date",
@@ -177,12 +182,19 @@ export default function Page() {
     profile?.role && actionRoles.includes(profile.role);
   const isViewAuthorized = profile?.role && viewRoles.includes(profile.role);
 
-  // Handle auth check
+  const awaitingStatus = process.env.NEXT_PUBLIC_STATUS_AWAITING; // Add this
+
   useEffect(() => {
     if (loading) return;
 
     if (!isLoggedIn || !profile?.isVerified) {
-      router.replace("/login/?redirect_to=order-details");
+      // Preserve the current URL parameters when redirecting to login
+      const currentParams = searchParams.toString();
+      const redirectUrl = currentParams
+        ? `/login/?redirect_to=order-details?${currentParams}`
+        : "/login/?redirect_to=order-details";
+
+      router.replace(redirectUrl);
       return;
     }
 
@@ -191,7 +203,7 @@ export default function Page() {
       router.replace("/product-category/alldevices");
       return;
     }
-  }, [loading, isLoggedIn, profile, router, isAuthorized]);
+  }, [loading, isLoggedIn, profile, router, isAuthorized, searchParams]); // Add searchParams to dependencies
 
   // Fetch orders data from Supabase
   const fetchOrders = async () => {
@@ -208,6 +220,7 @@ export default function Page() {
         userRole: profile?.role,
         isActionAuthorized,
         isViewAuthorized,
+        filterType: showAwaitingOnly ? "awaiting-only" : "all", // Add filter info to logs
       },
     });
 
@@ -215,89 +228,59 @@ export default function Page() {
       setIsLoading(true);
       setError(null);
 
+      // Build the query based on user role
+      let query = supabase.from("orders").select("*");
+
       if (!isActionAuthorized) {
-        const { data, error: supabaseError } = await supabase
-          .from("orders")
-          .select("*")
-          .order("order_no", { ascending: false })
-          .eq("order_by", profile?.id);
+        // Regular users only see their own orders
+        query = query.eq("order_by", profile?.id);
+      }
 
-        if (supabaseError) {
-          await logActivity({
-            type: "order",
-            level: "error",
-            action: "orders_fetch_failed",
-            message: `Failed to fetch orders: ${supabaseError.message}`,
-            userId: profile?.id || null,
-            details: {
-              error: supabaseError,
-              executionTimeMs: Date.now() - startTime,
-              userRole: profile?.role,
-              filter: "user-specific",
-            },
-            status: "failed",
-          });
-          throw supabaseError;
-        }
+      // Apply status filter if URL parameter is present
+      if (showAwaitingOnly && awaitingStatus) {
+        query = query.eq("order_status", awaitingStatus);
+      }
 
-        if (data) {
-          await logActivity({
-            type: "order",
-            level: "success",
-            action: "orders_fetch_success",
-            message: `Successfully fetched ${data.length} orders`,
-            userId: profile?.id || null,
-            details: {
-              ordersCount: data.length,
-              executionTimeMs: Date.now() - startTime,
-              userRole: profile?.role,
-              filter: "user-specific",
-            },
-            status: "completed",
-          });
-          setOrders(data as Order[]);
-        }
-      } else {
-        const { data, error: supabaseError } = await supabase
-          .from("orders")
-          .select("*")
-          .order("order_no", { ascending: false });
+      // Add ordering
+      query = query.order("order_no", { ascending: false });
 
-        if (supabaseError) {
-          await logActivity({
-            type: "order",
-            level: "error",
-            action: "orders_fetch_failed",
-            message: `Failed to fetch orders: ${supabaseError.message}`,
-            userId: profile?.id || null,
-            details: {
-              error: supabaseError,
-              executionTimeMs: Date.now() - startTime,
-              userRole: profile?.role,
-              filter: "all-orders",
-            },
-            status: "failed",
-          });
-          throw supabaseError;
-        }
+      const { data, error: supabaseError } = await query;
 
-        if (data) {
-          await logActivity({
-            type: "order",
-            level: "success",
-            action: "orders_fetch_success",
-            message: `Successfully fetched ${data.length} orders`,
-            userId: profile?.id || null,
-            details: {
-              ordersCount: data.length,
-              executionTimeMs: Date.now() - startTime,
-              userRole: profile?.role,
-              filter: "all-orders",
-            },
-            status: "completed",
-          });
-          setOrders(data as Order[]);
-        }
+      if (supabaseError) {
+        await logActivity({
+          type: "order",
+          level: "error",
+          action: "orders_fetch_failed",
+          message: `Failed to fetch orders: ${supabaseError.message}`,
+          userId: profile?.id || null,
+          details: {
+            error: supabaseError,
+            executionTimeMs: Date.now() - startTime,
+            userRole: profile?.role,
+            filterType: showAwaitingOnly ? "awaiting-only" : "all",
+          },
+          status: "failed",
+        });
+        throw supabaseError;
+      }
+
+      if (data) {
+        await logActivity({
+          type: "order",
+          level: "success",
+          action: "orders_fetch_success",
+          message: `Successfully fetched ${data.length} orders`,
+          userId: profile?.id || null,
+          details: {
+            ordersCount: data.length,
+            executionTimeMs: Date.now() - startTime,
+            userRole: profile?.role,
+            filterType: showAwaitingOnly ? "awaiting-only" : "all",
+            filterValue: showAwaitingOnly ? awaitingStatus : "none",
+          },
+          status: "completed",
+        });
+        setOrders(data as Order[]);
       }
     } catch (err: unknown) {
       await logActivity({
@@ -323,12 +306,11 @@ export default function Page() {
     }
   };
 
-  // Fetch data when authorized
   useEffect(() => {
     if (!loading && isLoggedIn && profile?.isVerified && isAuthorized) {
       fetchOrders();
     }
-  }, [loading, isLoggedIn, profile, isAuthorized]);
+  }, [loading, isLoggedIn, profile, isAuthorized, showAwaitingOnly]);
 
   // Format currency
   const formatCurrency = (amount: number | null) => {
@@ -1485,8 +1467,28 @@ export default function Page() {
   return (
     <div className="container mx-auto py-10 px-5 bg-gr">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="sm:text-3xl text-xl font-bold"></h1>
+        <h1 className="sm:text-3xl text-xl font-bold">
+          {showAwaitingOnly && awaitingStatus ? (
+            <span className="flex items-center gap-2">
+              Awaiting Orders
+              <span className="text-sm font-normal text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                {orders.length} orders
+              </span>
+            </span>
+          ) : (
+            "All Orders"
+          )}
+        </h1>
         <div className="flex gap-2">
+          {showAwaitingOnly && (
+            <Button
+              variant="outline"
+              onClick={() => router.push("/order-details")}
+              className="cursor-pointer"
+            >
+              Clear Filter
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={fetchOrders}

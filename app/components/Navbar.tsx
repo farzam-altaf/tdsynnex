@@ -634,7 +634,7 @@ export default function Navbar() {
                             {/* Order Approvals */}
                             <button
                               onClick={() => {
-                                router.push('/order-details');
+                                router.push('/order-details?_=true');
                                 setIsNotificationOpen(false);
                               }}
                               className="w-full text-left py-3 px-2 rounded-md hover:bg-gray-100 transition-colors duration-200 cursor-pointer"
