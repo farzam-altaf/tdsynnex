@@ -88,7 +88,7 @@ export default function Page() {
     const superSubscriberRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
     const subscriberRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
 
-    const allowedRoles = [smRole, adminRole, superSubscriberRole].filter(Boolean);
+    const allowedRoles = [adminRole, superSubscriberRole].filter(Boolean);
     const viewRoles = [subscriberRole, superSubscriberRole, smRole].filter(Boolean);
     const isViewAuthorized = profile?.role && viewRoles.includes(profile.role);
 
@@ -129,6 +129,27 @@ export default function Page() {
         }
 
     }, [loading, isLoggedIn, profile, router, isAuthorized]);
+
+    // Check if user has permission to access this page
+
+    useEffect(() => {
+        if (!isAuthorized) {
+            router.replace('/product-category/alldevices');
+            return;
+        }
+    }, [isAuthorized, router, subscriberRole, smRole, profile]);
+    // useEffect(() => {
+    //     if (smRole == profile?.role) {
+    //         router.replace('/product-category/alldevices');
+    //         return;
+    //     }
+    // }, [isAuthorized, router, subscriberRole, smRole, profile]);
+    // useEffect(() => {
+    //     if (subscriberRole == profile?.role) {
+    //         router.replace('/product-category/alldevices');
+    //         return;
+    //     }
+    // }, [isAuthorized, router, subscriberRole, smRole, profile]);
 
     // Format date to dd-MMM-yyyy
     const formatDateToCustomFormat = (dateString: string | null) => {
@@ -785,89 +806,7 @@ export default function Page() {
 
     // Define columns
     const columns: ColumnDef<Win>[] = [
-        // Actions column - Always add for authorized users
-        {
-            id: "actions",
-            enableHiding: false,
-            cell: ({ row }) => {
-                const win = row.original;
-                const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-                const handleDeleteClick = () => {
-                    setIsDeleteDialogOpen(true);
-                };
-
-                const handleConfirmDelete = async () => {
-                    await handleDeleteWin(win.id, win.customerName, win.order_no);
-                    setIsDeleteDialogOpen(false);
-                };
-
-                return (
-                    <div className="flex space-x-2 ps-2">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem
-                                    className="cursor-pointer"
-                                    onClick={() => {
-                                        router.push(`/view-windetails/${win.id}`);
-                                    }}
-                                >
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    View Details
-                                </DropdownMenuItem>
-                                {!isViewAuthorized && (
-                                    <>
-                                        <DropdownMenuItem
-                                            className="cursor-pointer"
-                                            onClick={() => handleEditWin(win)}
-                                        >
-                                            <Edit className="mr-2 h-4 w-4" />
-                                            Edit Win
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            className="cursor-pointer text-red-600 focus:text-red-600"
-                                            onClick={handleDeleteClick}
-                                        >
-                                            <Trash className="mr-2 h-4 w-4" />
-                                            Delete Win
-                                        </DropdownMenuItem>
-                                    </>
-                                )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-
-                        {/* Delete Confirmation Dialog */}
-                        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        This action cannot be undone. This will permanently delete the win report for
-                                        <b> {win.customerName}</b> (Order # {win.order_no || win.orderHash || 'N/A'}).
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                        onClick={handleConfirmDelete}
-                                        className="bg-red-500 hover:bg-red-600"
-                                    >
-                                        Delete Win
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    </div>
-                )
-            },
-        },
 
         // Order # column
         {
@@ -955,7 +894,7 @@ export default function Page() {
             cell: ({ row }) => {
                 const amount = row.getValue("deal_rev") as number;
                 return (
-                    <div className="text-left ps-2 font-medium text-green-600">
+                    <div className="text-left ps-2 font-medium">
                         ${amount?.toLocaleString()}
                     </div>
                 )
@@ -984,6 +923,96 @@ export default function Page() {
         },
     ]
 
+    if (!isViewAuthorized) {
+        columns.unshift(
+            // Actions column - Always add for authorized users
+            {
+                id: "actions",
+                enableHiding: false,
+                cell: ({ row }) => {
+                    const win = row.original;
+                    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+                    const handleDeleteClick = () => {
+                        setIsDeleteDialogOpen(true);
+                    };
+
+                    const handleConfirmDelete = async () => {
+                        await handleDeleteWin(win.id, win.customerName, win.order_no);
+                        setIsDeleteDialogOpen(false);
+                    };
+
+                    return (
+                        <div className="flex space-x-2 ps-2">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
+                                        <span className="sr-only">Open menu</span>
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                    <DropdownMenuItem
+                                        className="cursor-pointer"
+                                        onClick={() => {
+                                            router.push(`/view-windetails/${win.id}`);
+                                        }}
+                                    >
+                                        <Eye className="mr-2 h-4 w-4" />
+                                        View Details
+                                    </DropdownMenuItem>
+                                    {!isViewAuthorized && (
+                                        <>
+                                            <DropdownMenuItem
+                                                className="cursor-pointer"
+                                                onClick={() => handleEditWin(win)}
+                                            >
+                                                <Edit className="mr-2 h-4 w-4" />
+                                                Edit Win
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                className="cursor-pointer text-red-600 focus:text-red-600"
+                                                onClick={handleDeleteClick}
+                                            >
+                                                <Trash className="mr-2 h-4 w-4" />
+                                                Delete Win
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+
+                            {/* Delete Confirmation Dialog */}
+                            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This action cannot be undone. This will permanently delete the win report for
+                                            <b> {win.customerName}</b> (Order # {win.order_no || win.orderHash || 'N/A'}).
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction
+                                            onClick={handleConfirmDelete}
+                                            className="bg-red-500 hover:bg-red-600"
+                                        >
+                                            Delete Win
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
+                    )
+                },
+            },
+        )
+    }
+
+    const [globalFilter, setGlobalFilter] = useState<string>("")
+
     // Initialize table
     const table = useReactTable({
         data: wins,
@@ -996,11 +1025,14 @@ export default function Page() {
         getFilteredRowModel: getFilteredRowModel(),
         onColumnVisibilityChange: setColumnVisibility,
         onRowSelectionChange: setRowSelection,
+        onGlobalFilterChange: setGlobalFilter,
+        globalFilterFn: "auto", // or use "includesString" for case-insensitive search
         state: {
             sorting,
             columnFilters,
             columnVisibility,
             rowSelection,
+            globalFilter, // Add this
         },
     })
 
@@ -1016,7 +1048,7 @@ export default function Page() {
     return (
         <div className="container mx-auto py-10 px-5 h-lvh">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="sm:text-3xl text-xl font-bold">Wins Dashboard</h1>
+                <h1 className="sm:text-3xl text-xl font-bold"></h1>
                 <div className="flex gap-2">
                     <Button
                         variant="outline"
@@ -1040,41 +1072,43 @@ export default function Page() {
             )}
 
             <div className="w-full">
-                <div className="flex items-center py-4 gap-4">
-                    <Input
-                        placeholder="Filter by customer name..."
-                        value={(table.getColumn("customerName")?.getFilterValue() as string) ?? ""}
-                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                            table.getColumn("customerName")?.setFilterValue(event.target.value)
-                        }
-                        className="max-w-sm"
-                    />
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="ml-auto">
-                                Columns <ChevronDown className="ml-2 h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            {table
-                                .getAllColumns()
-                                .filter((column) => column.getCanHide())
-                                .map((column) => {
-                                    return (
-                                        <DropdownMenuCheckboxItem
-                                            key={column.id}
-                                            className="capitalize"
-                                            checked={column.getIsVisible()}
-                                            onCheckedChange={(value: boolean) =>
-                                                column.toggleVisibility(!!value)
-                                            }
-                                        >
-                                            {columnDisplayNames[column.id] || column.id}
-                                        </DropdownMenuCheckboxItem>
-                                    )
-                                })}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                <div className="flex items-center justify-between py-4 gap-4">
+                    <div className="">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="ml-auto">
+                                    Columns <ChevronDown className="ml-2 h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                {table
+                                    .getAllColumns()
+                                    .filter((column) => column.getCanHide())
+                                    .map((column) => {
+                                        return (
+                                            <DropdownMenuCheckboxItem
+                                                key={column.id}
+                                                className="capitalize"
+                                                checked={column.getIsVisible()}
+                                                onCheckedChange={(value: boolean) =>
+                                                    column.toggleVisibility(!!value)
+                                                }
+                                            >
+                                                {columnDisplayNames[column.id] || column.id}
+                                            </DropdownMenuCheckboxItem>
+                                        )
+                                    })}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                    <div>
+                        <Input
+                            placeholder="Search across all columns..."
+                            value={globalFilter ?? ""}
+                            onChange={(event) => setGlobalFilter(event.target.value)}
+                            className="pl-8"
+                        />
+                    </div>
                 </div>
                 <div className="overflow-hidden rounded-md border">
                     <Table>

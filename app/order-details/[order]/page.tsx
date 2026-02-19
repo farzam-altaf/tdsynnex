@@ -313,7 +313,7 @@ export default function Page() {
             if (data && data.length > 0) {
 
                 if (sRole === profile?.role && data[0].order_by !== profile?.id) {
-                    router.back();
+                    router.replace('/order-details');
                     return;
                 }
 
@@ -430,7 +430,7 @@ export default function Page() {
                                 <Button
                                     size="sm"
                                     onClick={() => handleProductSelect(editedValue)}
-                                    className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                                    className="bg-[#35c8dc] hover:bg-[#33aaba] cursor-pointer"
                                     disabled={!(isAdmin || isSMRole)}
                                 >
                                     Save
@@ -448,17 +448,7 @@ export default function Page() {
                         ) : (
                             <div className="flex items-center justify-between group">
                                 <div className="flex items-center gap-2">
-                                    {order.products?.slug ? (
-                                        <Link
-                                            href={`/product/${order.products.slug}`}
-                                            target="_blank"
-                                            className="text-blue-600 hover:underline cursor-pointer"
-                                        >
-                                            {order.products?.product_name}
-                                        </Link>
-                                    ) : (
-                                        <span>{order.products?.product_name}</span>
-                                    )}
+                                    <span>{order.products?.product_name}</span>
                                     {order.products?.sku && (
                                         <span className="text-xs text-gray-500">(SKU: {order.products.sku})</span>
                                     )}
@@ -664,7 +654,7 @@ export default function Page() {
             hours = hours % 12;
             hours = hours ? hours : 12;
 
-            return `${day}-${month}-${year} (${hours}:${minutes} ${ampm})`;
+            return `${day}-${month}-${year}`;
         } catch (error) {
             return dateTimeString;
         }
@@ -857,7 +847,7 @@ export default function Page() {
 
                                 handleReturnSubmit();
                             }}
-                            className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                            className="bg-[#35c8dc] hover:bg-[#33aaba] cursor-pointer"
                             disabled={!order || !canEditStatus}
                         >
                             Confirm Return
@@ -2420,7 +2410,7 @@ export default function Page() {
                     <Button
                         size="sm"
                         onClick={() => handleSaveEdit(field)}
-                        className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                        className="bg-[#35c8dc] hover:bg-[#33aaba] cursor-pointer"
                         disabled={!canEdit}
                     >
                         Save
@@ -2501,7 +2491,7 @@ export default function Page() {
                                 console.log('Return status - should already be handled by modal');
                             }
                         }}
-                        className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                        className="bg-[#35c8dc] hover:bg-[#33aaba] cursor-pointer"
                         disabled={!canEditStatus}
                     >
                         {isPendingShipped ? "Awaiting Tracking..." :
@@ -2570,7 +2560,7 @@ export default function Page() {
                             href={currentValue}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 cursor-pointer"
+                            className="bg-[#0A4647] text-white px-4 py-2 rounded-md hover:bg-[#093636] cursor-pointer"
                         >
                             View Return Label (PDF)
                         </Link>
@@ -2596,7 +2586,7 @@ export default function Page() {
                         />
                         <label
                             htmlFor="return-label-upload"
-                            className="inline-flex items-center justify-center px-3 py-1.5 text-sm bg-teal-600 text-white rounded-md hover:bg-teal-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center justify-center px-3 py-1.5 text-sm bg-[#35c8dc] text-white rounded-md hover:bg-[#33aaba] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isUploading ? "Uploading..." : currentValue ? "Replace PDF" : "Upload PDF"}
                         </label>
@@ -2622,7 +2612,7 @@ export default function Page() {
                     <Button
                         size="sm"
                         onClick={() => handleSaveEdit("notes")}
-                        className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                        className="bg-[#35c8dc] hover:bg-[#33aaba] cursor-pointer"
                         disabled={!canEditAll}
                     >
                         Save
@@ -2684,7 +2674,7 @@ export default function Page() {
                                                     <Link
                                                         href={order.tracking_link}
                                                         target="_blank"
-                                                        className="text-blue-600 underline cursor-pointer"
+                                                        className="text-[#0A4647] underline font-bold cursor-pointer"
                                                     >
                                                         {order.tracking}
                                                     </Link>
@@ -2781,7 +2771,7 @@ export default function Page() {
                                                         </Button>
                                                         <Button
                                                             onClick={handleTrackingUpdate}
-                                                            className="bg-teal-600 hover:bg-teal-700 cursor-pointer"
+                                                            className="bg-[#35c8dc] hover:bg-[#33aaba] cursor-pointer"
                                                             disabled={!canEditTracking}
                                                         >
                                                             Save Changes
@@ -2803,7 +2793,7 @@ export default function Page() {
                                                     <Link
                                                         href={order.return_tracking_link}
                                                         target="_blank"
-                                                        className="text-blue-600 underline cursor-pointer"
+                                                        className="text-[#0A4647] underline font-bold cursor-pointer"
                                                     >
                                                         {order.return_tracking}
                                                     </Link>
@@ -2855,11 +2845,6 @@ export default function Page() {
             <div className="flex flex-col lg:flex-row gap-6">
                 <div className="lg:w-[72%] space-y-6">
                     <div>
-                        {order.order_status !== process.env.NEXT_PUBLIC_STATUS_AWAITING && profile?.role !== process.env.NEXT_PUBLIC_SUBSCRIBER && (
-                            <>
-                                <h2 className="text-lg font-semibold mb-4">Order Details</h2>
-                            </>
-                        )}
                         {order.order_status === process.env.NEXT_PUBLIC_STATUS_AWAITING && profile?.role !== process.env.NEXT_PUBLIC_SUBSCRIBER ? (
                             <>
                                 {canApproveReject && (
@@ -3160,7 +3145,9 @@ export default function Page() {
 
                 <div className="lg:w-[28%] space-y-6">
                     <div>
-                        <h2 className="text-lg font-semibold mb-4">Shipping Details</h2>
+                        {!isSubscriber && order.order_status === "Awaiting Approval" && (
+                            <div className="mb-40"></div>
+                        )}
                         <Table className="border">
                             <TableHeader>
                                 <TableRow>
@@ -3184,7 +3171,7 @@ export default function Page() {
 
                     {renderTrackingSection()}
 
-                    {order.shipped_date && (
+                    {order.shipped_date && !isSubscriber && (
                         <div>
                             <Table className="border">
                                 <TableHeader>
@@ -3210,7 +3197,6 @@ export default function Page() {
                                                                 return (
                                                                     <span className={isOverdue ? "text-red-600 font-semibold" : ""}>
                                                                         {daysShipped} days
-                                                                        {isOverdue && ` (${daysOverdue} days overdue)`}
                                                                     </span>
                                                                 );
                                                             })()
@@ -3221,7 +3207,7 @@ export default function Page() {
                                                 </TableCell>
                                             </TableRow>
                                             <TableRow>
-                                                <TableCell className="font-semibold">Estimated Return Date</TableCell>
+                                                <TableCell className="font-semibold">Return Date</TableCell>
                                                 <TableCell className="border-l">
                                                     <div className="flex items-center">
                                                         {order.shipped_date ? (
@@ -3232,7 +3218,6 @@ export default function Page() {
                                                                 return (
                                                                     <span className={hasPassed ? "text-red-600 font-semibold" : ""}>
                                                                         {formatEstimatedReturnDate(order.shipped_date)}
-                                                                        {hasPassed && " (Passed)"}
                                                                     </span>
                                                                 );
                                                             })()

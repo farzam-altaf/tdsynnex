@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Filter, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Filter, X, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { Drawer, Skeleton } from "antd";
 import { FaFilter } from "react-icons/fa";
 import { supabase } from "@/lib/supabase/client";
@@ -12,6 +12,7 @@ import { FaMinus, FaPlus } from "react-icons/fa6";
 import { useCart } from "@/app/context/CartContext";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/logger";
+import { PiShoppingCartThin } from "react-icons/pi";
 
 // Hardcoded filters (not from database)
 const HARDCODED_FILTERS = {
@@ -126,9 +127,20 @@ export default function Page() {
         removeFromCart,
         isUpdating,
         addingProductId,
+        isLoading: cartLoading,
+        isUpdating: cartUpdating,
         isInCart, // Add this
-        cartItems
+        cartItems,
+        cartCount,
+        updateQuantity,
+        clearCart,
+        getCartTotal
     } = useCart()
+
+    // Get stock quantity for a cart item
+    const getItemStockQuantity = (cartItem: any) => {
+        return cartItem.product?.stock_quantity || 0;
+    };
 
     // State for filter options from products table
     const [filterOptions, setFilterOptions] = useState<Record<string, string[]>>({});
@@ -147,6 +159,16 @@ export default function Page() {
         copilotPC: [],
         fiveGEnabled: [],
     });
+    const [showCartDrawer, setShowCartDrawer] = useState(false);
+
+
+    // Handle clear cart
+    const handleClearCart = async () => {
+        try {
+            await clearCart()
+        } catch (error) {
+        }
+    }
 
     const handleAddToCart = async (productId: string) => {
         try {
@@ -186,9 +208,8 @@ export default function Page() {
                 status: 'completed'
             });
 
-            toast.success('Product added to cart!', {
-                style: { background: "black", color: "white" },
-            });
+            setShowCartDrawer(true);
+
         } catch (error: any) {
             let errorMessage = 'Failed to add product to cart. Please try again.';
 
@@ -305,6 +326,27 @@ export default function Page() {
 
         fetchDataFromDatabase();
     }, [authChecked, authInitialized]);
+
+    const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false)
+
+    const handleCart = () => {
+        router.replace('/cart');
+        setIsCartDrawerOpen(false);
+    };
+
+    const handleCartClick = () => {
+        setIsCartDrawerOpen(true);
+    };
+
+    const handleCheckout = () => {
+        router.push('/checkout');
+        setIsCartDrawerOpen(false);
+    };
+
+    const handleContinueShopping = () => {
+        setIsCartDrawerOpen(false);
+        router.push('/product-category/alldevices');
+    };
 
     // Fetch all data from database
     const fetchDataFromDatabase = async () => {
@@ -757,19 +799,21 @@ export default function Page() {
                             ) : filteredProducts.length > 0 ? (
                                 <>
                                     <div className="flex items-center justify-between sm:my-10 my-5">
-                                        <div className="text-3xl font-semibold">Devices</div>
                                         {(admin === profile?.role || shopManager === profile?.role) && (
-                                            <div className="">
-                                                <div className="flex justify-center md:justify-start">
-                                                    <Link
-                                                        href="/add-device"
-                                                        className="inline-flex items-center justify-center rounded bg-[#41abd6] px-5 py-2 text-sm font-semibold text-white transition-all duration-300 hover:bg-[#3791b4] hover:shadow-lg hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#3791b4]/50 sm:px-4 sm:py-2 sm:text-sm md:px-4 md:py-2 md:text-sm"
-                                                    >
-                                                        <FaPlus className="me-3" />
-                                                        Add New Device
-                                                    </Link>
+                                            <>
+                                                <div className="text-3xl font-semibold">Devices</div>
+                                                <div className="">
+                                                    <div className="flex justify-center md:justify-start">
+                                                        <Link
+                                                            href="/add-device"
+                                                            className="inline-flex items-center justify-center rounded bg-[#35c8dc] px-5 py-2 text-sm font-semibold text-white transition-all duration-300 hover:bg-[#33aaba] hover:shadow-lg hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#3791b4]/50 sm:px-4 sm:py-2 sm:text-sm md:px-4 md:py-2 md:text-sm"
+                                                        >
+                                                            <FaPlus className="me-3" />
+                                                            Add New Device
+                                                        </Link>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            </>
                                         )}
                                     </div>
                                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-10">
@@ -806,7 +850,7 @@ export default function Page() {
 
                                                         {/* Show Private badge only for admin/shop manager users when product is not published */}
                                                         {product.post_status !== "Publish" && (
-                                                            <div className="absolute sm:top-45 sm:right-3 top-5 z-10 flex items-center gap-1 text-xs text-white font-semibold px-3 py-1 rounded-full rounded-tr-full bg-[#41abd6]">
+                                                            <div className="absolute sm:top-45 sm:right-3 top-5 z-10 flex items-center gap-1 text-xs text-white font-semibold px-3 py-1 rounded-full rounded-tr-full bg-[#35c8dc]">
                                                                 Private
                                                             </div>
                                                         )}
@@ -947,6 +991,145 @@ export default function Page() {
                     <HardcodedFilterSection filterKey="fiveGEnabled" title="5G Enabled" />
                 </div>
             </Drawer>
+
+            {/* Cart Drawer - isLoggedIn check ke saath */}
+            {isLoggedIn && (
+                <Drawer
+                    title={
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                                <PiShoppingCartThin className="text-[#35c8dc]" size={20} />
+                                <span className="text-lg font-semibold">Your Cart</span>
+                                {cartCount > 0 && (
+                                    <span className="bg-[#35c8dc] text-white text-xs px-2 py-1 rounded-full">
+                                        {cartCount} {cartCount === 1 ? 'item' : 'items'}
+                                    </span>
+                                )}
+                            </div>
+                            {cartItems.length > 0 && (
+                                <button
+                                    onClick={handleClearCart}
+                                    disabled={cartUpdating}
+                                    className="text-sm text-red-500 hover:text-red-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    {cartUpdating ? 'Clearing...' : 'Clear All'}
+                                </button>
+                            )}
+                        </div>
+                    }
+                    placement="right"
+                    onClose={() => setShowCartDrawer(false)}  // <-- onClose mein showCartDrawer false karein
+                    open={showCartDrawer}  // <-- open ko showCartDrawer se control karein
+                    size={400}
+                    className="cart-drawer"
+                >
+                    {cartLoading ? (
+                        <div className="flex flex-col items-center justify-center h-full py-12">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#35c8dc]"></div>
+                            <p className="mt-4 text-gray-500">Loading cart...</p>
+                        </div>
+                    ) : cartItems.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full py-12">
+                            <PiShoppingCartThin className="text-gray-300 mb-4" size={64} />
+                            <h3 className="text-lg font-medium text-gray-900 mb-2">Your cart is empty</h3>
+                            <p className="text-gray-500 text-center mb-6">
+                                Looks like you haven't added any products to your cart yet.
+                            </p>
+                            <button
+                                onClick={handleContinueShopping}
+                                className="px-6 py-2 bg-[#35c8dc] text-white rounded-md hover:bg-[#33aaba] transition-colors cursor-pointer"
+                            >
+                                Continue
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col h-full">
+                            {/* Cart Items List */}
+                            <div className="flex-1 overflow-y-auto pr-2">
+                                {cartItems.map((item) => {
+                                    const stockQuantity = getItemStockQuantity(item);
+                                    const productName = item.product?.product_name || 'Unknown Product';
+                                    const sku = item.product?.sku || 'N/A';
+                                    const thumbnail = item.product?.thumbnail;
+                                    const price = item.product?.price || 0;
+                                    const productSlug = item.product?.slug || '';
+
+                                    return (
+                                        <div key={item.id} className="border-b border-gray-200 py-4">
+                                            <div className="flex items-start space-x-3">
+                                                {/* Product Image */}
+                                                <div
+                                                    className="w-15 h-15 bg-gray-100 rounded-md flex items-center justify-center shrink-0 cursor-pointer hover:bg-gray-200 transition-colors"
+                                                    onClick={() => productSlug && router.push(`/product/${productSlug}`)}
+                                                >
+                                                    {thumbnail ? (
+                                                        <img
+                                                            src={thumbnail}
+                                                            alt={productName}
+                                                            className="w-full h-full object-contain p-1"
+                                                        />
+                                                    ) : (
+                                                        <PiShoppingCartThin className="text-gray-400" size={24} />
+                                                    )}
+                                                </div>
+
+                                                {/* Product Details */}
+                                                <div className="flex-1 min-w-0">
+                                                    <h4
+                                                        className="text-sm font-medium text-gray-900 truncate hover:text-[#35c8dc] cursor-pointer transition-colors"
+                                                        onClick={() => productSlug && router.push(`/product/${productSlug}`)}
+                                                    >
+                                                        {productName}
+                                                    </h4>
+                                                    <p className="text-xs text-gray-500">SKU: {sku}</p>
+
+                                                </div>
+
+                                                {/* Price and Remove Button */}
+                                                <div className="flex flex-col items-end space-y-2">
+                                                    <button
+                                                        onClick={() => handleRemoveFromCart(item.product_id)}
+                                                        disabled={cartUpdating}
+                                                        className="text-gray-400 hover:text-red-500 p-1 transition-colors 
+                                          disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                    {price > 0 && (
+                                                        <p className="text-sm font-medium text-gray-900">
+                                                            ${(price * item.quantity).toFixed(2)}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Cart Summary */}
+                            <div className="border-t border-gray-200 pt-4 mt-4">
+
+                                <div className="space-y-3">
+                                    <button
+                                        onClick={handleCart}
+                                        className="w-full py-2.5 border-2 cursor-pointer border-[#35c8dc] text-[#35c8dc] font-medium hover:bg-gray-50 transition-colors rounded-md"
+                                    >
+                                        View Cart Details
+                                    </button>
+                                    <button
+                                        onClick={handleCheckout}
+                                        disabled={cartUpdating}
+                                        className="w-full py-3 cursor-pointer bg-[#35c8dc] text-white font-medium hover:bg-[#2db4c8] transition-colors rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {cartUpdating ? 'Processing...' : 'Proceed to Checkout'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </Drawer>
+            )}
         </div>
     );
 }

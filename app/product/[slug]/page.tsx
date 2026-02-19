@@ -760,22 +760,22 @@ export default function Page() {
 
                 // Fetch related products based on filters (using text values)
                 const relatedProductsStartTime = Date.now();
-                
+
                 // Build conditions array for related products
                 const conditions = [];
-                
+
                 if (productData.form_factor) {
                     conditions.push(`form_factor.eq.${productData.form_factor}`);
                 }
-                
+
                 if (productData.processor) {
                     conditions.push(`processor.eq.${productData.processor}`);
                 }
-                
+
                 if (productData.memory) {
                     conditions.push(`memory.eq.${productData.memory}`);
                 }
-                
+
                 if (productData.storage) {
                     conditions.push(`storage.eq.${productData.storage}`);
                 }
@@ -962,7 +962,7 @@ export default function Page() {
                 icon: <Check className="h-3 w-3 mr-1" />
             };
         }
-        
+
         return { text: "", color: "", icon: null };
     };
 
@@ -1194,41 +1194,41 @@ export default function Page() {
                             </div>
 
                             {/* Display Specifications */}
-                            <div className="mb-6">
+                            {/* <div className="mb-6">
                                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Specifications</h3>
                                 <div className="grid grid-cols-2 gap-3 text-sm">
                                     {product?.form_factor && (
                                         <div className="flex justify-between border-b pb-1">
-                                            <span className="text-gray-600">Form Factor:</span>
-                                            <span className="font-medium">{product.form_factor}</span>
+                                            <span className="text-gray-600 font-medium">Form Factor:</span>
+                                            <span className="">{product.form_factor}</span>
                                         </div>
                                     )}
                                     {product?.processor && (
                                         <div className="flex justify-between border-b pb-1">
-                                            <span className="text-gray-600">Processor:</span>
-                                            <span className="font-medium">{product.processor}</span>
+                                            <span className="text-gray-600 font-medium">Processor:</span>
+                                            <span className="">{product.processor}</span>
                                         </div>
                                     )}
                                     {product?.memory && (
                                         <div className="flex justify-between border-b pb-1">
-                                            <span className="text-gray-600">Memory:</span>
-                                            <span className="font-medium">{product.memory}</span>
+                                            <span className="text-gray-600 font-medium">Memory:</span>
+                                            <span className="">{product.memory}</span>
                                         </div>
                                     )}
                                     {product?.storage && (
                                         <div className="flex justify-between border-b pb-1">
-                                            <span className="text-gray-600">Storage:</span>
-                                            <span className="font-medium">{product.storage}</span>
+                                            <span className="text-gray-600 font-medium">Storage:</span>
+                                            <span className="">{product.storage}</span>
                                         </div>
                                     )}
                                     {product?.screen_size && (
                                         <div className="flex justify-between border-b pb-1">
-                                            <span className="text-gray-600">Screen Size:</span>
-                                            <span className="font-medium">{product.screen_size}</span>
+                                            <span className="text-gray-600 font-medium">Screen Size:</span>
+                                            <span className="">{product.screen_size}</span>
                                         </div>
                                     )}
                                 </div>
-                            </div>
+                            </div> */}
 
                             {/* Description Points with ID for Read More button */}
                             <div id="product-description">

@@ -578,7 +578,7 @@ export default function LoginForm() {
                   <button
                     type="submit"
                     disabled={isloading}
-                    className="w-full rounded-md bg-[#3ba1da] px-6 py-3 cursor-pointer font-semibold text-white transition-all hover:bg-[#41abd6] hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full rounded-md bg-[#35c8dc] px-6 py-3 cursor-pointer font-semibold text-white transition-all hover:bg-[#33aaba] hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isloading ? "Please wait..." : "Login"}
                   </button>
@@ -596,7 +596,7 @@ export default function LoginForm() {
 
               <Link
                 href={"/password-reset"}
-                className="flex justify-center font-normal text-[#7c7c7c] hover:text-[#3ba1da] transition-colors"
+                className="flex justify-center font-normal text-[#7c7c7c] hover:text-[#35c8dc] transition-colors mt-6"
               >
                 <h4>Forgot your password?</h4>
               </Link>

@@ -12,7 +12,6 @@ export default function Page() {
     const [error, setError] = useState("");
     const [isLoggedIn, setIsLoggedIn] = useState(false)
 
-
     useEffect(() => {
         supabase.auth.getSession().then(({ data }) => {
             setIsLoggedIn(!!data.session)
@@ -61,9 +60,11 @@ export default function Page() {
 
             const isDev = process.env.NEXT_PUBLIC_APP_ENV === "development";
 
-            const redirectUrl = isDev
-                ? `${APPCONSTANTS.LocalUrl}/update-password`
-                : `${APPCONSTANTS.WebUrl}/update-password`;
+            const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}update-password`;
+
+            // const redirectUrl = isDev
+            //     ? `${APPCONSTANTS.LocalUrl}/update-password`
+            //     : `${APPCONSTANTS.WebUrl}/update-password`;
 
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
                 redirectTo: redirectUrl,
@@ -145,7 +146,7 @@ export default function Page() {
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="w-full rounded-md bg-[#3ba1da] px-6 py-3 cursor-pointer font-semibold text-white transition-colors hover:bg-[#41abd6] disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full rounded-md bg-[#35c8dc] px-6 py-3 cursor-pointer font-semibold text-white transition-colors hover:bg-[#33aaba] disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {loading ? "Sending..." : "Reset Password"}
                             </button>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useAuth } from "../../context/AuthContext"
 import { supabase } from "@/lib/supabase/client"
@@ -48,7 +48,7 @@ export default function WinDetailsPage() {
     const ssRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
     const sRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
 
-    const allowedRoles = [smRole, adminRole, sRole, ssRole].filter(Boolean);
+    const allowedRoles = [adminRole, ssRole].filter(Boolean);
     const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
 
     // Format date to dd-MMM-yyyy
@@ -153,6 +153,7 @@ export default function WinDetailsPage() {
             setIsLoading(false);
         }
     };
+    const router = useRouter();
 
     useEffect(() => {
         if (!loading && isLoggedIn && profile?.isVerified && isAuthorized) {
@@ -167,6 +168,19 @@ export default function WinDetailsPage() {
                 <div className="text-lg">Loading win details...</div>
             </div>
         );
+    }
+    // Check if user has permission to access this page
+    if (!isAuthorized) {
+        router.replace('/product-category/alldevices');
+        return;
+    }
+    if (smRole == profile?.role) {
+        router.replace('/product-category/alldevices');
+        return;
+    }
+    if (sRole == profile?.role) {
+        router.replace('/product-category/alldevices');
+        return;
     }
 
     if (!isAuthorized) {
@@ -265,19 +279,6 @@ export default function WinDetailsPage() {
 
     return (
         <div className="container mx-auto py-10 px-5">
-            <div className="mb-6">
-                <h1 className="text-3xl font-bold">Win Details</h1>
-                <p className="text-gray-600 mt-2">View detailed information about this win report</p>
-            </div>
-
-            <div className="mb-6">
-                <Link
-                    href="/view-windetails"
-                    className="text-blue-500 hover:text-blue-700 hover:underline"
-                >
-                    ← Back to Wins List
-                </Link>
-            </div>
 
             {/* Win Details Table */}
             <div className="space-y-6">
@@ -326,7 +327,7 @@ export default function WinDetailsPage() {
                                         </div>
                                     )
                                 ) : (
-                                     <div>{win.otherDesc || "Unknown Product"}</div>
+                                    <div>{win.otherDesc || "Unknown Product"}</div>
                                 )}
                             </TableCell>
                         </TableRow>

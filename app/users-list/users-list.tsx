@@ -100,7 +100,7 @@ export default function UsersList() {
     const superSubscriberRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
     const subscriberRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
 
-    const allowedRoles = [superSubscriberRole, smRole, adminRole].filter(Boolean);
+    const allowedRoles = [superSubscriberRole, adminRole].filter(Boolean);
     const viewRoles = [superSubscriberRole].filter(Boolean);
 
     const columnDisplayNames: Record<string, string> = {
@@ -863,7 +863,7 @@ export default function UsersList() {
             }
         )
     }
-
+    const [globalFilter, setGlobalFilter] = useState<string>("")
     // Initialize table
     const table = useReactTable({
         data: users,
@@ -876,9 +876,11 @@ export default function UsersList() {
         getFilteredRowModel: getFilteredRowModel(),
         onColumnVisibilityChange: setColumnVisibility,
         onRowSelectionChange: setRowSelection,
+        onGlobalFilterChange: setGlobalFilter,
+        globalFilterFn: "auto", // Auto filter all string fields
         initialState: {
             pagination: {
-                pageSize: 100, // Set a safe default value instead of users.length
+                pageSize: 100,
                 pageIndex: 0,
             },
         },
@@ -887,6 +889,7 @@ export default function UsersList() {
             columnFilters,
             columnVisibility,
             rowSelection,
+            globalFilter, // Add this
         },
     });
 
@@ -1072,7 +1075,6 @@ export default function UsersList() {
             <div className="flex justify-between items-center mb-6">
                 <div className="flex flex-col">
                     <h1 className="sm:text-3xl text-xl font-bold">
-                        {isUnverifiedOnly ? 'User Approvals' : 'User Management'}
                     </h1>
                     {isUnverifiedOnly && (
                         <p className="text-sm text-gray-600 mt-1">
@@ -1123,53 +1125,57 @@ export default function UsersList() {
             )}
 
             <div className="w-full">
-                <div className="flex items-center py-4 gap-4">
-                    <Input
-                        placeholder="Filter emails..."
-                        value={(table.getColumn("email")?.getFilterValue() as string) ?? ""}
-                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                            table.getColumn("email")?.setFilterValue(event.target.value)
-                        }
-                        className="max-w-sm"
-                    />
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="ml-auto">
-                                Columns <ChevronDown className="ml-2 h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            {table
-                                .getAllColumns()
-                                .filter((column) => column.getCanHide())
-                                .map((column) => {
-                                    return (
-                                        <DropdownMenuCheckboxItem
-                                            key={column.id}
-                                            className="capitalize"
-                                            checked={column.getIsVisible()}
-                                            onCheckedChange={(value: boolean) => {
-                                                column.toggleVisibility(!!value);
-                                                logInfo(
-                                                    'ui',
-                                                    'column_toggle',
-                                                    `Column visibility toggled`,
-                                                    {
-                                                        columnId: column.id,
-                                                        columnName: columnDisplayNames[column.id] || column.id,
-                                                        isVisible: value
-                                                    },
-                                                    profile?.id,
-                                                    source
-                                                );
-                                            }}
-                                        >
-                                            {columnDisplayNames[column.id] || column.id}
-                                        </DropdownMenuCheckboxItem>
-                                    )
-                                })}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                <div className="flex items-center justify-between py-4 gap-4">
+                    <div className="">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="ml-auto">
+                                    Columns <ChevronDown className="ml-2 h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                {table
+                                    .getAllColumns()
+                                    .filter((column) => column.getCanHide())
+                                    .map((column) => {
+                                        return (
+                                            <DropdownMenuCheckboxItem
+                                                key={column.id}
+                                                className="capitalize"
+                                                checked={column.getIsVisible()}
+                                                onCheckedChange={(value: boolean) => {
+                                                    column.toggleVisibility(!!value);
+                                                    logInfo(
+                                                        'ui',
+                                                        'column_toggle',
+                                                        `Column visibility toggled`,
+                                                        {
+                                                            columnId: column.id,
+                                                            columnName: columnDisplayNames[column.id] || column.id,
+                                                            isVisible: value
+                                                        },
+                                                        profile?.id,
+                                                        source
+                                                    );
+                                                }}
+                                            >
+                                                {columnDisplayNames[column.id] || column.id}
+                                            </DropdownMenuCheckboxItem>
+                                        )
+                                    })}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                    <div className="">
+                        <Input
+                            placeholder="Search..."
+                            value={globalFilter ?? ""}
+                            onChange={(event) => {
+                                setGlobalFilter(event.target.value);
+                            }}
+                            className="pl-8"
+                        />
+                    </div>
                 </div>
                 <div className="overflow-hidden rounded-md border">
                     <Table>
@@ -1241,32 +1247,6 @@ export default function UsersList() {
                     </div>
                     <div className="flex items-center space-x-4">
                         <div className="flex items-center space-x-2">
-                            <span className="text-sm text-gray-600">Show</span>
-                            <select
-                                value={table.getState().pagination.pageSize}
-                                onChange={e => {
-                                    const newSize = Number(e.target.value);
-                                    table.setPageSize(newSize === -1 ? users.length : newSize);
-                                    logInfo(
-                                        'ui',
-                                        'page_size_changed',
-                                        `Page size changed to: ${newSize === -1 ? 'All' : newSize}`,
-                                        {
-                                            previousSize: table.getState().pagination.pageSize,
-                                            newSize: newSize === -1 ? users.length : newSize
-                                        },
-                                        profile?.id,
-                                        source
-                                    );
-                                }}
-                                className="border rounded px-2 py-1 text-sm"
-                            >
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                                <option value={50}>50</option>
-                                <option value={100}>100</option>
-                                <option value={-1}>All</option>
-                            </select>
                         </div>
 
                         {table.getPageCount() > 1 && (

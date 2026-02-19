@@ -153,7 +153,7 @@ export default function Page() {
     const sRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
 
 
-    const allowedRoles = [smRole, adminRole, sRole, ssRole].filter(Boolean); // Remove undefined values
+    const allowedRoles = [adminRole, ssRole].filter(Boolean); // Remove undefined values
     const actionRoles = [smRole, adminRole, ssRole].filter(Boolean); // Remove undefined values
     const viewRoles = [sRole, ssRole, smRole].filter(Boolean); // Remove undefined values
 
@@ -189,6 +189,13 @@ export default function Page() {
     const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
     const isActionAuthorized = profile?.role && actionRoles.includes(profile.role);
     const isViewAuthorized = profile?.role && viewRoles.includes(profile.role);
+
+    useEffect(() => {
+        if (!isAuthorized) {
+            router.replace('/product-category/alldevices');
+            return;
+        }
+    }, [isAuthorized, router, ssRole, smRole, profile]);
 
     // Handle auth check
     useEffect(() => {
@@ -756,7 +763,7 @@ export default function Page() {
 
                 return <div className="text-left ps-2 capitalize">{order_status}</div>;
             },
-        },  
+        },
         {
             id: "product_info",
             header: ({ column }) => {
@@ -1042,191 +1049,160 @@ export default function Page() {
             cell: ({ row }) => <div className="text-left ps-2">{row.getValue("order_quarter") || '-'}</div>,
         },
     ];
-
-    // Only add actions column if user is authorized for actions
     if (!isViewAuthorized) {
-        columns.unshift({
-            id: "actions",
-            enableHiding: false,
-            cell: ({ row }) => {
-                const order = row.original;
-                const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+        columns.unshift(
+            {
+                id: "actions",
+                enableHiding: false,
+                cell: ({ row }) => {
+                    const order = row.original;
+                    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-                const handleDeleteClick = () => {
-                    setIsDeleteDialogOpen(true);
-                };
+                    const handleDeleteClick = () => {
+                        setIsDeleteDialogOpen(true);
+                    };
 
-                const handleConfirmDelete = async () => {
-                    const startTime = Date.now();
+                    const handleConfirmDelete = async () => {
+                        const startTime = Date.now();
 
-                    logWarning(
-                        'order',
-                        'order_delete_requested',
-                        `Delete requested for order #${order.order_no}`,
-                        {
-                            orderId: order.id,
-                            orderNo: order.order_no,
-                            customerName: order.company_name,
-                            deletedBy: profile?.email
-                        },
-                        profile?.id,
-                        source
-                    );
-
-                    try {
-                        const { error } = await supabase
-                            .from('orders')
-                            .delete()
-                            .eq('id', order.id);
-
-                        if (error) throw error;
-
-                        // Refresh the orders list
-                        fetchOrders();
-                        setIsDeleteDialogOpen(false);
-
-
-                        const executionTime = Date.now() - startTime;
-                        logSuccess(
+                        logWarning(
                             'order',
-                            'order_delete_success',
-                            `Successfully deleted order #${order.order_no}`,
+                            'order_delete_requested',
+                            `Delete requested for order #${order.order_no}`,
                             {
                                 orderId: order.id,
                                 orderNo: order.order_no,
                                 customerName: order.company_name,
-                                executionTime,
                                 deletedBy: profile?.email
                             },
                             profile?.id,
                             source
                         );
 
-                    } catch (error) {
-                        const executionTime = Date.now() - startTime;
-                        setError('Failed to delete order');
-                        logError(
-                            'db',
-                            'order_delete_failed',
-                            `Failed to delete order #${order.order_no}`,
-                            {
-                                orderId: order.id,
-                                executionTime
-                            },
-                            profile?.id,
-                            source
-                        );
-                    }
-                };
-                return (
-                    <div className="flex space-x-2 ps-2">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem
-                                    className="cursor-pointer"
-                                    onClick={() => navigator.clipboard.writeText(order.order_no || '')}
-                                >
-                                    Copy Order #
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    className="cursor-pointer"
-                                    onClick={() => navigator.clipboard.writeText(order.company_name || '')}
-                                >
-                                    Copy Customer Name
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    className="cursor-pointer"
-                                    onClick={() => {
-                                        router.push(`/order-details/${order.order_no}`);
-                                    }}
-                                >
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    className="cursor-pointer"
-                                    onClick={() => handleEditOrder(order)}
-                                >
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Edit Order
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    className="cursor-pointer text-red-600 focus:text-red-600"
-                                    onClick={handleDeleteClick}
-                                >
-                                    <Trash className="mr-2 h-4 w-4" />
-                                    Delete Order
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        try {
+                            const { error } = await supabase
+                                .from('orders')
+                                .delete()
+                                .eq('id', order.id);
 
-                        {/* Delete Confirmation Dialog */}
-                        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        This action cannot be undone. This will permanently delete the order of
-                                        <b> {order.company_name}</b> (Order no #{order.order_no}).
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                        onClick={handleConfirmDelete}
-                                        className="bg-red-500 hover:bg-red-600"
+                            if (error) throw error;
+
+                            // Refresh the orders list
+                            fetchOrders();
+                            setIsDeleteDialogOpen(false);
+
+
+                            const executionTime = Date.now() - startTime;
+                            logSuccess(
+                                'order',
+                                'order_delete_success',
+                                `Successfully deleted order #${order.order_no}`,
+                                {
+                                    orderId: order.id,
+                                    orderNo: order.order_no,
+                                    customerName: order.company_name,
+                                    executionTime,
+                                    deletedBy: profile?.email
+                                },
+                                profile?.id,
+                                source
+                            );
+
+                        } catch (error) {
+                            const executionTime = Date.now() - startTime;
+                            setError('Failed to delete order');
+                            logError(
+                                'db',
+                                'order_delete_failed',
+                                `Failed to delete order #${order.order_no}`,
+                                {
+                                    orderId: order.id,
+                                    executionTime
+                                },
+                                profile?.id,
+                                source
+                            );
+                        }
+                    };
+                    return (
+                        <div className="flex space-x-2 ps-2">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
+                                        <span className="sr-only">Open menu</span>
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                    <DropdownMenuItem
+                                        className="cursor-pointer"
+                                        onClick={() => navigator.clipboard.writeText(order.order_no || '')}
                                     >
+                                        Copy Order #
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className="cursor-pointer"
+                                        onClick={() => navigator.clipboard.writeText(order.company_name || '')}
+                                    >
+                                        Copy Customer Name
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        className="cursor-pointer"
+                                        onClick={() => {
+                                            router.push(`/order-details/${order.order_no}`);
+                                        }}
+                                    >
+                                        <Eye className="mr-2 h-4 w-4" />
+                                        View Details
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className="cursor-pointer"
+                                        onClick={() => handleEditOrder(order)}
+                                    >
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Edit Order
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className="cursor-pointer text-red-600 focus:text-red-600"
+                                        onClick={handleDeleteClick}
+                                    >
+                                        <Trash className="mr-2 h-4 w-4" />
                                         Delete Order
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    </div>
-                )
-            },
-        });
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+
+                            {/* Delete Confirmation Dialog */}
+                            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This action cannot be undone. This will permanently delete the order of
+                                            <b> {order.company_name}</b> (Order no #{order.order_no}).
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction
+                                            onClick={handleConfirmDelete}
+                                            className="bg-red-500 hover:bg-red-600"
+                                        >
+                                            Delete Order
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
+                    )
+                },
+            }
+        );
     }
-    if (isViewAuthorized) {
-        columns.unshift({
-            id: "actions",
-            enableHiding: false,
-            cell: ({ row }) => {
-                const order = row.original;
-                return (
-                    <div className="flex space-x-2 ps-2">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem
-                                    className="cursor-pointer"
-                                    onClick={() => {
-                                        router.push(`/order-details/${order.order_no}`);
-                                    }}
-                                >
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    View Details
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                )
-            },
-        });
-    }
+
+    const [globalFilter, setGlobalFilter] = useState<string>("")
 
     // Initialize table
     const table = useReactTable({
@@ -1241,12 +1217,15 @@ export default function Page() {
         getFilteredRowModel: getFilteredRowModel(),
         onColumnVisibilityChange: setColumnVisibility,
         onRowSelectionChange: setRowSelection,
+        onGlobalFilterChange: setGlobalFilter,
+        globalFilterFn: "auto",
         state: {
             sorting,
             columnFilters,
             columnVisibility,
             rowSelection,
             pagination,
+            globalFilter, // Add this
         },
     })
 
@@ -1391,7 +1370,7 @@ export default function Page() {
     return (
         <div className="container mx-auto py-10 px-5 bg-gr">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="sm:text-3xl text-xl font-bold">SKU Order Management</h1>
+                <h1 className="sm:text-3xl text-xl font-bold"></h1>
                 <div className="flex gap-2">
                     <Button
                         variant="outline"
@@ -1428,41 +1407,45 @@ export default function Page() {
             )}
 
             <div className="w-full">
-                <div className="flex items-center py-4 gap-4">
-                    <Input
-                        placeholder="Filter by Shipping Status..."
-                        value={(table.getColumn("order_status")?.getFilterValue() as string) ?? ""}
-                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                            table.getColumn("order_status")?.setFilterValue(event.target.value)
-                        }
-                        className="max-w-sm"
-                    />
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="ml-auto">
-                                Columns <ChevronDown className="ml-2 h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            {table
-                                .getAllColumns()
-                                .filter((column) => column.getCanHide())
-                                .map((column) => {
-                                    return (
-                                        <DropdownMenuCheckboxItem
-                                            key={column.id}
-                                            className="capitalize"
-                                            checked={column.getIsVisible()}
-                                            onCheckedChange={(value: boolean) =>
-                                                column.toggleVisibility(!!value)
-                                            }
-                                        >
-                                            {columnDisplayNames[column.id] || column.id}
-                                        </DropdownMenuCheckboxItem>
-                                    )
-                                })}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                <div className="flex items-center justify-between py-4 gap-4">
+                    <div className="">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="ml-auto">
+                                    Columns <ChevronDown className="ml-2 h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                {table
+                                    .getAllColumns()
+                                    .filter((column) => column.getCanHide())
+                                    .map((column) => {
+                                        return (
+                                            <DropdownMenuCheckboxItem
+                                                key={column.id}
+                                                className="capitalize"
+                                                checked={column.getIsVisible()}
+                                                onCheckedChange={(value: boolean) =>
+                                                    column.toggleVisibility(!!value)
+                                                }
+                                            >
+                                                {columnDisplayNames[column.id] || column.id}
+                                            </DropdownMenuCheckboxItem>
+                                        )
+                                    })}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                    <div className="">
+                        <Input
+                            placeholder="Search..."
+                            value={globalFilter ?? ""}
+                            onChange={(event) => {
+                                setGlobalFilter(event.target.value);
+                            }}
+                            className="pl-8"
+                        />
+                    </div>
                 </div>
                 <div className="overflow-hidden rounded-md">
                     <Table>
@@ -1531,32 +1514,8 @@ export default function Page() {
                 <div className="flex flex-col gap-4 py-4">
                     {/* Top row: Rows per page selector */}
                     <div className="flex justify-between items-center">
-                        <div className="flex items-center space-x-2">
-                            <span className="text-sm text-gray-600 whitespace-nowrap">Show</span>
-                            <select
-                                value={pagination.pageSize === 1000000 ? "All" : pagination.pageSize}
-                                onChange={e => {
-                                    const value = e.target.value;
-                                    if (value === "All") {
-                                        table.setPageSize(1000000); // Very large number
-                                    } else {
-                                        table.setPageSize(Number(value));
-                                    }
-                                }}
-                                className="border rounded px-2 py-1 text-sm"
-                            >
-                                <option value="All">All</option>
-                                <option value="10">10</option>
-                                <option value="20">20</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                            </select>
-                            <span className="text-sm text-gray-600 whitespace-nowrap">entries</span>
-                        </div>
-
                         {/* Page info for mobile */}
                         <div className="text-sm text-gray-600 sm:hidden">
-                            {table.getState().pagination.pageIndex + 1}/{table.getPageCount()}
                         </div>
                     </div>
 
@@ -1564,7 +1523,6 @@ export default function Page() {
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                         {/* Page info for desktop */}
                         <div className="hidden sm:block text-sm text-gray-600">
-                            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
                         </div>
 
                         <div className="flex items-center justify-center space-x-1 w-full sm:w-auto">

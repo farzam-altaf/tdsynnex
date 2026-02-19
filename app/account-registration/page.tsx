@@ -483,7 +483,7 @@ export default function Page() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-56 rounded-md bg-[#3ba1da] px-6 py-3 font-semibold cursor-pointer text-white transition-colors hover:bg-[#41abd6] disabled:opacity-50"
+                  className="w-56 rounded-md bg-[#35c8dc] px-6 py-3 font-semibold cursor-pointer text-white transition-colors hover:bg-[#33aaba] disabled:opacity-50"
                 >
                   {loading ? "Signing up..." : "Sign up"}
                 </button>

@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     if (!from) from = process.env.EMAIL_FROM;
 
-    // const info = await transporter.sendMail({ from, to, cc, subject, text, html });
+    const info = await transporter.sendMail({ from, to, cc, subject, text, html });
 
     return NextResponse.json({ success: true, message: "Email sent successfully" });
   } catch (err: any) {

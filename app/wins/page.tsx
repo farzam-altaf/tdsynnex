@@ -726,9 +726,7 @@ export default function Page() {
                     source
                 );
 
-                toast.success(`Win reported successfully for ${formData.selectedProducts.length} product${formData.selectedProducts.length > 1 ? 's' : ''}!`, {
-                    style: { background: "black", color: "white" }
-                });
+
 
                 // Send win email for each product (or one for "other")
                 if (formData.deviceType === "product") {
@@ -835,6 +833,11 @@ export default function Page() {
                     profile?.id,
                     source
                 );
+
+
+                setTimeout(() => {
+                    router.push('/thanks?_=thanks');
+                }, 50);
 
             } catch (error: any) {
                 const executionTime = Date.now() - startTime;
@@ -998,7 +1001,7 @@ export default function Page() {
         return (
             <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3ba1da] mx-auto"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#35c8dc] mx-auto"></div>
                     <p className="mt-4 text-gray-600">Loading...</p>
                 </div>
             </div>
@@ -1050,7 +1053,7 @@ export default function Page() {
                                 onChange={handleChange}
                                 className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition bg-white text-sm ${errors.orderNumber
                                     ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                    : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                    : "border-gray-300 focus:border-[#35c8dc] focus:ring-2 focus:ring-[#35c8dc]/30"
                                     }`}
                             >
                                 <option value="">Select an order</option>
@@ -1082,7 +1085,7 @@ export default function Page() {
                                         onChange={handleChange}
                                         className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.otherPartNumber
                                             ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                            : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                            : "border-gray-300 focus:border-[#35c8dc] focus:ring-2 focus:ring-[#35c8dc]/30"
                                             }`}
                                         placeholder="Enter part number"
                                     />
@@ -1102,7 +1105,7 @@ export default function Page() {
 
                                 {loadingProducts ? (
                                     <div className="flex justify-center items-center p-4 border border-gray-200 rounded-lg">
-                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#3ba1da]"></div>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#35c8dc]"></div>
                                         <span className="ml-2 text-sm text-gray-600">Loading product...</span>
                                     </div>
                                 ) : (
@@ -1110,7 +1113,7 @@ export default function Page() {
                                         {/* Product Radio Button - with product details */}
                                         {products.length > 0 && (
                                             <label className={`flex items-start space-x-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition ${formData.deviceType === "product"
-                                                ? "border-[#3ba1da] bg-blue-50"
+                                                ? "border-[#35c8dc] bg-blue-50"
                                                 : "border-gray-300"
                                                 }`}>
                                                 <input
@@ -1119,7 +1122,7 @@ export default function Page() {
                                                     value="product"
                                                     checked={formData.deviceType === "product"}
                                                     onChange={handleChange}
-                                                    className="h-4 w-4 text-[#3ba1da] focus:ring-[#3ba1da] mt-1 shrink-0"
+                                                    className="h-4 w-4 text-[#35c8dc] focus:ring-[#35c8dc] mt-1 shrink-0"
                                                 />
                                                 <div className="flex-1 min-w-0">
                                                     <span className="font-medium text-gray-700 text-sm block">
@@ -1144,7 +1147,7 @@ export default function Page() {
 
                                         {/* Other Product Radio Button */}
                                         <label className={`flex items-start space-x-3 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition ${formData.deviceType === "other"
-                                            ? "border-[#3ba1da] bg-blue-50"
+                                            ? "border-[#35c8dc] bg-blue-50"
                                             : "border-gray-300"
                                             }`}>
                                             <input
@@ -1153,7 +1156,7 @@ export default function Page() {
                                                 value="other"
                                                 checked={formData.deviceType === "other"}
                                                 onChange={handleChange}
-                                                className="h-4 w-4 text-[#3ba1da] focus:ring-[#3ba1da] mt-1 shrink-0"
+                                                className="h-4 w-4 text-[#35c8dc] focus:ring-[#35c8dc] mt-1 shrink-0"
                                             />
                                             <div className="flex-1 min-w-0">
                                                 <span className="font-medium text-gray-700 text-sm">Other Product</span>
@@ -1179,7 +1182,7 @@ export default function Page() {
                                 onChange={handleChange}
                                 className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.resellerName
                                     ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                    : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                    : "border-gray-300 focus:border-[#35c8dc] focus:ring-2 focus:ring-[#35c8dc]/30"
                                     }`}
                                 placeholder="Enter reseller name"
                             />
@@ -1199,7 +1202,7 @@ export default function Page() {
                                 onChange={handleChange}
                                 className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.synnexOrderNumber
                                     ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                    : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                    : "border-gray-300 focus:border-[#35c8dc] focus:ring-2 focus:ring-[#35c8dc]/30"
                                     }`}
                                 placeholder="Enter Synnex order number"
                             />
@@ -1221,7 +1224,7 @@ export default function Page() {
                                 onChange={handleChange}
                                 className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.resellerAccountNumber
                                     ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                    : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                    : "border-gray-300 focus:border-[#35c8dc] focus:ring-2 focus:ring-[#35c8dc]/30"
                                     }`}
                                 placeholder="Enter account number"
                             />
@@ -1241,7 +1244,7 @@ export default function Page() {
                                 onChange={handleChange}
                                 className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.customerName
                                     ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                    : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                    : "border-gray-300 focus:border-[#35c8dc] focus:ring-2 focus:ring-[#35c8dc]/30"
                                     }`}
                                 placeholder="Customer name"
                             />
@@ -1264,7 +1267,7 @@ export default function Page() {
                                 min="1"
                                 className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.numberOfUnits
                                     ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                    : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                    : "border-gray-300 focus:border-[#35c8dc] focus:ring-2 focus:ring-[#35c8dc]/30"
                                     }`}
                                 placeholder="0"
                             />
@@ -1285,7 +1288,7 @@ export default function Page() {
                                 min="0"
                                 className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.totalDealRevenue
                                     ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                    : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                    : "border-gray-300 focus:border-[#35c8dc] focus:ring-2 focus:ring-[#35c8dc]/30"
                                     }`}
                                 placeholder="0"
                             />
@@ -1306,7 +1309,7 @@ export default function Page() {
                                 onChange={handleChange}
                                 className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition bg-white text-sm ${errors.purchaseType
                                     ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                    : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                    : "border-gray-300 focus:border-[#35c8dc] focus:ring-2 focus:ring-[#35c8dc]/30"
                                     }`}
                             >
                                 <option value="">Select option</option>
@@ -1330,15 +1333,10 @@ export default function Page() {
                                     onChange={handleChange}
                                     className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition text-sm ${errors.purchaseDate
                                         ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                        : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                        : "border-gray-300 focus:border-[#35c8dc] focus:ring-2 focus:ring-[#35c8dc]/30"
                                         }`}
                                 />
                             </div>
-                            {formData.purchaseDate && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Selected: {formatDateForDisplay(formData.purchaseDate)}
-                                </p>
-                            )}
                             {errors.purchaseDate && (
                                 <p className="mt-1 text-sm text-red-600">{errors.purchaseDate}</p>
                             )}
@@ -1357,7 +1355,7 @@ export default function Page() {
                             maxLength={500}
                             className={`w-full rounded-lg border px-4 py-3 text-gray-900 focus:outline-none transition resize-none text-sm ${errors.howHelped
                                 ? "border-red-500 focus:ring-2 focus:ring-red-300"
-                                : "border-gray-300 focus:border-[#3ba1da] focus:ring-2 focus:ring-[#3ba1da]/30"
+                                : "border-gray-300 focus:border-[#35c8dc] focus:ring-2 focus:ring-[#35c8dc]/30"
                                 }`}
                             placeholder="Describe how TD SYNNEX SURFACE contributed to closing this deal... (10-500 characters)"
                         />
@@ -1374,7 +1372,7 @@ export default function Page() {
                     <div className="flex justify-center pt-4">
                         <button
                             type="submit"
-                            className="w-48 rounded-lg bg-[#3ba1da] cursor-pointer px-6 py-2.5 text-base font-semibold text-white transition-all duration-300 hover:bg-[#41abd6] hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#3ba1da]/50"
+                            className="w-48 rounded-lg bg-[#35c8dc] cursor-pointer px-6 py-2.5 text-base font-semibold text-white transition-all duration-300 hover:bg-[#33aaba] hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#35c8dc]/50"
                         >
                             Submit
                         </button>

@@ -146,9 +146,9 @@ export default function Page() {
     const ssRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
     const sRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
 
-    const allowedRoles = [smRole, adminRole, sRole, ssRole].filter(Boolean); // Remove undefined values
-    const actionRoles = [smRole, adminRole, ssRole].filter(Boolean); // Remove undefined values
-    const viewRoles = [sRole, ssRole].filter(Boolean); // Remove undefined values
+    const allowedRoles = [adminRole, ssRole, smRole].filter(Boolean); // Remove undefined values
+    const actionRoles = [adminRole, ssRole, smRole].filter(Boolean); // Remove undefined values
+    const viewRoles = [ssRole].filter(Boolean); // Remove undefined values
 
     const columnDisplayNames: Record<string, string> = {
         "select": "Select",
@@ -1307,6 +1307,8 @@ export default function Page() {
         }
     ];
 
+    const [globalFilter, setGlobalFilter] = useState<string>("")
+
     // Initialize table
     const table = useReactTable({
         data: orders,
@@ -1320,12 +1322,15 @@ export default function Page() {
         getFilteredRowModel: getFilteredRowModel(),
         onColumnVisibilityChange: setColumnVisibility,
         onRowSelectionChange: setRowSelection,
+        onGlobalFilterChange: setGlobalFilter,
+        globalFilterFn: "auto",
         state: {
             sorting,
             columnFilters,
             columnVisibility,
             rowSelection,
             pagination,
+            globalFilter, // Add this
         },
     });
 
@@ -1492,10 +1497,7 @@ export default function Page() {
         <div className="container mx-auto py-10 px-5">
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="sm:text-3xl text-xl font-bold">Overdue Orders Dashboard</h1>
-                    <p className="text-sm text-gray-600 mt-1">
-                        Showing {orders.length} order{orders.length !== 1 ? 's' : ''} with passed return dates (shipped more than 45 days ago)
-                    </p>
+                    <h1 className="sm:text-3xl text-xl font-bold"></h1>
                 </div>
                 <div className="flex gap-2">
                     <Button
@@ -1517,8 +1519,8 @@ export default function Page() {
                 <div className="mb-6 p-4 rounded-lg">
                     <div className="flex items-center justify-between">
                         <div>
-                            <span className="font-semibold">{selectedCount}</span>
-                            <span className="ml-2">
+                            <span>{selectedCount}</span>
+                            <span className="ml-1">
                                 {selectedCount === 1 ? 'order selected' : 'orders selected'}
                             </span>
                         </div>
@@ -1527,13 +1529,13 @@ export default function Page() {
                                 onClick={handleSendReminders}
                                 disabled={isSendingReminders}
                                 className="
-                        flex items-center gap-2
-                        bg-blue-900 hover:bg-blue-700
-                        text-white
-                        px-4 py-2
-                        rounded-md
-                        disabled:opacity-50
-                    "
+                                    flex items-center gap-2
+                                    bg-blue-900 hover:bg-blue-700
+                                    text-white
+                                    px-4 py-2
+                                    rounded-md
+                                    disabled:opacity-50
+                                "
                             >
                                 {isSendingReminders ? "Sending..." : "Send Reminders"}
                             </button>
@@ -1549,41 +1551,46 @@ export default function Page() {
             )}
 
             <div className="w-full">
-                <div className="flex items-center py-4 gap-4">
-                    <Input
-                        placeholder="Filter by Customer Name..."
-                        value={(table.getColumn("company_name")?.getFilterValue() as string) ?? ""}
-                        onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                            table.getColumn("company_name")?.setFilterValue(event.target.value)
-                        }
-                        className="max-w-sm"
-                    />
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="ml-auto">
-                                Columns <ChevronDown className="ml-2 h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            {table
-                                .getAllColumns()
-                                .filter((column) => column.getCanHide() && column.id !== 'select')
-                                .map((column) => {
-                                    return (
-                                        <DropdownMenuCheckboxItem
-                                            key={column.id}
-                                            className="capitalize"
-                                            checked={column.getIsVisible()}
-                                            onCheckedChange={(value: boolean) =>
-                                                column.toggleVisibility(!!value)
-                                            }
-                                        >
-                                            {columnDisplayNames[column.id] || column.id}
-                                        </DropdownMenuCheckboxItem>
-                                    )
-                                })}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                <div className="flex items-center justify-between py-4 gap-4">
+
+                    <div className="">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="ml-auto">
+                                    Columns <ChevronDown className="ml-2 h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                {table
+                                    .getAllColumns()
+                                    .filter((column) => column.getCanHide() && column.id !== 'select')
+                                    .map((column) => {
+                                        return (
+                                            <DropdownMenuCheckboxItem
+                                                key={column.id}
+                                                className="capitalize"
+                                                checked={column.getIsVisible()}
+                                                onCheckedChange={(value: boolean) =>
+                                                    column.toggleVisibility(!!value)
+                                                }
+                                            >
+                                                {columnDisplayNames[column.id] || column.id}
+                                            </DropdownMenuCheckboxItem>
+                                        )
+                                    })}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+
+                    <div className="">
+                        <Input
+                            placeholder="Search..."
+                            value={globalFilter ?? ""}
+                            onChange={(event) => setGlobalFilter(event.target.value)}
+                            className="pl-8"
+                        />
+                    </div>
+
                 </div>
                 <div className="overflow-hidden rounded-md">
                     <Table className="border">
@@ -1652,40 +1659,13 @@ export default function Page() {
                 <div className="flex flex-col gap-4 py-4">
                     {/* Top row: Rows per page selector */}
                     <div className="flex justify-between items-center">
-                        <div className="flex items-center space-x-2">
-                            <span className="text-sm text-gray-600 whitespace-nowrap">Show</span>
-                            <select
-                                value={pagination.pageSize === 1000000 ? "All" : pagination.pageSize}
-                                onChange={e => {
-                                    const value = e.target.value;
-                                    if (value === "All") {
-                                        table.setPageSize(1000000); // Very large number
-                                    } else {
-                                        table.setPageSize(Number(value));
-                                    }
-                                }}
-                                className="border rounded px-2 py-1 text-sm"
-                            >
-                                <option value="All">All</option>
-                                <option value="10">10</option>
-                                <option value="20">20</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                            </select>
-                            <span className="text-sm text-gray-600 whitespace-nowrap">entries</span>
-                        </div>
 
-                        {/* Page info for mobile */}
-                        <div className="text-sm text-gray-600 sm:hidden">
-                            {table.getState().pagination.pageIndex + 1}/{table.getPageCount()}
-                        </div>
                     </div>
 
                     {/* Bottom row: Pagination controls */}
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                         {/* Page info for desktop */}
                         <div className="hidden sm:block text-sm text-gray-600">
-                            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
                         </div>
 
                         <div className="flex items-center justify-center space-x-1 w-full sm:w-auto">

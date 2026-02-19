@@ -42,7 +42,7 @@ const menuItems = [
 
 const authMenuItems = [
   { name: 'Edit Profile', href: '/edit-profile' },
-  { name: 'My Orders', href: '/order-details' },
+  { name: 'Orders', href: '/order-details' },
   { name: 'Password reset', href: '/password-reset' },
   { name: 'Logout', href: 'logout' },
 ]
@@ -102,7 +102,7 @@ export default function Navbar() {
   }
 
   const fetchNotificationCounts = useCallback(async () => {
-    if (!profile?.role || (profile.role !== admin && profile.role !== shopManager)) {
+    if (!profile?.role || (profile.role !== admin && profile.role !== superSubscriber)) {
       return;
     }
 
@@ -207,7 +207,7 @@ export default function Navbar() {
 
   // Add useEffect to fetch counts
   useEffect(() => {
-    if (!loading && profile?.role && (profile.role === admin || profile.role === shopManager)) {
+    if (!loading && profile?.role && (profile.role === admin || profile.role === superSubscriber)) {
       fetchNotificationCounts();
 
       // Refresh counts every 30 seconds
@@ -538,7 +538,7 @@ export default function Navbar() {
 
                 <div className="flex items-center space-x-2">
                   {/* Desktop Notification Bell with Hover Dropdown */}
-                  {(isLoggedIn && (profile?.role === admin || profile?.role === shopManager)) && (
+                  {(isLoggedIn && (profile?.role === admin || profile?.role === superSubscriber)) && (
                     <div
                       className="hidden lg:block relative"
                       ref={notificationRef}
@@ -1055,7 +1055,7 @@ export default function Navbar() {
               <button
                 onClick={handleClearCart}
                 disabled={cartUpdating}
-                className="text-sm text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="text-sm text-red-500 hover:text-red-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {cartUpdating ? 'Clearing...' : 'Clear All'}
               </button>
@@ -1082,9 +1082,9 @@ export default function Navbar() {
             </p>
             <button
               onClick={handleContinueShopping}
-              className="px-6 py-2 bg-[#35c8dc] text-white rounded-md hover:bg-[#2db4c8] transition-colors cursor-pointer"
+              className="px-6 py-2 bg-[#35c8dc] text-white rounded-md hover:bg-[#33aaba] transition-colors cursor-pointer"
             >
-              Continue Shopping
+              Continue
             </button>
           </div>
         ) : (
@@ -1136,7 +1136,7 @@ export default function Navbar() {
                           onClick={() => handleRemoveFromCart(item.product_id)}
                           disabled={cartUpdating}
                           className="text-gray-400 hover:text-red-500 p-1 transition-colors 
-                      disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                         >
                           <Trash2 size={16} />
                         </button>

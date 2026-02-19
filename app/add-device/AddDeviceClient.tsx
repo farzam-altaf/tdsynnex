@@ -7,7 +7,7 @@ import { useAuth } from "@/app/context/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, ArrowLeft } from "lucide-react";
 import {
-    logActivity, 
+    logActivity,
     logError,
     logSuccess,
     logInfo,
@@ -144,7 +144,7 @@ export default function AddDeviceClient() {
     const adminRole = process.env.NEXT_PUBLIC_ADMINISTRATOR;
     const superSubscriberRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
     const subscriberRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
-    
+
     // Role options for select
     const roleOptions = [
         { label: "Admin", value: adminRole || "Administrator" },
@@ -157,6 +157,13 @@ export default function AddDeviceClient() {
 
     // Check if current user is authorized
     const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
+
+    useEffect(() => {
+        if (!isAuthorized) {
+            router.replace('/product-category/alldevices');
+            return;
+        }
+    }, [isAuthorized, router]);
 
     // Handle auth check
     useEffect(() => {
@@ -333,7 +340,7 @@ export default function AddDeviceClient() {
     const fetchFilterOptions = async () => {
         try {
             setIsLoading(true);
-            
+
             // Fetch distinct values for each filter column from products table
             const { data: formFactorData } = await supabase
                 .from("products")
@@ -1023,7 +1030,7 @@ export default function AddDeviceClient() {
                                 type="button"
                                 onClick={() => handleInputChange(field, option)}
                                 className={`px-3 py-1.5 text-sm rounded-md cursor-pointer transition-colors ${formData[field] === option
-                                    ? "bg-[#3ba1da] text-white border border-[#41abd6]"
+                                    ? "bg-[#35c8dc] text-white border border-[#33aaba]"
                                     : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent"
                                     }`}
                             >
@@ -1043,7 +1050,7 @@ export default function AddDeviceClient() {
                                 handleCustomInputChange(customField, e.target.value)
                             }
                             className="w-full px-4 py-2 border border-gray-300 rounded-md
-                focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
+                focus:outline-none focus:ring-2 focus:ring-[#35c8dc]"
                         />
                         <p className="text-xs text-gray-500 mt-1">
                             Custom value will be saved when you submit the form
@@ -1058,7 +1065,7 @@ export default function AddDeviceClient() {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-[#3ba1da] mx-auto" />
+                    <Loader2 className="h-8 w-8 animate-spin text-[#35c8dc] mx-auto" />
                     <p className="mt-4 text-gray-600">Loading product data...</p>
                 </div>
             </div>
@@ -1131,7 +1138,7 @@ export default function AddDeviceClient() {
                                                     accept="image/*"
                                                     onChange={(e) => handleImageUpload(e, 'primary')}
                                                 />
-                                                <span className="text-[#3ba1da] font-medium cursor-pointer hover:text-[#41abd6] transition-colors">
+                                                <span className="text-[#35c8dc] font-medium cursor-pointer hover:text-[#33aaba] transition-colors">
                                                     Click to upload
                                                 </span>
                                             </label>
@@ -1164,7 +1171,7 @@ export default function AddDeviceClient() {
                                                 multiple
                                                 onChange={(e) => handleImageUpload(e, 'additional')}
                                             />
-                                            <span className="text-[#3ba1da] font-medium cursor-pointer hover:text-[#41abd6] transition-colors">
+                                            <span className="text-[#35c8dc] font-medium cursor-pointer hover:text-[#33aaba] transition-colors">
                                                 Click to upload
                                             </span>
                                         </label>
@@ -1221,7 +1228,7 @@ export default function AddDeviceClient() {
                                     placeholder="Enter product name"
                                     value={formData.productName}
                                     onChange={(e) => handleInputChange('productName', e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#35c8dc]"
                                     required
                                 />
                             </div>
@@ -1236,7 +1243,7 @@ export default function AddDeviceClient() {
                                     placeholder="Enter SKU"
                                     value={formData.sku}
                                     onChange={(e) => handleInputChange('sku', e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#35c8dc]"
                                     required
                                 />
                             </div>
@@ -1264,7 +1271,7 @@ export default function AddDeviceClient() {
                                     placeholder="Enter technologies (comma separated)"
                                     value={formData.technologies}
                                     onChange={(e) => handleInputChange('technologies', e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#35c8dc]"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Example: Wi-Fi 6, Bluetooth 5.3, vPro</p>
                             </div>
@@ -1275,7 +1282,7 @@ export default function AddDeviceClient() {
                                 <select
                                     value={formData.inventoryType}
                                     onChange={(e) => handleInputChange('inventoryType', e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#35c8dc]"
                                 >
                                     <option value="">Select inventory type</option>
                                     {inventoryTypes.map((type) => (
@@ -1292,7 +1299,7 @@ export default function AddDeviceClient() {
                                     placeholder="Enter total inventory"
                                     value={formData.totalInventory}
                                     onChange={(e) => handleInputChange('totalInventory', e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#35c8dc]"
                                 />
                             </div>
 
@@ -1304,7 +1311,7 @@ export default function AddDeviceClient() {
                                     placeholder="Enter stock quantity"
                                     value={formData.stockQuantity}
                                     onChange={(e) => handleInputChange('stockQuantity', e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#35c8dc]"
                                 />
                             </div>
 
@@ -1315,7 +1322,7 @@ export default function AddDeviceClient() {
                                     type="date"
                                     value={formData.currentDate}
                                     onChange={(e) => handleInputChange('currentDate', e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#35c8dc]"
                                 />
                             </div>
 
@@ -1331,7 +1338,7 @@ export default function AddDeviceClient() {
                                                 value={option}
                                                 checked={formData.copilotPC === option}
                                                 onChange={(e) => handleRadioChange('copilotPC', e.target.value)}
-                                                className="text-[#3ba1da] focus:ring-[#41abd6]"
+                                                className="text-[#35c8dc] focus:ring-[#33aaba]"
                                             />
                                             <span className="text-gray-700">{option}</span>
                                         </label>
@@ -1351,7 +1358,7 @@ export default function AddDeviceClient() {
                                                 value={option}
                                                 checked={formData.fiveGEnabled === option}
                                                 onChange={(e) => handleRadioChange('fiveGEnabled', e.target.value)}
-                                                className="text-[#3ba1da] focus:ring-[#41abd6]"
+                                                className="text-[#35c8dc] focus:ring-[#33aaba]"
                                             />
                                             <span className="text-gray-700">{option}</span>
                                         </label>
@@ -1371,7 +1378,7 @@ export default function AddDeviceClient() {
                                                 value={option}
                                                 checked={formData.postStatus === option}
                                                 onChange={(e) => handleRadioChange('postStatus', e.target.value)}
-                                                className="text-[#3ba1da] focus:ring-[#41abd6]"
+                                                className="text-[#35c8dc] focus:ring-[#33aaba]"
                                             />
                                             <span className="text-gray-700">{option}</span>
                                         </label>
@@ -1387,7 +1394,7 @@ export default function AddDeviceClient() {
                                     rows={4}
                                     value={formData.description}
                                     onChange={(e) => handleInputChange('description', e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3ba1da]"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#35c8dc]"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Add details like condition, highlights, notes.</p>
                             </div>
@@ -1398,10 +1405,10 @@ export default function AddDeviceClient() {
                             <button
                                 type="submit"
                                 disabled={isFormLoading}
-                                className={`px-12 py-3 bg-[#3ba1da] text-white font-medium rounded-md 
-                  focus:outline-none focus:ring-2 focus:ring-[#41abd6] focus:ring-offset-2
+                                className={`px-12 py-3 bg-[#35c8dc] text-white font-medium rounded-md 
+                  focus:outline-none focus:ring-2 focus:ring-[#33aaba] focus:ring-offset-2
                   transition-colors 
-                  ${isFormLoading ? 'cursor-not-allowed opacity-50' : 'hover:bg-[#41abd6] cursor-pointer'}`}
+                  ${isFormLoading ? 'cursor-not-allowed opacity-50' : 'hover:bg-[#33aaba] cursor-pointer'}`}
                             >
                                 {isFormLoading ? (isEditing ? 'Updating...' : 'Submitting...') : (isEditing ? 'Update Device' : 'Submit')}
                             </button>
