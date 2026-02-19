@@ -1468,16 +1468,6 @@ export default function OrderDetails() {
     <div className="container mx-auto py-10 px-5 bg-gr">
       <div className="flex justify-between items-center mb-6">
         <h1 className="sm:text-3xl text-xl font-bold">
-          {showAwaitingOnly && awaitingStatus ? (
-            <span className="flex items-center gap-2">
-              Awaiting Orders
-              <span className="text-sm font-normal text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                {orders.length} orders
-              </span>
-            </span>
-          ) : (
-            "All Orders"
-          )}
         </h1>
         <div className="flex gap-2">
           {showAwaitingOnly && (
