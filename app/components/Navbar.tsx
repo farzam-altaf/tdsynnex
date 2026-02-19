@@ -681,7 +681,7 @@ export default function Navbar() {
                         onClick={() => setIsSearchOpen(!isSearchOpen)}
                       >
                         <span className="sr-only">Search</span>
-                        <CiSearch size={25} />
+                        <CiSearch size={23} />
                       </button>
 
                       {isSearchOpen && (
@@ -801,7 +801,7 @@ export default function Navbar() {
                       onMouseLeave={handleUserMenuMouseLeave}
                       onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                     >
-                      <CiUser size={27} />
+                      <CiUser size={23} />
                       <FaCaretDown
                         size={13}
                         className={classNames(
@@ -883,7 +883,7 @@ export default function Navbar() {
                         type="button"
                         onClick={handleCartClick}
                         disabled={cartUpdating || cartLoading}
-                        className="relative rounded-full p-1 mt-2 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="relative rounded-full p-1 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <span className="sr-only">Cart</span>
                         <Badge
@@ -902,7 +902,7 @@ export default function Navbar() {
                           }}
                         >
                           <div className="relative">
-                            <PiShoppingCartThin size={26} />
+                            <PiShoppingCartThin size={23} />
                           </div>
                         </Badge>
                       </button>

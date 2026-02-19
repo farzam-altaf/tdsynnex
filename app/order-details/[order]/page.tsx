@@ -745,7 +745,7 @@ export default function Page() {
                                 </TableBody>
                             </Table>
                         </div>
-
+                        {/* 
                         <div className="bg-gray-50 p-4 rounded">
                             <h4 className="font-semibold mb-3 text-lg">Return Summary</h4>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
@@ -817,7 +817,7 @@ export default function Page() {
                                     </div>
                                 </div>
                             )}
-                        </div>
+                        </div> */}
                     </div>
 
                     <div className="flex justify-end space-x-3 pt-4 border-t">
@@ -1586,7 +1586,7 @@ export default function Page() {
             setEditingRowId(null);
             setEditedValue("");
 
-            toast.success(`Data updated successfully!`);
+            toast.success(`Order updated successfully!`);
 
         } catch (err) {
             await logActivity({
@@ -2855,7 +2855,7 @@ export default function Page() {
                                                     <div className="flex">
                                                         <Button
                                                             onClick={handleApprove}
-                                                            className="bg-[#0A4647] hover:bg-[#093131] text-white cursor-pointer flex items-center gap-2"
+                                                            className="bg-[#0A4647] hover:bg-[#267d5a] text-white cursor-pointer flex items-center gap-2"
                                                             disabled={!canApproveReject}
                                                         >
                                                             <CheckCircle size={18} />
@@ -2863,7 +2863,7 @@ export default function Page() {
                                                         </Button>
                                                         <Button
                                                             onClick={handleReject}
-                                                            className="bg-red-700 hover:bg-red-800 text-white cursor-pointer mx-4 flex items-center gap-2"
+                                                            className="bg-white border border-red-700 hover:bg-red-700 text-red-800 hover:text-white cursor-pointer mx-4 flex items-center gap-2"
                                                             variant="destructive"
                                                             disabled={!canApproveReject}
                                                         >

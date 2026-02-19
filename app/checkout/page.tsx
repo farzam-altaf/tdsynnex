@@ -349,6 +349,146 @@ export default function Page() {
     return "";
   };
 
+  const [formattedDevOpportunity, setFormattedDevOpportunity] = useState("");
+
+  // Format number with commas
+  const formatNumberWithCommas = (value: string | number): string => {
+    if (!value && value !== 0) return "";
+
+    // Remove existing commas and convert to string
+    const stringValue = String(value).replace(/,/g, "");
+
+    // Parse to number and check if valid
+    const num = parseFloat(stringValue);
+    if (isNaN(num)) return "";
+
+    // Format with commas
+    return num.toLocaleString('en-US');
+  };
+
+  // Parse formatted string back to number
+  const parseFormattedNumber = (formattedValue: string): number => {
+    if (!formattedValue) return 0;
+    // Remove commas and convert to number
+    return parseFloat(formattedValue.replace(/,/g, "")) || 0;
+  };
+
+
+  const [formattedDevBudget, setFormattedDevBudget] = useState(""); // Add this
+  const [formattedRevOpportunity, setFormattedRevOpportunity] = useState(""); // Add this
+
+
+  // Handle formatted dev budget change
+  const handleDevBudgetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+
+    // Allow only numbers and commas
+    const cleanedValue = rawValue.replace(/[^\d,]/g, "");
+
+    // Update the formatted display
+    setFormattedDevBudget(cleanedValue);
+
+    // Parse the value to number (removing commas) for the actual form data
+    const numericValue = parseFormattedNumber(cleanedValue);
+
+    // Update form data with the numeric value CONVERTED TO STRING
+    setFormData(prev => ({
+      ...prev,
+      dev_budget: numericValue
+    }));
+
+    // Clear error for this field if it exists
+    if (errors.dev_budget) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.dev_budget;
+        return newErrors;
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (formData.dev_budget) {
+      setFormattedDevBudget(formatNumberWithCommas(formData.dev_budget));
+    } else {
+      setFormattedDevBudget("");
+    }
+  }, [formData.dev_budget]);
+
+  useEffect(() => {
+    if (formData.rev_opportunity) {
+      setFormattedRevOpportunity(formatNumberWithCommas(formData.rev_opportunity));
+    } else {
+      setFormattedRevOpportunity("");
+    }
+  }, [formData.rev_opportunity]);
+
+  // Handle formatted revenue opportunity change
+  const handleRevOpportunityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+
+    // Allow only numbers and commas
+    const cleanedValue = rawValue.replace(/[^\d,]/g, "");
+
+    // Update the formatted display
+    setFormattedRevOpportunity(cleanedValue);
+
+    // Parse the value to number (removing commas) for the actual form data
+    const numericValue = parseFormattedNumber(cleanedValue);
+
+    // Update form data with the numeric value CONVERTED TO STRING
+    setFormData(prev => ({
+      ...prev,
+      rev_opportunity: numericValue
+    }));
+
+    // Clear error for this field if it exists
+    if (errors.rev_opportunity) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.rev_opportunity;
+        return newErrors;
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (formData.dev_opportunity) {
+      setFormattedDevOpportunity(formatNumberWithCommas(formData.dev_opportunity));
+    } else {
+      setFormattedDevOpportunity("");
+    }
+  }, [formData.dev_opportunity]);
+
+  // Handle formatted input change
+  const handleDevOpportunityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+
+    // Allow only numbers and commas
+    const cleanedValue = rawValue.replace(/[^\d,]/g, "");
+
+    // Update the formatted display
+    setFormattedDevOpportunity(cleanedValue);
+
+    // Parse the value to number (removing commas) for the actual form data
+    const numericValue = parseFormattedNumber(cleanedValue);
+
+    // Update form data with the numeric value CONVERTED TO STRING
+    setFormData(prev => ({
+      ...prev,
+      dev_opportunity: numericValue.toString() // Convert to string here
+    }));
+
+    // Clear error for this field if it exists
+    if (errors.dev_opportunity) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.dev_opportunity;
+        return newErrors;
+      });
+    }
+  };
+
   // Validate entire form
   const validateForm = (): boolean => {
     const requiredFields = [
@@ -567,9 +707,6 @@ export default function Page() {
 
       // Dismiss loading toast and show success toast
       toast.dismiss(loadingToast);
-      toast.success(`Order Placed for ${cartItems.length} Product(s)!`, {
-        style: { background: "black", color: "white" }
-      });
 
       // Send emails with multiple products
       if (insertedOrder) {
@@ -1097,12 +1234,22 @@ export default function Page() {
                         Device Opportunity Size (Units) <span className="text-red-600">*</span>
                       </label>
                       <input
-                        name="dev_opportunity"
-                        type="number"
-                        min="1"
-                        value={formData.dev_opportunity}
-                        onChange={handleInputChange}
+                        name="dev_opportunity_formatted"
+                        type="text"
+                        inputMode="numeric"
+                        value={formattedDevOpportunity}
+                        onChange={handleDevOpportunityChange}
+                        onBlur={() => {
+                          // Re-format on blur to ensure proper comma placement
+                          if (formattedDevOpportunity) {
+                            const numericValue = parseFormattedNumber(formattedDevOpportunity);
+                            if (!isNaN(numericValue) && numericValue > 0) {
+                              setFormattedDevOpportunity(formatNumberWithCommas(numericValue));
+                            }
+                          }
+                        }}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring ${getErrorClass('dev_opportunity')}`}
+                        placeholder="Enter number (e.g., 78,381)"
                         required
                       />
                       {errors.dev_opportunity && (
@@ -1111,6 +1258,8 @@ export default function Page() {
                           {errors.dev_opportunity.includes(' is') ? ' is required' : ''}
                         </p>
                       )}
+                      {/* Optional: Show raw value for debugging */}
+                      {/* <p className="text-xs text-gray-500 mt-1">Raw value: {formData.dev_opportunity}</p> */}
                     </div>
 
                     <div>
@@ -1122,14 +1271,22 @@ export default function Page() {
                           $
                         </span>
                         <input
-                          name="dev_budget"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          disabled
-                          value={formData.dev_budget}
-                          onChange={handleInputChange}
+                          name="dev_budget_formatted"
+                          type="text"
+                          inputMode="numeric"
+                          value={formattedDevBudget}
+                          onChange={handleDevBudgetChange}
+                          onBlur={() => {
+                            // Re-format on blur to ensure proper comma placement
+                            if (formattedDevBudget) {
+                              const numericValue = parseFormattedNumber(formattedDevBudget);
+                              if (!isNaN(numericValue) && numericValue > 0) {
+                                setFormattedDevBudget(formatNumberWithCommas(numericValue));
+                              }
+                            }
+                          }}
                           className={`flex-1 px-3 py-2 border rounded-r-md focus:outline-none focus:ring ${getErrorClass('dev_budget')}`}
+                          placeholder="Enter amount (e.g., 1,800)"
                           required
                         />
                       </div>
@@ -1147,7 +1304,7 @@ export default function Page() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Revenue Opportunity Size ($ Device Rev) <span className="text-red-600">*</span>
                         <span className="text-xs text-gray-500 ml-2">
-                          (Calculated: {formatCurrency(formData.rev_opportunity)})
+                          (Auto-calculated)
                         </span>
                       </label>
                       <div className="flex">
@@ -1155,13 +1312,31 @@ export default function Page() {
                           $
                         </span>
                         <input
-                          name="rev_opportunity"
-                          type="number"
-                          value={formData.rev_opportunity}
-                          readOnly
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md bg-gray-50"
+                          name="rev_opportunity_formatted"
+                          type="text"
+                          inputMode="numeric"
+                          value={formattedRevOpportunity}
+                          onChange={handleRevOpportunityChange}
+                          onBlur={() => {
+                            // Re-format on blur to ensure proper comma placement
+                            if (formattedRevOpportunity) {
+                              const numericValue = parseFormattedNumber(formattedRevOpportunity);
+                              if (!isNaN(numericValue) && numericValue > 0) {
+                                setFormattedRevOpportunity(formatNumberWithCommas(numericValue));
+                              }
+                            }
+                          }}
+                          className={`flex-1 px-3 py-2 border rounded-r-md focus:outline-none focus:ring ${getErrorClass('rev_opportunity')}`}
+                          placeholder="Auto-calculated"
+                          required
                         />
                       </div>
+                      {errors.rev_opportunity && (
+                        <p className="mt-1 text-sm text-red-600">
+                          <span className="capitalize">{errors.rev_opportunity.split(' is')[0]}</span>
+                          {errors.rev_opportunity.includes(' is') ? ' is required' : ''}
+                        </p>
+                      )}
                     </div>
 
                     <div>

@@ -218,7 +218,7 @@ export const emailTemplates = {
 
     <!-- Header -->
     <div style="background: #0A4647; padding: 32px 24px; text-align: center;">
-      <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX" style="max-width: 180px; height: auto;">
+      <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX" style="max-width: 180px; width:250px; height: auto;">
       <h1 style="color: white; margin: 20px 0 0; font-size: 24px; font-weight: 500;">New User Registration</h1>
     </div>
 
@@ -236,7 +236,7 @@ export const emailTemplates = {
 
       <!-- Button -->
       <div style="text-align: center; margin: 40px 0 32px;">
-        <a href="/users-list?_=true"
+        <a href="https://tdsynnex.vercel.app/users-list?_=true"
           style="background: #0A4647; color: white; padding: 14px 36px; text-decoration: none; border-radius: 6px; font-weight: 500; font-size: 15px; display: inline-block;">
           Review Pending Users
         </a>
@@ -307,7 +307,7 @@ export const emailTemplates = {
 
     <!-- Header -->
     <div style="background: #0A4647; padding: 32px 24px; text-align: center;">
-      <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX" style="max-width: 180px; height: auto;">
+      <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX" style="max-width: 180px; width:250px; height: auto;">
       <h1 style="color: white; margin: 2; font-size: 24px; font-weight: 500; letter-spacing: -0.2px;">Account
         Registration Received</h1>
       <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0; font-size: 15px;">TD SYNNEX Partner Portal</p>
@@ -425,7 +425,7 @@ export const emailTemplates = {
               <td style="background: #0A4647; padding: 32px 30px; text-align: center;">
                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX"
                   style="max-width: 160px; margin-bottom: 16px;">
-                <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 500; letter-spacing: -0.2px;">
+                <h1 style="color: white; margin: 0; font-size: 24px; width:250px; font-weight: 500; letter-spacing: -0.2px;">
                   <b>WELCOME TO TD SYNNEX</b>
                 </h1>
               </td>
@@ -638,7 +638,7 @@ export const emailTemplates = {
             <tr>
               <td style="background:#0A4647; padding:32px 30px; text-align:center;">
                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX"
-                  style="max-width:160px; margin-bottom:16px;">
+                  style="max-width:400px; margin-bottom:16px; width:250px;">
                 <h1 style="color:#ffffff; margin:0; font-size:24px; font-weight:500; letter-spacing:-0.2px;">
                   <b>New Order #${orderNumber} | TD SYNNEX SURFACE</b>
                 </h1>
@@ -663,13 +663,8 @@ export const emailTemplates = {
             <tr>
               <td style="padding:0 30px 24px;">
                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                  <tr>
-                    <td colspan="2"
-                      style="background:#0A4647; color:#ffffff; padding:12px 16px; font-size:15px; font-weight:500;">
-                      Order Items (${totalQuantity} items)
-                    </td>
-                  </tr>
-                  <tr style="background:#f8fafb;">
+
+                  <tr style="background: #0A4647; color:#ffffff;">
                     <td style="padding:10px 16px; border:1px solid #e2e8f0; font-weight:600; color:#1e293b;">Product
                     </td>
                     <td
@@ -1059,7 +1054,7 @@ export const emailTemplates = {
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
+                                    style="max-width:400px; margin-bottom:12px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     New Order #${orderNumber} | TD SYNNEX SURFACE
                                 </h1>
@@ -1092,13 +1087,7 @@ export const emailTemplates = {
                         <tr>
                             <td style="padding:0 30px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items (${totalQuantity} items)
-                                        </th>
-                                    </tr>
-                                    <tr style="background:#f1f3f5;">
+                                    <tr style="background:#0A4647; color:#ffffff;">
                                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
                                         <th
                                             style="padding:10px; border:1px solid #ddd; text-align:center; width:100px;">
@@ -1487,7 +1476,7 @@ export const emailTemplates = {
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
+                                    style="max-width:400px; margin-bottom:12px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Order Approved #${orderNumber} | TD SYNNEX SURFACE
                                 </h1>
@@ -1524,13 +1513,7 @@ export const emailTemplates = {
                         <tr>
                             <td style="padding:0 30px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items (${totalQuantity} items)
-                                        </th>
-                                    </tr>
-                                    <tr style="background:#f1f3f5;">
+                                    <tr style="background:#0A4647; color:#ffffff;">
                                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
                                         <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
                                         </th>
@@ -1888,7 +1871,7 @@ export const emailTemplates = {
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
+                                    style="max-width:400px; margin-bottom:12px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Order Rejected #${orderNumber} | TD SYNNEX SURFACE
                                 </h1>
@@ -1908,13 +1891,7 @@ export const emailTemplates = {
                         <tr>
                             <td style="padding:0 30px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items (${totalQuantity} items)
-                                        </th>
-                                    </tr>
-                                    <tr style="background:#f1f3f5;">
+                                    <tr style="background:#0A4647; color:#ffffff;">
                                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
                                         <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
                                         </th>
@@ -2204,25 +2181,12 @@ export const emailTemplates = {
     }) => {
         const productRows = products.map(product => {
             const returnedText = product.returnedQuantity > 0
-                ? `<span style="
-                        background:#e8f5e9;
-                        color:#388e3c;
-                        padding:4px 8px;
-                        border-radius:4px;
-                        font-weight:600;
-                    ">${product.returnedQuantity}</span>`
-                : `<span style="color:#999;">0</span>`;
+                ? `<span style="">${product.returnedQuantity}</span>`
+                : `<span style="">0</span>`;
 
             const leftText = product.leftWithCustomer > 0
-                ? `<span style="
-                        background:#fdecea;
-                        color:#d32f2f;
-                        padding:4px 8px;
-                        border-radius:4px;
-                        font-weight:600;
-                        text-decoration:line-through;
-                    ">${product.leftWithCustomer}</span>`
-                : `<span style="color:#999;">0</span>`;
+                ? `<span style="">${product.leftWithCustomer}</span>`
+                : `<span style="">0</span>`;
 
             return `
                 <tr>
@@ -2233,25 +2197,11 @@ export const emailTemplates = {
                     <td style="padding:12px; border:1px solid #ddd;">
                         <table width="100%" cellpadding="0" cellspacing="0">
                             <tr>
-                                <td style="font-size:13px; padding-bottom:6px;">
-                                    <strong>Shipped:</strong>
-                                    <span style="font-weight:600;">
-                                        ${product.shippedQuantity}
-                                    </span>
+                                <td style="font-size:13px; padding-bottom:6px; text-align: center;">
+                                    ${returnedText} <del style="color: red;">${leftText}</del>
                                 </td>
                             </tr>
 
-                            <tr>
-                                <td style="font-size:13px; padding-bottom:6px;">
-                                    <strong>Returned:</strong> ${returnedText}
-                                </td>
-                            </tr>
-
-                            <tr>
-                                <td style="font-size:13px;">
-                                    <strong>Left:</strong> ${leftText}
-                                </td>
-                            </tr>
                         </table>
                     </td>
                 </tr>
@@ -2336,13 +2286,10 @@ Best regards,
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
+                                    style="max-width:400px; margin-bottom:12px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Order Returned #${orderNumber} | TD SYNNEX SURFACE
                                 </h1>
-                                <p style="color:#ffffff; margin:10px 0 0; font-size:16px;">
-                                    ${totalReturned} item(s) returned to stock
-                                </p>
                             </td>
                         </tr>
 
@@ -2373,17 +2320,11 @@ Best regards,
                             <td style="padding:20px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0"
                                     style="border-collapse:collapse; border:1px solid #ddd;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left; font-size:16px;">
-                                            Return Details (${totalQuantity} items shipped)
-                                        </th>
-                                    </tr>
-                                    <tr style="background:#f1f3f5;">
+                                    <tr style="background:#0A4647; color:#ffffff;">
                                         <th style="padding:12px; border:1px solid #ddd; text-align:left; width:75%;">
                                             Product</th>
                                         <th style="padding:12px; border:1px solid #ddd; text-align:center; width:25%;">
-                                            Quantity Status</th>
+                                            Quantity</th>
                                     </tr>
                                     ${productRows}
                                 </table>
@@ -2755,7 +2696,7 @@ Best regards,
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
+                                    style="max-width:400px; margin-bottom:12px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Order Shipped #${orderNumber} | TD SYNNEX SURFACE
                                 </h1>
@@ -2837,13 +2778,7 @@ Best regards,
                         <tr>
                             <td style="padding:0 30px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items (${totalQuantity} items)
-                                        </th>
-                                    </tr>
-                                    <tr style="background:#f1f3f5;">
+                                    <tr style="background:#0A4647; color:#ffffff;">
                                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
                                         <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
                                         </th>
@@ -3212,7 +3147,7 @@ Best regards,
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
+                                    style="max-width:400px; margin-bottom:12px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     25-Day Return Reminder – Order #${orderNumber} (${companyName}) | TD SYNNEX SURFACE
                                 </h1>
@@ -3274,13 +3209,7 @@ Best regards,
                         <tr>
                             <td style="padding:0 30px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items (${totalQuantity} items)
-                                        </th>
-                                    </tr>
-                                    <tr style="background:#f1f3f5;">
+                                    <tr style="background:#0A4647; color:#ffffff;">
                                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
                                         <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
                                         </th>
@@ -3693,7 +3622,7 @@ Best regards,
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
+                                    style="max-width:400px; margin-bottom:12px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Return Reminder Notification Order #${orderNumber} (${companyName}) | TD SYNNEX
                                     SURFACE
@@ -3741,13 +3670,7 @@ Best regards,
                         <tr>
                             <td style="padding:0 30px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items (${totalQuantity} items total)
-                                        </th>
-                                    </tr>
-                                    <tr style="background:#f1f3f5;">
+                                    <tr style="background:#0A4647; color:#ffffff;">
                                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
                                         <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
                                         </th>
@@ -3939,7 +3862,7 @@ Best regards,
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
+                                    style="max-width:400px; margin-bottom:12px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Overdue Reminder Notification Order #${orderNumber} (${companyName}) | TD SYNNEX
                                     SURFACE
@@ -3990,13 +3913,7 @@ Best regards,
                         <tr>
                             <td style="padding:0 30px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                                    <tr>
-                                        <th colspan="2"
-                                            style="background:#0A4647; color:#ffffff; padding:12px; text-align:left;">
-                                            Order Items (${totalQuantity} items)
-                                        </th>
-                                    </tr>
-                                    <tr style="background:#f1f3f5;">
+                                    <tr style="background:#0A4647; color:#ffffff;">
                                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
                                         <th style="padding:10px; border:1px solid #ddd; text-align:center;">Quantity
                                         </th>
@@ -4165,7 +4082,7 @@ Best regards,
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
+                                    style="max-width:400px; margin-bottom:12px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Report a Win | TD SYNNEX SURFACE
                                 </h1>
@@ -4317,7 +4234,7 @@ Best regards,
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
+                                    style="max-width:400px; margin-bottom:12px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Product Subscribed | TD SYNNEX SURFACE
                                 </h1>
@@ -4396,7 +4313,7 @@ Best regards,
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:12px;" />
+                                    style="max-width:400px; margin-bottom:12px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Product Back In Stock | TD SYNNEX SURFACE
                                 </h1>
@@ -4468,7 +4385,7 @@ Best regards,
                             <td
                                 style="background:linear-gradient(135deg,#0A4647,#093636); padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:15px;" />
+                                    style="max-width:400px; margin-bottom:15px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Account Approved | TD SYNNEX SURFACE
                                 </h1>
@@ -4493,7 +4410,7 @@ Best regards,
 
                                 <!-- CTA Button -->
                                 <div style="text-align:center; margin:35px 0;">
-                                    <a href="/login"
+                                    <a href="https://tdsynnex.vercel.app/login"
                                         style="background:#093636; color:#ffffff; padding:14px 36px; text-decoration:none; border-radius:6px; font-size:16px; font-weight:bold; display:inline-block;">
                                         Login to Portal
                                     </a>
@@ -4543,7 +4460,7 @@ Best regards,
                             <td
                                 style="background:linear-gradient(135deg,#0A4647,#093636); padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:15px;" />
+                                    style="max-width:400px; margin-bottom:15px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Account Update | TD SYNNEX SURFACE
                                 </h1>
@@ -4617,7 +4534,7 @@ Best regards,
                             <td
                                 style="background:linear-gradient(135deg,#0A4647,#093636); padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
-                                    style="max-width:160px; margin-bottom:15px;" />
+                                    style="max-width:400px; width:250px; margin-bottom:15px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Reset Your Password
                                 </h1>
