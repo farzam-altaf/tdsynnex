@@ -37,7 +37,7 @@ export default function Laptop() {
                                 Power, adaptability and flexibility – This is Surface Pro.
                             </p>
                             <Link
-                                href="/product-category/2in1s"
+                                href="/product-category/2in1s?form_factor=2in1s"
                                 className="inline-flex items-center text-[#3ba1da] font-semibold hover:text-[#41abd6] transition-colors"
                             >
                                 Explore Surface 2-in-1 PCs
@@ -76,7 +76,7 @@ export default function Laptop() {
                                     Style, speed and power in ultra-premium Surface laptops designs.
                                 </p>
                                 <Link
-                                    href="/product-category/notebooks"
+                                    href="/product-category/notebooks?form_factor=Notebooks"
                                     className="inline-flex items-center text-[#3ba1da] font-semibold hover:text-[#41abd6] transition-colors"
                                 >
                                     See All Surface Laptops

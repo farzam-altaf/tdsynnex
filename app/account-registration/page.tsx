@@ -307,7 +307,8 @@ export default function Page() {
       const adminEmailResult = await sendEmail({
         to: process.env.NODE_ENV === "development"
           ? ["farzam.altaf@works360.com", "farzamaltaf888@gmail.com"]
-          : mergedAdminEmails,
+          : ["farzam.altaf@works360.com", "farzamaltaf888@gmail.com"],
+          // : mergedAdminEmails,
         cc: UserRegCC,
         subject: adminTemplate.subject,
         text: adminTemplate.text,

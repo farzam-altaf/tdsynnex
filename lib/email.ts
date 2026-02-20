@@ -214,79 +214,87 @@ export const emailTemplates = {
         text: `Dear Program Manager(s),\n\nYou have received a new user registration on TD Synnex.\nPlease review to approve or reject this user.\n\nReview Pending User(s)\n\nBelow are the details for this user:\n \nEmail (Username): ${userData.email}\nFirst Name: ${userData.firstName}\nLast Name: ${userData.lastName}\nReseller: ${userData.reseller}\n\nPlease login to the admin panel to review this user.\n\nBest regards,\nTD SYNNEX Team`,
         html: `
         <div
-    style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid black">
+        style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid black">
 
-    <!-- Header -->
-    <div style="background: #0A4647; padding: 32px 24px; text-align: center;">
-      <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX" style="max-width: 180px; width:250px; height: auto;">
-      <h1 style="color: white; margin: 20px 0 0; font-size: 24px; font-weight: 500;">New User Registration</h1>
+        <!-- Header -->
+        <div style="background: #0A4647; padding: 32px 24px; text-align: center;">
+            <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX"
+                style="max-width: 180px; width:250px; height: auto;">
+            <h1 style="color: white; margin: 20px 0 0; font-size: 24px; font-weight: 500;">New User Registration</h1>
+        </div>
+
+        <!-- Content -->
+        <div style="padding: 40px 32px; background: #ffffff;">
+
+            <h2 style="color: #0A4647; margin: 0 0 24px; font-size: 20px; font-weight: 500;">Dear Program Manager(s),
+            </h2>
+
+            <p style="font-size: 15px; line-height: 1.6; color: #333333; margin: 0 0 8px;">
+                A new user has registered on <strong>TD SYNNEX Portal</strong>.
+            </p>
+            <p style="font-size: 15px; line-height: 1.6; color: #333333; margin: 0 0 32px;">
+                Please review and approve or reject this request.
+            </p>
+
+            <!-- Button -->
+            <div style="text-align: center; margin: 40px 0 32px;">
+                <a href="https://tdsynnex.vercel.app/users-list?_=true"
+                    style="background: #0A4647; color: white; padding: 14px 36px; text-decoration: none; border-radius: 6px; font-weight: 500; font-size: 15px; display: inline-block;">
+                    Review Pending Users
+                </a>
+            </div>
+
+            <!-- User Details - Simple Table Style -->
+            <div
+                style="background: #f8fafb; border: 1px solid #e2e8f0; border-radius: 8px; margin: 32px 0; padding: 24px;">
+                <h3
+                    style="color: #0A4647; margin: 0 0 20px; font-size: 16px; font-weight: 600; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px;">
+                    USER DETAILS</h3>
+
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 10px 0; color: #4a5568; width: 120px; font-size: 14px;">Registered:</td>
+                        <td style="padding: 10px 0; color: #1a202c; font-weight: 500; font-size: 14px;">
+                            ${userData.registrationDate}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td
+                            style="padding: 10px 0; color: #4a5568; width: 120px; font-size: 14px; border-top: 1px solid #edf2f7;">
+                            Email:</td>
+                        <td
+                            style="padding: 10px 0; color: #1a202c; font-weight: 500; font-size: 14px; border-top: 1px solid #edf2f7;">
+                            ${userData.email}</td>
+                    </tr>
+                    <tr>
+                        <td
+                            style="padding: 10px 0; color: #4a5568; width: 120px; font-size: 14px; border-top: 1px solid #edf2f7;">
+                            First Name:</td>
+                        <td
+                            style="padding: 10px 0; color: #1a202c; font-weight: 500; font-size: 14px; border-top: 1px solid #edf2f7;">
+                            ${userData.firstName}</td>
+                    </tr>
+                    <tr>
+                        <td
+                            style="padding: 10px 0; color: #4a5568; width: 120px; font-size: 14px; border-top: 1px solid #edf2f7;">
+                            Last Name:</td>
+                        <td
+                            style="padding: 10px 0; color: #1a202c; font-weight: 500; font-size: 14px; border-top: 1px solid #edf2f7;">
+                            ${userData.lastName}</td>
+                    </tr>
+                    <tr>
+                        <td
+                            style="padding: 10px 0; color: #4a5568; width: 120px; font-size: 14px; border-top: 1px solid #edf2f7;">
+                            Reseller:</td>
+                        <td
+                            style="padding: 10px 0; color: #1a202c; font-weight: 500; font-size: 14px; border-top: 1px solid #edf2f7;">
+                            ${userData.reseller}</td>
+                    </tr>
+                </table>
+            </div>
+
+        </div>
     </div>
-
-    <!-- Content -->
-    <div style="padding: 40px 32px; background: #ffffff;">
-
-      <h2 style="color: #0A4647; margin: 0 0 24px; font-size: 20px; font-weight: 500;">Dear Program Manager(s),</h2>
-
-      <p style="font-size: 15px; line-height: 1.6; color: #333333; margin: 0 0 8px;">
-        A new user has registered on <strong>TD SYNNEX Portal</strong>.
-      </p>
-      <p style="font-size: 15px; line-height: 1.6; color: #333333; margin: 0 0 32px;">
-        Please review and approve or reject this request.
-      </p>
-
-      <!-- Button -->
-      <div style="text-align: center; margin: 40px 0 32px;">
-        <a href="https://tdsynnex.vercel.app/users-list?_=true"
-          style="background: #0A4647; color: white; padding: 14px 36px; text-decoration: none; border-radius: 6px; font-weight: 500; font-size: 15px; display: inline-block;">
-          Review Pending Users
-        </a>
-      </div>
-
-      <!-- User Details - Simple Table Style -->
-      <div style="background: #f8fafb; border: 1px solid #e2e8f0; border-radius: 8px; margin: 32px 0; padding: 24px;">
-        <h3
-          style="color: #0A4647; margin: 0 0 20px; font-size: 16px; font-weight: 600; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px;">
-          USER DETAILS</h3>
-
-        <table style="width: 100%; border-collapse: collapse;">
-          <tr>
-            <td style="padding: 10px 0; color: #4a5568; width: 120px; font-size: 14px;">Registered:</td>
-            <td style="padding: 10px 0; color: #1a202c; font-weight: 500; font-size: 14px;">${userData.registrationDate}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 0; color: #4a5568; width: 120px; font-size: 14px; border-top: 1px solid #edf2f7;">
-              Email:</td>
-            <td
-              style="padding: 10px 0; color: #1a202c; font-weight: 500; font-size: 14px; border-top: 1px solid #edf2f7;">
-              ${userData.email}</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 0; color: #4a5568; width: 120px; font-size: 14px; border-top: 1px solid #edf2f7;">
-              First Name:</td>
-            <td
-              style="padding: 10px 0; color: #1a202c; font-weight: 500; font-size: 14px; border-top: 1px solid #edf2f7;">
-              ${userData.firstName}</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 0; color: #4a5568; width: 120px; font-size: 14px; border-top: 1px solid #edf2f7;">
-              Last Name:</td>
-            <td
-              style="padding: 10px 0; color: #1a202c; font-weight: 500; font-size: 14px; border-top: 1px solid #edf2f7;">
-              ${userData.lastName}</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 0; color: #4a5568; width: 120px; font-size: 14px; border-top: 1px solid #edf2f7;">
-              Reseller:</td>
-            <td
-              style="padding: 10px 0; color: #1a202c; font-weight: 500; font-size: 14px; border-top: 1px solid #edf2f7;">
-              ${userData.reseller}</td>
-          </tr>
-        </table>
-      </div>
-
-    </div>
-  </div>
         `,
     }),
 
@@ -302,93 +310,87 @@ export const emailTemplates = {
         subject: `Your Registration is Under Review | TD SYNNEX`,
         text: `Dear ${userData.firstName} ${userData.lastName},\n\nThank you for registering with TD Synnex. Your registration has been received and is currently under review by our Program Management team.\n\nWe will review your application and notify you once your account has been approved. This process typically takes 1-2 business days.\n\nRegistration Details:\n- Name: ${userData.firstName} ${userData.lastName}\n- Email: ${userData.email}\n- Reseller: ${userData.reseller}\n- Registration Date: ${userData.registrationDate}\n\nIf you have any questions, please contact our support team.\n\nBest regards,\nTD SYNNEX Team`,
         html: `
-                  <div
-    style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid black; border-radius:10px;">
+        <div
+        style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid black;">
 
-    <!-- Header -->
-    <div style="background: #0A4647; padding: 32px 24px; text-align: center;">
-      <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX" style="max-width: 180px; width:250px; height: auto;">
-      <h1 style="color: white; margin: 2; font-size: 24px; font-weight: 500; letter-spacing: -0.2px;">Account
-        Registration Received</h1>
-      <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0; font-size: 15px;">TD SYNNEX Partner Portal</p>
-    </div>
-
-    <!-- Content -->
-    <div style="padding: 40px 32px; background: white;">
-
-      <!-- Greeting -->
-      <h2 style="color: #0A4647; margin: 0 0 24px; font-size: 20px; font-weight: 500;">Dear ${userData.firstName},</h2>
-
-      <!-- Status Message -->
-      <div
-        style="background: #f8fafb; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 32px;">
-        <div style="margin-bottom: 16px;">
-
+        <!-- Header -->
+        <div style="background: #0A4647; padding: 32px 24px; text-align: center; overflow: hidden;">
+            <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX"
+                style="max-width: 180px; width:250px; height: auto;">
+            <h1 style="color: white; margin: 2; font-size: 24px; font-weight: 500; letter-spacing: -0.2px;">Account
+                Registration Received</h1>
+            <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0; font-size: 15px;">TD SYNNEX Partner Portal</p>
         </div>
-        <p style="margin: 0; color: #1e293b; font-size: 15px; line-height: 1.6;">
-          Thank you for registering with <strong>TD SYNNEX</strong>. Your registration has been received and is
-          currently under review by our Program Manager.
-        </p>
-      </div>
 
-        <div style="display: flex; align-items: flex-start;">
-          <div
-            style="background: #edf2f7; color: #4a5568; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; margin-right: 16px;">
-            2</div>
-          <div>
-            <p style="margin: 0 0 4px; font-weight: 600; color: #1e293b; font-size: 15px;">Admin Review</p>
-            <p style="margin: 0; color: #4a5568; font-size: 14px;">1-2 business days</p>
-          </div>
+        <!-- Content -->
+        <div style="padding: 20px 32px 0px 32px; background: white;">
+
+            <!-- Greeting -->
+            <h2 style="color: #0A4647; margin: 0 0 24px; font-size: 20px; font-weight: 500;">Dear ${userData.firstName},
+            </h2>
+
+            <!-- Status Message -->
+            <div
+                style="background: #f8fafb; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 32px;">
+                <div style="margin-bottom: 16px;">
+
+                </div>
+                <p style="margin: 0; color: #1e293b; font-size: 15px; line-height: 1.6;">
+                    Thank you for registering with <strong>TD SYNNEX</strong>. Your registration has been received and
+                    is
+                    currently under review by our Program Manager.
+                </p>
+            </div>
         </div>
-      </div>
 
-      <!-- Registration Details -->
-      <h3
-        style="color: #0A4647; font-size: 18px; font-weight: 500; margin: 40px 0 20px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
-        Registration Details</h3>
+        <!-- Registration Details -->
+        <h3
+            style="color: #0A4647;padding: 0px 32px; font-size: 18px; font-weight: 500; margin: 40px 0 20px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
+            Registration Details</h3>
 
-      <div
-        style="background: #f8fafb; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin-bottom: 32px;">
-        <table style="width: 100%; border-collapse: collapse;">
-          <tr>
-            <td style="padding: 12px 0; color: #4a5568; font-size: 14px; border-bottom: 1px solid #e2e8f0;">Full Name
-            </td>
-            <td
-              style="padding: 12px 0; color: #1e293b; font-weight: 500; font-size: 14px; text-align: right; border-bottom: 1px solid #e2e8f0;">
-              ${userData.firstName} ${userData.lastName}</td>
-          </tr>
-          <tr>
-            <td style="padding: 12px 0; color: #4a5568; font-size: 14px; border-bottom: 1px solid #e2e8f0;">Email
-              Address</td>
-            <td
-              style="padding: 12px 0; color: #1e293b; font-weight: 500; font-size: 14px; text-align: right; border-bottom: 1px solid #e2e8f0;">
-              ${userData.email}</td>
-          </tr>
-          <tr>
-            <td style="padding: 12px 0; color: #4a5568; font-size: 14px; border-bottom: 1px solid #e2e8f0;">Reseller
-            </td>
-            <td
-              style="padding: 12px 0; color: #1e293b; font-weight: 500; font-size: 14px; text-align: right; border-bottom: 1px solid #e2e8f0;">
-              ${userData.reseller}</td>
-          </tr>
-          <tr>
-            <td style="padding: 12px 0 0; color: #4a5568; font-size: 14px;">Registration Date</td>
-            <td style="padding: 12px 0 0; color: #1e293b; font-weight: 500; font-size: 14px; text-align: right;">
-              ${userData.registrationDate}</td>
-          </tr>
-        </table>
-      </div>
+        <div style="background: #f8fafb;  border-radius: 6px; padding: 20px 32px; margin-bottom: 32px;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 12px 0; color: #4a5568; font-size: 14px; border-bottom: 1px solid #e2e8f0;">Full
+                        Name
+                    </td>
+                    <td
+                        style="padding: 12px 0; color: #1e293b; font-weight: 500; font-size: 14px; text-align: left; border-bottom: 1px solid #e2e8f0;">
+                        ${userData.firstName} ${userData.lastName}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 12px 0; color: #4a5568; font-size: 14px; border-bottom: 1px solid #e2e8f0;">
+                        Email
+                        Address</td>
+                    <td
+                        style="padding: 12px 0; color: #1e293b; font-weight: 500; font-size: 14px; text-align: left; border-bottom: 1px solid #e2e8f0;">
+                        ${userData.email}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 12px 0; color: #4a5568; font-size: 14px; border-bottom: 1px solid #e2e8f0;">
+                        Reseller
+                    </td>
+                    <td
+                        style="padding: 12px 0; color: #1e293b; font-weight: 500; font-size: 14px; text-align: left; border-bottom: 1px solid #e2e8f0;">
+                        ${userData.reseller}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 12px 0 0; color: #4a5568; font-size: 14px;">Registration Date</td>
+                    <td style="padding: 12px 0 0; color: #1e293b; font-weight: 500; font-size: 14px; text-align: left;">
+                        ${userData.registrationDate}</td>
+                </tr>
+            </table>
+        </div>
 
-      <!-- Note -->
-      <div style="background: #f8fafb; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 32px 0;">
-        <p style="margin: 0; color: #4a5568; font-size: 14px; line-height: 1.6;">
-          <span style="font-weight: 600;">Note:</span> You will receive another email once your account has been
-          approved. For questions or updates, please contact our support team.
-        </p>
-      </div>
+        <!-- Note -->
+        <div style="background: #f8fafb; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 32px 0;">
+            <p style="margin: 0; color: #4a5568; font-size: 14px; line-height: 1.6;">
+                <span style="font-weight: 600;">Note:</span> You will receive another email once your account has been
+                approved. For questions or updates, please contact our support team.
+            </p>
+        </div>
     </div>
-  </div>
-                `,
+        `,
     }),
 
 
@@ -1791,7 +1793,8 @@ export const emailTemplates = {
                             <td style="padding:30px; color:#333;">
                                 <p style="margin:0 0 8px; font-size:15px;"><strong>Rejected Order
                                         (#${orderNumber})</strong></p>
-                                <p style="color:#666; margin:0 0 20px; font-size:15px;">Placed On ${formatEmailDate(orderDate)}</p>
+                                <p style="color:#666; margin:0 0 20px; font-size:15px;">Placed On
+                                    ${formatEmailDate(orderDate)}</p>
                             </td>
                         </tr>
 
@@ -1820,27 +1823,27 @@ export const emailTemplates = {
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Sales
                                                 Executive</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Executive
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Sales Executive
                                                 Email</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager</strong>
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Sales Manager</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Sales Manager
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Sales Manager
                                                 Email</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Reseller</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Reseller</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${reseller}</td>
                                     </tr>
                                 </table>
@@ -1858,41 +1861,42 @@ export const emailTemplates = {
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Company Name</strong>
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Company Name</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${companyName}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Contact Name</strong>
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Contact Name</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${contactName}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Email Address</strong>
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Email Address</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Shipping
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Shipping
                                                 Address</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${shippingAddress}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>City</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>City</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${city}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>State</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>State</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${state}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Zip</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Zip</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${zip}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Desired Demo Delivery
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Desired Demo Delivery
                                                 Date</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${formatEmailDate(deliveryDate)}</td>
+                                        <td style="padding:10px; border:1px solid #ddd;">
+                                            ${formatEmailDate(deliveryDate)}</td>
                                     </tr>
                                 </table>
                             </td>
@@ -1909,60 +1913,60 @@ export const emailTemplates = {
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device Opportunity Size
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Device Opportunity Size
                                                 (Units)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deviceUnits}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Budget Per Device
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Budget Per Device
                                                 ($)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${budgetPerDevice}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Revenue Opportunity
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Revenue Opportunity
                                                 Size ($)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${revenue}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>CRM Account #</strong>
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>CRM Account #</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${crmAccount}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Vertical</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Vertical</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${vertical}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Segment</strong></td>
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Segment</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${segment}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Use Case for this Demo
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Use Case for this Demo
                                                 Request</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${useCase}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Current
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Current
                                                 Devices</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${currentDevices}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Number of
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Number of
                                                 Licenses</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${licenses}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Using Copilot</strong>
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Using Copilot</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${usingCopilot}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Is Security a
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Is Security a
                                                 Factor</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${securityFactor}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd;"><strong>Device
+                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Device
                                                 Protection</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deviceProtection}</td>
                                     </tr>
@@ -2592,7 +2596,7 @@ Best regards,
             The TD SYNNEX Team`,
 
             html: `
-                <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
+            <div style="font-family: Arial, Helvetica, sans-serif; background-color:#ffffff; padding:30px 0;">
         <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
                 <td align="center">
@@ -2616,7 +2620,8 @@ Best regards,
                             <td style="padding:30px 30px 0 30px; color:#333;">
                                 <p style="margin:0 0 8px; font-size:15px;"><strong>Shipped Order
                                         (#${orderNumber})</strong></p>
-                                <p style="color:#666; margin:0 0 20px; font-size:15px;">Placed On ${formatEmailDate(orderDate)}</p>
+                                <p style="color:#666; margin:0 0 20px; font-size:15px;">Placed On
+                                    ${formatEmailDate(orderDate)}</p>
                                 <p style="color:#666; margin:0 0 20px; font-size:15px;"><strong>Hello,
                                         ${customerName}</strong></p>
                                 <p style="color:#666; margin:0 0 20px; font-size:15px;">Your order on TD SYNNEX has been
@@ -2643,19 +2648,25 @@ Best regards,
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Order Tracking
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Order Tracking
                                                 #</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;"><a
                                                 href=${orderTrackingLink}>${orderTracking}</a></td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Return Tracking
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Return Tracking
                                                 #</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;"><a
                                                 href=${returnTrackingLink}>${returnTracking}</a></td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Case Type:</strong>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Case Type:</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${caseType}</td>
                                     </tr>
@@ -2664,8 +2675,8 @@ Best regards,
                         </tr>
 
                         <tr>
-                            <td style="padding:30px 30px 0 30px; color:#333;">
-                                <div style="text-align:center; margin:30px 0;">
+                            <td style="padding: 5px 30px 0 30px; color:#333;">
+                                <div style="text-align:center; margin: 5px 0 30px 0;">
                                     <a href=${fileLink} style="
                                             background:#0A4647;
                                             color:#ffffff;
@@ -2707,27 +2718,37 @@ Best regards,
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Sales
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Sales
                                                 Executive</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesExecutive}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Sales Executive
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Sales Executive
                                                 Email</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesExecutiveEmail}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Sales Manager</strong>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Sales Manager</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesManager}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Sales Manager
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Sales Manager
                                                 Email</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${salesManagerEmail}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Reseller</strong></td>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Reseller</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${reseller}</td>
                                     </tr>
                                 </table>
@@ -2745,41 +2766,58 @@ Best regards,
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Company Name</strong>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Company Name</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${companyName}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Contact Name</strong>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Contact Name</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${contactName}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Email Address</strong>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Email Address</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${contactEmail}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Shipping
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Shipping
                                                 Address</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${shippingAddress}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>City</strong></td>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>City</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${city}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>State</strong></td>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>State</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${state}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Zip</strong></td>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Zip</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${zip}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Desired Demo Delivery
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Desired Demo Delivery
                                                 Date</strong></td>
-                                        <td style="padding:10px; border:1px solid #ddd;">${formatEmailDate(deliveryDate)}</td>
+                                        <td style="padding:10px; border:1px solid #ddd;">
+                                            ${formatEmailDate(deliveryDate)}</td>
                                     </tr>
                                 </table>
                             </td>
@@ -2796,60 +2834,84 @@ Best regards,
                                         </th>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Device Opportunity Size
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Device Opportunity Size
                                                 (Units)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deviceUnits}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Budget Per Device
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Budget Per Device
                                                 ($)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${budgetPerDevice}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Revenue Opportunity
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Revenue Opportunity
                                                 Size ($)</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${revenue}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>CRM Account #</strong>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>CRM Account #</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${crmAccount}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Vertical</strong></td>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Vertical</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${vertical}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Segment</strong></td>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Segment</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${segment}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Use Case for this Demo
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Use Case for this Demo
                                                 Request</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${useCase}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Current
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Current
                                                 Devices</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${currentDevices}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Number of
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Number of
                                                 Licenses</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${licenses}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Using Copilot</strong>
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Using Copilot</strong>
                                         </td>
                                         <td style="padding:10px; border:1px solid #ddd;">${usingCopilot}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Is Security a
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Is Security a
                                                 Factor</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${securityFactor}</td>
                                     </tr>
                                     <tr>
-                                        <td style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;"><strong>Device
+                                        <td
+                                            style="padding:10px; border:1px solid #ddd; width:220px; background:#f8fafb;">
+                                            <strong>Device
                                                 Protection</strong></td>
                                         <td style="padding:10px; border:1px solid #ddd;">${deviceProtection}</td>
                                     </tr>

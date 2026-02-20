@@ -29,11 +29,11 @@ interface Product {
     product_name: string;
     slug: string;
     sku: string;
-    form_factor: string; // Now this is the actual text value, not ID
-    processor: string; // Now this is the actual text value, not ID
-    memory: string; // Now this is the actual text value, not ID
-    storage: string; // Now this is the actual text value, not ID
-    screen_size: string; // Now this is the actual text value, not ID
+    form_factor: string;
+    processor: string;
+    memory: string;
+    storage: string;
+    screen_size: string;
     technologies: string;
     inventory_type: string;
     total_inventory: number;
@@ -50,24 +50,39 @@ interface Product {
     created_at: string;
 }
 
+// Map URL filter parameters to database columns
+const URL_TO_DB_MAPPING: Record<string, string> = {
+    'form_factor': 'form_factor',
+    'processor': 'processor',
+    'screen_size': 'screen_size',
+    'memory': 'memory',
+    'storage': 'storage',
+    'copilot': 'copilot',
+    'five_g': 'five_g_Enabled',
+};
+
+// Map URL filter parameters to filter keys (for UI)
+const URL_FILTER_MAPPING: Record<string, string> = {
+    'form_factor': 'formFactor',
+    'processor': 'processor',
+    'screen_size': 'screenSize',
+    'memory': 'memory',
+    'storage': 'storage',
+    'copilot': 'copilotPC',
+    'five_g': 'fiveGEnabled',
+};
+
 // Skeleton component for products grid
 const ProductsGridSkeleton = () => {
-    // Check for window only inside component
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
-        // Check on mount and on resize
         const checkIfMobile = () => {
             setIsMobile(window.innerWidth < 640);
         };
 
-        // Initial check
         checkIfMobile();
-
-        // Add event listener for resize
         window.addEventListener('resize', checkIfMobile);
-
-        // Cleanup
         return () => window.removeEventListener('resize', checkIfMobile);
     }, []);
 
@@ -123,6 +138,7 @@ export default function Page() {
     const superSubscriber = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
     const subscriber = process.env.NEXT_PUBLIC_SUBSCRIBER;
     const pathname = usePathname();
+    const searchParams = useSearchParams();
 
     const source = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}${pathname}`;
 
@@ -133,12 +149,10 @@ export default function Page() {
         addingProductId,
         isLoading: cartLoading,
         isUpdating: cartUpdating,
-        isInCart, // Add this
+        isInCart,
         cartItems,
         cartCount,
-        updateQuantity,
         clearCart,
-        getCartTotal
     } = useCart()
 
     // Extract the last part of the path
@@ -149,8 +163,8 @@ export default function Page() {
     // State for products
     const [products, setProducts] = useState<Product[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const searchParams = useSearchParams();
     const q = searchParams.get("q");
+    
     // Combined filters state
     const [filters, setFilters] = useState<Record<string, string[]>>({
         formFactor: [],
@@ -167,12 +181,62 @@ export default function Page() {
     const [openFilters, setOpenFilters] = useState<string[]>([]);
     const [authChecked, setAuthChecked] = useState(false);
     const [authInitialized, setAuthInitialized] = useState(false);
-
-
-    const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false)
-
+    const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
     const [showCartDrawer, setShowCartDrawer] = useState(false);
 
+    // Function to extract filters from URL
+    const getFiltersFromURL = () => {
+        const urlFilters: Record<string, string[]> = {};
+        
+        // Iterate through all search params
+        searchParams.forEach((value, key) => {
+            // Skip non-filter parameters
+            if (key === 'q' || key === 'page' || key === '_') return;
+            
+            // Map URL parameter to filter key
+            const filterKey = URL_FILTER_MAPPING[key];
+            if (filterKey) {
+                // Handle multiple values for same filter (comma-separated)
+                const values = value.split(',').map(v => v.trim());
+                urlFilters[filterKey] = values;
+            }
+        });
+        
+        return urlFilters;
+    };
+
+    // Update URL when filters change
+    const updateURLWithFilters = (newFilters: Record<string, string[]>) => {
+        const params = new URLSearchParams(searchParams.toString());
+        
+        // Remove all existing filter parameters
+        Object.keys(URL_FILTER_MAPPING).forEach(key => {
+            params.delete(key);
+        });
+        
+        // Add new filter parameters
+        Object.entries(newFilters).forEach(([filterKey, values]) => {
+            if (values.length > 0) {
+                // Find the URL parameter key for this filter
+                const urlKey = Object.keys(URL_FILTER_MAPPING).find(
+                    key => URL_FILTER_MAPPING[key] === filterKey
+                );
+                
+                if (urlKey) {
+                    // Join multiple values with comma
+                    params.set(urlKey, values.join(','));
+                }
+            }
+        });
+        
+        // Preserve existing query parameters like 'q'
+        const queryString = params.toString();
+        const newUrl = queryString 
+            ? `${pathname}?${queryString}`
+            : pathname;
+        
+        router.replace(newUrl, { scroll: false });
+    };
 
     // Handle clear cart
     const handleClearCart = async () => {
@@ -186,7 +250,6 @@ export default function Page() {
         try {
             const product = products.find(p => p.id === productId);
 
-            // Log add to cart attempt
             await logActivity({
                 type: 'product',
                 level: 'info',
@@ -205,7 +268,6 @@ export default function Page() {
 
             await addToCart(productId, 1);
 
-            // Log success
             await logActivity({
                 type: 'product',
                 level: 'success',
@@ -259,14 +321,9 @@ export default function Page() {
         return cartItem.product?.stock_quantity || 0;
     };
 
-
     const handleCart = () => {
         router.replace('/cart');
         setIsCartDrawerOpen(false);
-    };
-
-    const handleCartClick = () => {
-        setIsCartDrawerOpen(true);
     };
 
     const handleCheckout = () => {
@@ -283,7 +340,6 @@ export default function Page() {
     const handleRemoveFromCart = async (productId: string) => {
         const product = products.find(p => p.id === productId);
 
-        // Log removal attempt
         await logActivity({
             type: 'product',
             level: 'info',
@@ -302,7 +358,6 @@ export default function Page() {
         try {
             await removeFromCart(productId);
 
-            // Log successful removal
             await logActivity({
                 type: 'product',
                 level: 'success',
@@ -339,16 +394,14 @@ export default function Page() {
         return isInCart(productId)
     }
 
-    // Handle auth check - IMPROVED VERSION
+    // Handle auth check
     useEffect(() => {
-        // Only run auth check after auth is fully initialized
         if (loading) {
             return;
         }
 
         setAuthInitialized(true);
 
-        // Now check authentication status
         if (!isLoggedIn || profile?.isVerified === false && !profile) {
             router.replace(`/login/?redirect_to=product-category/${slug}`);
         } else {
@@ -359,17 +412,16 @@ export default function Page() {
     // Fetch data only after auth is confirmed AND initialized
     useEffect(() => {
         if (!authChecked || !authInitialized) {
-            return; // Don't fetch data until auth is fully checked AND initialized
+            return;
         }
 
         fetchDataFromDatabase();
-    }, [authChecked, authInitialized]);
+    }, [authChecked, authInitialized, searchParams]); // Add searchParams as dependency
 
-    // Function to fetch products based on slug
+    // Function to fetch products based on slug and URL filters
     const fetchProductsBySlug = async (categorySlug: string) => {
         const startTime = Date.now();
 
-        // Log fetch attempt
         await logActivity({
             type: 'product',
             level: 'info',
@@ -384,7 +436,6 @@ export default function Page() {
         });
 
         try {
-            // Decode URL slug if it contains special characters
             const decodedSlug = decodeURIComponent(categorySlug).toLowerCase();
 
             let productsQuery = supabase
@@ -392,8 +443,33 @@ export default function Page() {
                 .select("*")
                 .order("date", { ascending: false });
 
-            // Search by product name or SKU
-            productsQuery = productsQuery.or(`product_name.ilike.%${decodedSlug}%,sku.ilike.%${decodedSlug}%`);
+            // Apply URL filters to the database query
+            let hasFilters = false;
+            
+            searchParams.forEach((value, key) => {
+                // Skip non-filter parameters
+                if (key === 'q' || key === 'page' || key === '_') return;
+                
+                const dbColumn = URL_TO_DB_MAPPING[key];
+                if (dbColumn) {
+                    const values = value.split(',').map(v => v.trim());
+                    
+                    if (values.length === 1) {
+                        // Single value - use eq
+                        productsQuery = productsQuery.eq(dbColumn, values[0]);
+                        hasFilters = true;
+                    } else if (values.length > 1) {
+                        // Multiple values - use in
+                        productsQuery = productsQuery.in(dbColumn, values);
+                        hasFilters = true;
+                    }
+                }
+            });
+
+            // If no filters, search by product name or SKU
+            if (!hasFilters) {
+                productsQuery = productsQuery.or(`product_name.ilike.%${decodedSlug}%,sku.ilike.%${decodedSlug}%`);
+            }
 
             const { data: productsData, error: productsError } = await productsQuery;
 
@@ -411,7 +487,6 @@ export default function Page() {
                     },
                     status: 'failed'
                 });
-                setProducts([]);
                 return [];
             } else {
                 if (productsData && productsData.length > 0) {
@@ -433,7 +508,6 @@ export default function Page() {
 
                     return productsData;
                 } else {
-                    // Log no products found
                     await logActivity({
                         type: 'product',
                         level: 'info',
@@ -481,7 +555,6 @@ export default function Page() {
                 (typeof value === 'string' ? value.trim() !== '' : true)
             );
 
-        // Convert to strings and remove duplicates
         return [...new Set(values.map(v => v.toString()))].sort();
     };
 
@@ -500,7 +573,6 @@ export default function Page() {
 
     // Fetch all data from database
     const fetchDataFromDatabase = async () => {
-
         await logActivity({
             type: 'product',
             level: 'info',
@@ -524,10 +596,29 @@ export default function Page() {
             if (slug && slug !== "alldevices") {
                 productsData = await fetchProductsBySlug(slug) as Product[];
             } else {
-                const { data, error } = await supabase
+                let query = supabase
                     .from("products")
                     .select("*")
                     .order("date", { ascending: false });
+
+                // Apply URL filters for alldevices
+                searchParams.forEach((value, key) => {
+                    // Skip non-filter parameters
+                    if (key === 'q' || key === 'page' || key === '_') return;
+                    
+                    const dbColumn = URL_TO_DB_MAPPING[key];
+                    if (dbColumn) {
+                        const values = value.split(',').map(v => v.trim());
+                        
+                        if (values.length === 1) {
+                            query = query.eq(dbColumn, values[0]);
+                        } else if (values.length > 1) {
+                            query = query.in(dbColumn, values);
+                        }
+                    }
+                });
+
+                const { data, error } = await query;
 
                 if (error) {
                     await logActivity({
@@ -564,11 +655,17 @@ export default function Page() {
             }
 
             setProducts(productsData);
-
-            // Update filter options based on fetched products
             updateFilterOptions(productsData);
 
-            // Initialize open filters with all available keys
+            // Initialize filters from URL for UI
+            const urlFilters = getFiltersFromURL();
+            if (Object.keys(urlFilters).length > 0) {
+                setFilters(prev => ({
+                    ...prev,
+                    ...urlFilters
+                }));
+            }
+
             const allFilterKeys = [
                 'formFactor',
                 'processor',
@@ -606,12 +703,11 @@ export default function Page() {
         );
     };
 
-    // Filter products based on selected filters
+    // Filter products based on selected filters (client-side)
     const filteredProducts = products.filter(product => {
         return Object.entries(filters).every(([key, values]) => {
             if (values.length === 0) return true;
 
-            // Map filter keys to product property names
             const keyMapping: Record<string, keyof Product> = {
                 formFactor: "form_factor",
                 fiveGEnabled: "five_g_Enabled",
@@ -625,63 +721,60 @@ export default function Page() {
             const productKey = keyMapping[key] || key as keyof Product;
             const productValue = product[productKey];
 
-            // Handle undefined/null values
             if (productValue === undefined || productValue === null) {
                 return false;
             }
 
-            // Handle boolean filters
             if (key === "copilotPC" || key === "fiveGEnabled") {
                 return values.includes("Yes") ? productValue === true : true;
             }
 
-            // Handle string values
             return values.includes(productValue.toString());
         });
     });
 
     // Sort the filtered products
     filteredProducts.sort((a, b) => {
-        // Priority 1: Post Status (Publish first, then others)
         const aIsPublished = a.post_status === "Publish";
         const bIsPublished = b.post_status === "Publish";
 
         if (aIsPublished && !bIsPublished) return -1;
         if (!aIsPublished && bIsPublished) return 1;
 
-        // Priority 2: Stock Quantity (non-zero first, zero last)
         const aHasStock = a.stock_quantity > 0;
         const bHasStock = b.stock_quantity > 0;
 
         if (aHasStock && !bHasStock) return -1;
         if (!aHasStock && bHasStock) return 1;
 
-        // Priority 3: Date (latest first)
         const dateA = a.date ? new Date(a.date).getTime() : 0;
         const dateB = b.date ? new Date(b.date).getTime() : 0;
 
-        return dateB - dateA; // Descending order (latest first)
+        return dateB - dateA;
     });
 
     const handleFilterChange = (filterType: string, value: string) => {
         setFilters(prev => {
-            // Ensure prev[filterType] exists and is an array
             const currentValues = Array.isArray(prev[filterType]) ? prev[filterType] : [];
 
-            // Check if value exists
             const newValues = currentValues.includes(value)
-                ? currentValues.filter(v => v !== value)  // Remove if exists
-                : [...currentValues, value];               // Add if doesn't exist
+                ? currentValues.filter(v => v !== value)
+                : [...currentValues, value];
 
-            return {
+            const updatedFilters = {
                 ...prev,
                 [filterType]: newValues
             };
+
+            // Update URL when filters change
+            updateURLWithFilters(updatedFilters);
+            
+            return updatedFilters;
         });
     };
 
     const clearFilters = () => {
-        setFilters({
+        const clearedFilters = {
             formFactor: [],
             processor: [],
             screenSize: [],
@@ -689,7 +782,25 @@ export default function Page() {
             storage: [],
             copilotPC: [],
             fiveGEnabled: [],
+        };
+        
+        setFilters(clearedFilters);
+        
+        // Clear URL parameters
+        const params = new URLSearchParams(searchParams.toString());
+        Object.keys(URL_FILTER_MAPPING).forEach(key => {
+            params.delete(key);
         });
+        
+        const queryString = params.toString();
+        const newUrl = queryString 
+            ? `${pathname}?${queryString}`
+            : pathname;
+        
+        router.replace(newUrl, { scroll: false });
+        
+        // Refetch data without filters
+        fetchDataFromDatabase();
     };
 
     const getActiveFilterCount = () => {
@@ -804,7 +915,6 @@ export default function Page() {
         );
     };
 
-    // Optional: prevent UI flicker - MUST BE AFTER ALL HOOKS
     if (isLoggedIn === null) {
         return (
             <div className="min-h-screen flex items-center justify-center">
@@ -833,46 +943,36 @@ export default function Page() {
                             )}
                         </div>
 
-                        {/* Show skeleton only for filter options when loading */}
                         {isLoading ? (
                             <FiltersSidebarSkeleton />
                         ) : (
                             <div className="space-y-4">
-                                {/* Database Filters from products table */}
                                 <DatabaseFilterSection filterKey="formFactor" title="Form Factor" />
                                 <DatabaseFilterSection filterKey="processor" title="Processor" />
                                 <DatabaseFilterSection filterKey="screenSize" title="Screen Size" />
                                 <DatabaseFilterSection filterKey="memory" title="Memory" />
                                 <DatabaseFilterSection filterKey="storage" title="Storage" />
-
-                                {/* Hardcoded Filters */}
                                 <HardcodedFilterSection filterKey="copilotPC" title="Copilot + PC" />
                                 <HardcodedFilterSection filterKey="fiveGEnabled" title="5G Enabled" />
                             </div>
                         )}
                     </div>
                 </div>
-                {/* Main Content Area (right side of sidebar) */}
+
+                {/* Main Content Area */}
                 <div className="flex-1 min-h-screen sm:px-0 px-6">
                     {/* Mobile filter button */}
                     <div className="lg:hidden py-4 px-8 flex items-center justify-between gap-3">
-                        {/* Mobile Heading */}
                         <h1 className="text-4xl text-gray-900">
                             <span className="capitalize">{slug == "notebooks" ? "Laptops" : slug}</span>
                         </h1>
-
-                        {/* Filter Button */}
-                        <button
-                            onClick={() => setShowFilters(true)}
-                            className="m-2"
-                        >
+                        <button onClick={() => setShowFilters(true)} className="m-2">
                             <FaFilter size={15} />
                         </button>
                     </div>
 
                     {/* Products Section */}
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-2">
-                        {/* Results header - Only show when not loading */}
                         {!isLoading && getActiveFilterCount() > 0 && (
                             <div className="mb-8">
                                 <div className="flex flex-wrap gap-2 mt-4">
@@ -902,14 +1002,15 @@ export default function Page() {
                             </div>
                         )}
 
-                        {/* Products grid - Show skeleton when loading */}
                         <div className="w-full lg:max-w-7xl lg:mx-auto lg:px-6">
                             {isLoading ? (
                                 <ProductsGridSkeleton />
                             ) : filteredProducts.length > 0 ? (
                                 <>
                                     <div className="flex items-center justify-between sm:my-10 my-5">
-                                        <div className="text-3xl font-semibold"><span className="capitalize">{slug == "notebooks" ? "Laptops" : slug}</span> {q !== "search" && "Devices"}</div>
+                                        <div className="text-3xl font-semibold">
+                                            <span className="capitalize">{slug == "notebooks" ? "Notebooks" : slug}</span> 
+                                        </div>
                                         {(admin === profile?.role || shopManager === profile?.role) && (
                                             <div className="">
                                                 <div className="flex justify-center md:justify-start">
@@ -926,24 +1027,21 @@ export default function Page() {
                                     </div>
                                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-10">
                                         {filteredProducts.map(product => {
-                                            // If product is not published, only show to admin/shop_manager
                                             if (product.post_status !== "Publish") {
                                                 if (subscriber === profile?.role || superSubscriber === profile?.role) {
-                                                    return null; // Don't render this product for non-admin users
+                                                    return null;
                                                 }
                                             }
                                             const isProductInCart = checkIfInCart(product.id)
                                             return (
                                                 <Link href={`/product/${product.slug}`} key={product.id}>
-                                                    <div className="bg-white border border-gray-300 sm:py-5 p-3 overflow-hidden hover:shadow-md transition-shadow duration-300 group relative h-full flex flex-col"
-                                                    >
+                                                    <div className="bg-white border border-gray-300 sm:py-5 p-3 overflow-hidden hover:shadow-md transition-shadow duration-300 group relative h-full flex flex-col">
                                                         {product.stock_quantity == 0 && (
                                                             <div className="absolute top-4 left-0 z-10 flex items-center gap-1 bg-red-500 text-white text-sm font-semibold px-4 py-2 rounded-br-full rounded-tr-full">
                                                                 Out of stock
                                                             </div>
                                                         )}
 
-                                                        {/* 5G Logo - Top Right Corner */}
                                                         {product.five_g_Enabled && (
                                                             <div className="absolute top-4 right-3 z-10">
                                                                 <img
@@ -954,14 +1052,12 @@ export default function Page() {
                                                             </div>
                                                         )}
 
-                                                        {/* Show Private badge only for admin/shop manager users when product is not published */}
                                                         {product.post_status !== "Publish" && (
                                                             <div className="absolute sm:top-45 sm:right-3 top-5 z-10 flex items-center gap-1 text-xs text-white font-semibold px-3 py-1 rounded-full rounded-tr-full bg-[#41abd6]">
                                                                 Private
                                                             </div>
                                                         )}
 
-                                                        {/* Image Container - Fixed Height */}
                                                         <div className="flex items-center justify-center transition-colors h-48 min-h-[12rem] sm:mt-0 -mt-12 relative">
                                                             {product.thumbnail ? (
                                                                 <img
@@ -978,32 +1074,25 @@ export default function Page() {
                                                             )}
                                                         </div>
 
-                                                        {/* Product Info Container - Flexible but with constraints */}
                                                         <div className="flex flex-col flex-grow space-y-2 text-center sm:mt-4 -mt-7">
-                                                            {/* Title with fixed lines */}
                                                             <h3 className="text-gray-800 sm:text-md text-sm line-clamp-1 min-h-14 flex items-center justify-center">
                                                                 {product.product_name}
                                                             </h3>
 
-                                                            {/* SKU Info - Fixed height */}
                                                             <div className="text-gray-500 text-xs sm:py-3 py-1 space-y-1">
                                                                 <p><b>SKU:</b> {product.sku}</p>
                                                             </div>
 
-                                                            {/* Spacer to push button to bottom */}
                                                             <div className="flex-grow"></div>
 
-                                                            {/* Button Container - Fixed at bottom */}
                                                             <div className="sm:pt-4 sm:mb-2 mt-auto">
                                                                 {product.stock_quantity != 0 && product.post_status === "Publish" ? (
                                                                     <>
                                                                         {isProductInCart ? (
-                                                                            // Remove from cart button
                                                                             <div className="flex flex-col items-center space-y-2">
-
                                                                                 <button
                                                                                     onClick={(e) => {
-                                                                                        e.preventDefault() // Prevent Link navigation
+                                                                                        e.preventDefault()
                                                                                         e.stopPropagation()
                                                                                         handleRemoveFromCart(product.id)
                                                                                     }}
@@ -1014,10 +1103,9 @@ export default function Page() {
                                                                                 </button>
                                                                             </div>
                                                                         ) : (
-                                                                            // Add to cart button
                                                                             <button
                                                                                 onClick={(e) => {
-                                                                                    e.preventDefault() // Prevent Link navigation
+                                                                                    e.preventDefault()
                                                                                     e.stopPropagation()
                                                                                     handleAddToCart(product.id)
                                                                                 }}
@@ -1085,20 +1173,17 @@ export default function Page() {
                 className="filter-drawer"
             >
                 <div className="space-y-6">
-                    {/* Database Filters from products table */}
                     <DatabaseFilterSection filterKey="formFactor" title="Form Factor" />
                     <DatabaseFilterSection filterKey="processor" title="Processor" />
                     <DatabaseFilterSection filterKey="screenSize" title="Screen Size" />
                     <DatabaseFilterSection filterKey="memory" title="Memory" />
                     <DatabaseFilterSection filterKey="storage" title="Storage" />
-
-                    {/* Hardcoded Filters */}
                     <HardcodedFilterSection filterKey="copilotPC" title="Copilot + PC" />
                     <HardcodedFilterSection filterKey="fiveGEnabled" title="5G Enabled" />
                 </div>
             </Drawer>
 
-            {/* Cart Drawer - isLoggedIn check ke saath */}
+            {/* Cart Drawer */}
             {isLoggedIn && (
                 <Drawer
                     title={
@@ -1124,8 +1209,8 @@ export default function Page() {
                         </div>
                     }
                     placement="right"
-                    onClose={() => setShowCartDrawer(false)}  // <-- onClose mein showCartDrawer false karein
-                    open={showCartDrawer}  // <-- open ko showCartDrawer se control karein
+                    onClose={() => setShowCartDrawer(false)}
+                    open={showCartDrawer}
                     size={400}
                     className="cart-drawer"
                 >
@@ -1150,10 +1235,8 @@ export default function Page() {
                         </div>
                     ) : (
                         <div className="flex flex-col h-full">
-                            {/* Cart Items List */}
                             <div className="flex-1 overflow-y-auto pr-2">
                                 {cartItems.map((item) => {
-                                    const stockQuantity = getItemStockQuantity(item);
                                     const productName = item.product?.product_name || 'Unknown Product';
                                     const sku = item.product?.sku || 'N/A';
                                     const thumbnail = item.product?.thumbnail;
@@ -1163,7 +1246,6 @@ export default function Page() {
                                     return (
                                         <div key={item.id} className="border-b border-gray-200 py-4">
                                             <div className="flex items-start space-x-3">
-                                                {/* Product Image */}
                                                 <div
                                                     className="w-15 h-15 bg-gray-100 rounded-md flex items-center justify-center shrink-0 cursor-pointer hover:bg-gray-200 transition-colors"
                                                     onClick={() => productSlug && router.push(`/product/${productSlug}`)}
@@ -1179,7 +1261,6 @@ export default function Page() {
                                                     )}
                                                 </div>
 
-                                                {/* Product Details */}
                                                 <div className="flex-1 min-w-0">
                                                     <h4
                                                         className="text-sm font-medium text-gray-900 truncate hover:text-[#35c8dc] cursor-pointer transition-colors"
@@ -1188,10 +1269,8 @@ export default function Page() {
                                                         {productName}
                                                     </h4>
                                                     <p className="text-xs text-gray-500">SKU: {sku}</p>
-
                                                 </div>
 
-                                                {/* Price and Remove Button */}
                                                 <div className="flex flex-col items-end space-y-2">
                                                     <button
                                                         onClick={() => handleRemoveFromCart(item.product_id)}
@@ -1213,9 +1292,7 @@ export default function Page() {
                                 })}
                             </div>
 
-                            {/* Cart Summary */}
                             <div className="border-t border-gray-200 pt-4 mt-4">
-
                                 <div className="space-y-3">
                                     <button
                                         onClick={handleCart}
