@@ -282,9 +282,6 @@ export default function Page() {
       // Get admin emails from database
       const adminEmails = await getAdminEmails();
 
-      if (adminEmails.length === 0) {
-        adminEmails.push("admin@tdsynnex.com");
-      }
 
       // Merge DB + static emails
       const mergedAdminEmails = [
@@ -294,10 +291,6 @@ export default function Page() {
         ])
       ];
 
-      // Fallback if still empty
-      if (mergedAdminEmails.length === 0) {
-        mergedAdminEmails.push("admin@tdsynnex.com");
-      }
 
       // Prepare user data
       const userEmailData = {

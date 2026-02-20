@@ -251,7 +251,7 @@ export const emailTemplates = {
         <table style="width: 100%; border-collapse: collapse;">
           <tr>
             <td style="padding: 10px 0; color: #4a5568; width: 120px; font-size: 14px;">Registered:</td>
-            <td style="padding: 10px 0; color: #1a202c; font-weight: 500; font-size: 14px;">${formatEmailDate(userData.registrationDate)}
+            <td style="padding: 10px 0; color: #1a202c; font-weight: 500; font-size: 14px;">${userData.registrationDate}
             </td>
           </tr>
           <tr>
@@ -303,7 +303,7 @@ export const emailTemplates = {
         text: `Dear ${userData.firstName} ${userData.lastName},\n\nThank you for registering with TD Synnex. Your registration has been received and is currently under review by our Program Management team.\n\nWe will review your application and notify you once your account has been approved. This process typically takes 1-2 business days.\n\nRegistration Details:\n- Name: ${userData.firstName} ${userData.lastName}\n- Email: ${userData.email}\n- Reseller: ${userData.reseller}\n- Registration Date: ${userData.registrationDate}\n\nIf you have any questions, please contact our support team.\n\nBest regards,\nTD SYNNEX Team`,
         html: `
                   <div
-    style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid black;">
+    style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid black; border-radius:10px;">
 
     <!-- Header -->
     <div style="background: #0A4647; padding: 32px 24px; text-align: center;">
@@ -327,25 +327,9 @@ export const emailTemplates = {
         </div>
         <p style="margin: 0; color: #1e293b; font-size: 15px; line-height: 1.6;">
           Thank you for registering with <strong>TD SYNNEX</strong>. Your registration has been received and is
-          currently under review by our Program Management team.
+          currently under review by our Program Manager.
         </p>
       </div>
-
-      <!-- What Happens Next -->
-      <h3
-        style="color: #0A4647; font-size: 18px; font-weight: 500; margin: 32px 0 20px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
-        What Happens Next</h3>
-
-      <div style="margin-bottom: 20px;">
-        <div style="display: flex; align-items: flex-start; margin-bottom: 16px;">
-          <div
-            style="background: #0A4647; color: white; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; margin-right: 16px;">
-            1</div>
-          <div>
-            <p style="margin: 0 0 4px; font-weight: 600; color: #1e293b; font-size: 15px;">Registration Submitted</p>
-            <p style="margin: 0; color: #4a5568; font-size: 14px;">${formatEmailDate(userData.registrationDate)}</p>
-          </div>
-        </div>
 
         <div style="display: flex; align-items: flex-start;">
           <div
@@ -390,7 +374,7 @@ export const emailTemplates = {
           <tr>
             <td style="padding: 12px 0 0; color: #4a5568; font-size: 14px;">Registration Date</td>
             <td style="padding: 12px 0 0; color: #1e293b; font-weight: 500; font-size: 14px; text-align: right;">
-              ${formatEmailDate(userData.registrationDate)}</td>
+              ${userData.registrationDate}</td>
           </tr>
         </table>
       </div>
@@ -407,82 +391,6 @@ export const emailTemplates = {
                 `,
     }),
 
-
-    // Welcome/Login Email
-    welcomeEmail: (name: string, email: string) => ({
-        subject: `Welcome to TD SYNNEX, ${name}!`,
-        text: `Hello ${name},\n\nWelcome to TD SYNNEX platform! Your login was successful.\n\nEmail: ${email}\n\nBest regards,\nTD SYNNEX Team`,
-        html: `
-          <div style="font-family: Arial, Helvetica, sans-serif; background-color: #f4f6f8; padding: 30px 0;">
-    <table width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td align="center">
-          <table width="600" cellpadding="0" cellspacing="0"
-            style="background: #ffffff; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.04); border: 1px solid black;">
-
-            <!-- Header - Solid teal, no gradient -->
-            <tr>
-              <td style="background: #0A4647; padding: 32px 30px; text-align: center;">
-                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX"
-                  style="max-width: 160px; margin-bottom: 16px;">
-                <h1 style="color: white; margin: 0; font-size: 24px; width:250px; font-weight: 500; letter-spacing: -0.2px;">
-                  <b>WELCOME TO TD SYNNEX</b>
-                </h1>
-              </td>
-            </tr>
-
-            <!-- Body -->
-            <tr>
-              <td style="padding: 32px 30px; color: #1e293b;">
-                <p style="font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-                  Hello <strong style="color: #0A4647;">${name}</strong>,
-                </p>
-
-                <p style="font-size: 15px; line-height: 1.6; color: #334155; margin: 0 0 24px;">
-                  We're excited to have you on board! Your account has been successfully accessed.
-                </p>
-
-                <!-- Info Box - Clean and simple -->
-                <table width="100%" cellpadding="0" cellspacing="0"
-                  style="background: #f8fafb; border: 1px solid #e2e8f0; border-radius: 6px; margin: 24px 0;">
-                  <tr>
-                    <td style="padding: 20px;">
-                      <table width="100%" cellpadding="0" cellspacing="0">
-                        <tr>
-                          <td style="padding: 6px 0; color: #475569; font-size: 14px; width: 100px;">Email:</td>
-                          <td style="padding: 6px 0; color: #1e293b; font-weight: 500; font-size: 14px;">${email}</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 6px 0; color: #475569; font-size: 14px; width: 100px;">Login Time:</td>
-                          <td style="padding: 6px 0; color: #1e293b; font-weight: 500; font-size: 14px;">${new
-                Date().toLocaleString()}</td>
-                        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                </table>
-
-                <p style="font-size: 15px; line-height: 1.6; color: #475569; margin: 0 0 32px;">
-                  If you don't recognize this activity, please contact our support team immediately.
-                </p>
-
-                <!-- Button - Solid teal -->
-                <div style="text-align: center; margin: 32px 0 16px;">
-                  <a href="#"
-                    style="background: #0A4647; color: white; padding: 14px 36px; text-decoration: none; border-radius: 6px; font-size: 15px; font-weight: 500; display: inline-block;">
-                    Go to Dashboard
-                  </a>
-                </div>
-              </td>
-            </tr>
-
-          </table>
-        </td>
-      </tr>
-    </table>
-  </div>
-    `,
-    }),
 
 
     checkoutEmail: ({
@@ -4383,7 +4291,7 @@ Best regards,
                         <!-- Header -->
                         <tr>
                             <td
-                                style="background:linear-gradient(135deg,#0A4647,#093636); padding:30px; text-align:center;">
+                                style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:15px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
@@ -4411,7 +4319,7 @@ Best regards,
                                 <!-- CTA Button -->
                                 <div style="text-align:center; margin:35px 0;">
                                     <a href="https://tdsynnex.vercel.app/login"
-                                        style="background:#093636; color:#ffffff; padding:14px 36px; text-decoration:none; border-radius:6px; font-size:16px; font-weight:bold; display:inline-block;">
+                                        style="background:#0A4647; color:#ffffff; padding:14px 36px; text-decoration:none; border-radius:6px; font-size:16px; font-weight:bold; display:inline-block;">
                                         Login to Portal
                                     </a>
                                 </div>
@@ -4458,7 +4366,7 @@ Best regards,
                         <!-- Header -->
                         <tr>
                             <td
-                                style="background:linear-gradient(135deg,#0A4647,#093636); padding:30px; text-align:center;">
+                                style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:15px; width:250px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
@@ -4509,8 +4417,8 @@ Best regards,
         <p>You requested to reset your password. Click the button below:</p>
         
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${resetLink}" style="background: linear-gradient(135deg, #3ba1da 0%, #41abd6 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(59, 161, 218, 0.3);">
-            🔐 Reset Password
+          <a href="${resetLink}" style="background: #0A4647; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(59, 161, 218, 0.3);">
+            Reset Password
           </a>
         </div>
         
@@ -4532,7 +4440,7 @@ Best regards,
                         <!-- Header -->
                         <tr>
                             <td
-                                style="background:linear-gradient(135deg,#0A4647,#093636); padding:30px; text-align:center;">
+                                style="background:#0A4647; padding:30px; text-align:center;">
                                 <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; width:250px; margin-bottom:15px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
@@ -4555,10 +4463,10 @@ Best regards,
 
                                 <!-- Button -->
                                 <div style="text-align: center; margin: 30px 0;">
-                                    <a href="${resetLink}" style="display: inline-block; background: linear-gradient(135deg, #0A4647 0%, #093636 100%); 
+                                    <a href="${resetLink}" style="display: inline-block; background: #0A4647; 
                               color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; 
                               font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(10, 70, 71, 0.3);">
-                                        🔐 Reset Password
+                                        Reset Password
                                     </a>
                                 </div>
 

@@ -1249,7 +1249,6 @@ export default function Page() {
                           }
                         }}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring ${getErrorClass('dev_opportunity')}`}
-                        placeholder="Enter number (e.g., 78,381)"
                         required
                       />
                       {errors.dev_opportunity && (
@@ -1274,7 +1273,7 @@ export default function Page() {
                           name="dev_budget_formatted"
                           type="text"
                           inputMode="numeric"
-                          value={formattedDevBudget}
+                          value={1800}
                           onChange={handleDevBudgetChange}
                           onBlur={() => {
                             // Re-format on blur to ensure proper comma placement
@@ -1286,8 +1285,8 @@ export default function Page() {
                             }
                           }}
                           className={`flex-1 px-3 py-2 border rounded-r-md focus:outline-none focus:ring ${getErrorClass('dev_budget')}`}
-                          placeholder="Enter amount (e.g., 1,800)"
-                          required
+
+                          disabled
                         />
                       </div>
                       {errors.dev_budget && (
@@ -1316,6 +1315,7 @@ export default function Page() {
                           type="text"
                           inputMode="numeric"
                           value={formattedRevOpportunity}
+                          disabled
                           onChange={handleRevOpportunityChange}
                           onBlur={() => {
                             // Re-format on blur to ensure proper comma placement

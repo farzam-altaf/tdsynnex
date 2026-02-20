@@ -685,7 +685,7 @@ export default function Navbar() {
                       </button>
 
                       {isSearchOpen && (
-                        <div className="absolute right-0 top-full mt-2 w-125 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                        <div className="absolute right-0 top-full mt-4 w-125 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                           <form onSubmit={handleSearchSubmit} className="p-4">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center space-x-2 flex-1">
@@ -883,7 +883,7 @@ export default function Navbar() {
                         type="button"
                         onClick={handleCartClick}
                         disabled={cartUpdating || cartLoading}
-                        className="relative rounded-full p-1 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="relative rounded-full p-1 mt-2 text-black cursor-pointer hover:bg-gray-100 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <span className="sr-only">Cart</span>
                         <Badge
