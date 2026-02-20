@@ -1336,15 +1336,6 @@ export default function OrderDetails() {
         <h1 className="sm:text-3xl text-xl font-bold">
         </h1>
         <div className="flex gap-2">
-          {showAwaitingOnly && (
-            <Button
-              variant="outline"
-              onClick={() => router.push("/order-details")}
-              className="cursor-pointer"
-            >
-              Clear Filter
-            </Button>
-          )}
           <Button
             variant="outline"
             onClick={fetchOrders}
