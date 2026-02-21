@@ -760,7 +760,7 @@ export default function Page() {
       setIsSubmitting(false);
     }
   };
-
+const orderDateTimestamp = formatToTimestamp(new Date().toISOString());
   const sendCheckoutEmail = async (orders: any[]) => {
     const startTime = Date.now();
     try {
@@ -779,7 +779,7 @@ export default function Page() {
 
       const template = emailTemplates.checkoutEmail({
         orderNumber: orderNumber,
-        orderDate: formData.desired_date,
+        orderDate: `${orderDateTimestamp}`,
         customerName: formData.contact_name,
         customerEmail: myMail,
         products: products,
@@ -844,7 +844,7 @@ export default function Page() {
 
       const template = emailTemplates.newOrderEmail({
         orderNumber: orderNumber,
-        orderDate: formData.desired_date,
+        orderDate: `${orderDateTimestamp}`,
         customerName: formData.contact_name,
         customerEmail: formData.email,
         products: products,
