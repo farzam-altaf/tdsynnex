@@ -554,7 +554,7 @@ export default function Page() {
 
     // Format dates as timestamps with timezone
     const desiredDateTimestamp = formatToTimestamp(formData.desired_date);
-    const orderDateTimestamp = formatToTimestamp(formData.desired_date);
+    const orderDateTimestamp = formatToTimestamp(new Date().toISOString());
     const createdAtTimestamp = now.toISOString();
     const updatedAtTimestamp = now.toISOString();
 
