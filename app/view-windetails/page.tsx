@@ -132,24 +132,24 @@ export default function Page() {
 
     // Check if user has permission to access this page
 
+    // useEffect(() => {
+    //     if (!isAuthorized) {
+    //         router.replace('/product-category/alldevices');
+    //         return;
+    //     }
+    // }, [isAuthorized, router]);
     useEffect(() => {
-        if (!isAuthorized) {
+        if (smRole == profile?.role) {
             router.replace('/product-category/alldevices');
             return;
         }
     }, [isAuthorized, router, subscriberRole, smRole, profile]);
-    // useEffect(() => {
-    //     if (smRole == profile?.role) {
-    //         router.replace('/product-category/alldevices');
-    //         return;
-    //     }
-    // }, [isAuthorized, router, subscriberRole, smRole, profile]);
-    // useEffect(() => {
-    //     if (subscriberRole == profile?.role) {
-    //         router.replace('/product-category/alldevices');
-    //         return;
-    //     }
-    // }, [isAuthorized, router, subscriberRole, smRole, profile]);
+    useEffect(() => {
+        if (subscriberRole == profile?.role) {
+            router.replace('/product-category/alldevices');
+            return;
+        }
+    }, [isAuthorized, router, subscriberRole, smRole, profile]);
 
     // Format date to dd-MMM-yyyy
     const formatDateToCustomFormat = (dateString: string | null) => {

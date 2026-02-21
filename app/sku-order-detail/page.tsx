@@ -190,12 +190,25 @@ export default function Page() {
     const isActionAuthorized = profile?.role && actionRoles.includes(profile.role);
     const isViewAuthorized = profile?.role && viewRoles.includes(profile.role);
 
+    // useEffect(() => {
+    //     if (!isAuthorized) {
+    //         router.replace('/product-category/alldevices');
+    //         return;
+    //     }
+    // }, [isAuthorized, router, ssRole, smRole, profile]);
+
     useEffect(() => {
-        if (!isAuthorized) {
+        if (smRole == profile?.role) {
             router.replace('/product-category/alldevices');
             return;
         }
-    }, [isAuthorized, router, ssRole, smRole, profile]);
+    }, [isAuthorized, router, sRole, smRole, profile]);
+    useEffect(() => {
+        if (sRole == profile?.role) {
+            router.replace('/product-category/alldevices');
+            return;
+        }
+    }, [isAuthorized, router, sRole, smRole, profile]);
 
     // Handle auth check
     useEffect(() => {
