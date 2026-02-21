@@ -212,7 +212,7 @@ export async function GET(request: NextRequest) {
                     productListHtml: productsList.html,
                     totalQuantity: productsList.totalQuantity,
                     returnTracking: order.return_tracking || "Not provided yet",
-                    fileLink: `${process.env.NEXT_PUBLIC_APP_URL || "https://tdsynnex.vercel.app"}`,
+                    fileLink: `${process.env.NEXT_PUBLIC_APP_URL || "https://tdsynnex-surface.com"}`,
                     salesExecutive: order.sales_executive || "N/A",
                     salesExecutiveEmail: order.se_email || "N/A",
                     salesManager: order.sales_manager || "N/A",

@@ -760,7 +760,9 @@ export default function Page() {
       setIsSubmitting(false);
     }
   };
-const orderDateTimestamp = formatToTimestamp(new Date().toISOString());
+
+  const orderDateTimestamp = formatToTimestamp(new Date().toISOString());
+
   const sendCheckoutEmail = async (orders: any[]) => {
     const startTime = Date.now();
     try {
@@ -878,9 +880,19 @@ const orderDateTimestamp = formatToTimestamp(new Date().toISOString());
 
       const adminEmails = await getAdminEmails();
 
+      // Merge DB + static emails
+      const mergedAdminEmails = [
+        ...new Set([
+          ...adminEmails,
+          ...NewOrderEmail
+        ])
+      ];
+
 
       await sendEmail({
-        to: NewOrderEmail,
+        to: process.env.NODE_ENV === "development"
+          ? ["farzam.altaf@works360.com", "farzamaltaf888@gmail.com"]
+          : mergedAdminEmails,
         cc: "",
         subject: template.subject,
         text: template.text,
