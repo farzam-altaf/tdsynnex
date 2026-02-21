@@ -998,9 +998,9 @@ export const emailTemplates = {
                             <td style="padding:0 30px 30px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                                     <tr style="background:#0A4647; color:#ffffff;">
-                                        <th style="padding:10px; border:1px solid #ddd; text-align:left;">Product</th>
+                                        <th style="padding:10px; border:1px solid #ddd; text-align:left; color:#ffffff;">Product</th>
                                         <th
-                                            style="padding:10px; border:1px solid #ddd; text-align:center; width:100px;">
+                                            style="padding:10px; border:1px solid #ddd; text-align:center; width:100px; color:#ffffff;">
                                             Quantity</th>
                                     </tr>
                                     ${productRows}
