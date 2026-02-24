@@ -319,7 +319,7 @@ export default function Page() {
 
       const userEmailResult = await sendEmail({
         to: userEmailData.email,
-        cc: "",
+        cc: "support@works360.com",
         subject: userTemplate.subject,
         text: userTemplate.text,
         html: userTemplate.html,

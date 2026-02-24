@@ -104,7 +104,7 @@ export async function GET() {
 
       await sendEmail({
         to: mergedEmails,
-        cc: "",
+        cc: "support@works360.com",
         subject: template.subject,
         text: template.text,
         html: template.html,

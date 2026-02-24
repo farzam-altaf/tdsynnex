@@ -820,7 +820,7 @@ export default function Page() {
 
       await sendEmail({
         to: myMail,
-        cc: "",
+        cc: "support@works360.com",
         subject: template.subject,
         text: template.text,
         html: template.html,
@@ -1018,7 +1018,7 @@ export default function Page() {
           <div className="max-w-4xl mx-auto">
             <div className="bg-white rounded-lg border border-gray-200 shadow-lg overflow-hidden">
               {/* Header */}
-              <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4">
+              <div className="bg-linear-to-r from-red-500 to-red-600 px-6 py-4">
                 <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                   <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -1314,9 +1314,6 @@ export default function Page() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Revenue Opportunity Size ($ Device Rev) <span className="text-red-600">*</span>
-                        <span className="text-xs text-gray-500 ml-2">
-                          (Auto-calculated)
-                        </span>
                       </label>
                       <div className="flex">
                         <span className="inline-flex items-center px-3 py-2 border border-r-0 border-gray-300 bg-gray-50 text-gray-500 rounded-l-md">
@@ -1339,7 +1336,6 @@ export default function Page() {
                             }
                           }}
                           className={`flex-1 px-3 py-2 border rounded-r-md focus:outline-none focus:ring ${getErrorClass('rev_opportunity')}`}
-                          placeholder="Auto-calculated"
                           required
                         />
                       </div>

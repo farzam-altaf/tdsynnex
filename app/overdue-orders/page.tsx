@@ -207,13 +207,13 @@ export default function Page() {
         return diffDays;
     };
 
-    // Calculate estimated return date (45 days after shipped date)
+    // Calculate estimated return date (30 days after shipped date)
     const calculateEstimatedReturnDate = (shippedDate: string | null): Date | null => {
         if (!shippedDate) return null;
 
         const shipped = new Date(shippedDate);
         const estimatedReturn = new Date(shipped);
-        estimatedReturn.setDate(shipped.getDate() + 45);
+        estimatedReturn.setDate(shipped.getDate() + 30);
 
         return estimatedReturn;
     };
@@ -255,7 +255,7 @@ export default function Page() {
         if (!shippedDate) return 0;
 
         const daysShipped = calculateDaysShipped(shippedDate);
-        return Math.max(0, daysShipped - 45);
+        return Math.max(0, daysShipped - 30);
     };
 
     // Fetch orders data from Supabase - ONLY SHIPPED ORDERS with passed return dates
@@ -333,7 +333,7 @@ export default function Page() {
                 }
             }
 
-            // Filter orders where estimated return date has passed (shipped more than 45 days ago)
+            // Filter orders where estimated return date has passed (shipped more than 30 days ago)
             const filteredOrders = ordersData.filter(order => {
                 return hasReturnDatePassed(order.shipped_date);
             });
@@ -438,9 +438,6 @@ export default function Page() {
         }));
     };
 
-    // Replace the existing handleSendReminders function with this updated version:
-
-    // Modified handleSendReminders function - products fetch from order_items
     const handleSendReminders = async () => {
         const selectedOrderIds = Object.keys(selectedRows).filter(id => selectedRows[id]);
 
@@ -465,14 +462,17 @@ export default function Page() {
         });
 
         const startTime = Date.now();
-
         setIsSendingReminders(true);
 
         try {
-            // Get selected orders with user data
+            // Get selected orders with user data and product data in one query
             const { data: selectedOrdersData, error: orderError } = await supabase
                 .from('orders')
-                .select('*, users:order_by (id, email)')
+                .select(`
+                *,
+                users:order_by (id, email),
+                products:product_id (*)
+            `)
                 .in('id', selectedOrderIds);
 
             if (orderError) throw orderError;
@@ -511,115 +511,19 @@ export default function Page() {
 
                 try {
                     const customerName = order.contact_name || order.company_name || "Customer";
-                    // Process product_id array and quantity array
-                    let products: any[] = [];
-                    let totalQuantity = 0;
 
+                    // SIMPLIFIED: Single product, single quantity
+                    const productName = order.products?.product_name || "Standard Device Package";
+                    const productSlug = order.products?.slug || "standard-device-package";
+                    const quantity = order.quantity || 1;
 
-                    try {
-                        // Handle product_id as JSON array string
-                        if (order.product_id && typeof order.product_id === 'string' && order.product_id.startsWith('[')) {
-                            try {
-                                // Parse product IDs from JSON array
-                                const productIds: string[] = JSON.parse(order.product_id);
+                    const products = [{
+                        name: productName,
+                        quantity: quantity,
+                        slug: productSlug
+                    }];
 
-                                // Parse quantities
-                                let quantities: number[] = [];
-
-                                if (order.quantity && typeof order.quantity === 'string') {
-                                    if (order.quantity.startsWith('[')) {
-                                        // JSON array format
-                                        quantities = JSON.parse(order.quantity);
-                                    } else if (order.quantity.includes(',')) {
-                                        // Comma-separated format
-                                        quantities = order.quantity.split(',').map((q: string) => {
-                                            const num = parseInt(q.trim());
-                                            return isNaN(num) ? 1 : num;
-                                        });
-                                    } else {
-                                        // Single number
-                                        const singleQty = parseInt(order.quantity);
-                                        quantities = [isNaN(singleQty) ? 1 : singleQty];
-                                    }
-                                }
-
-                                // Ensure we have at least one quantity per product
-                                while (quantities.length < productIds.length) {
-                                    quantities.push(1);
-                                }
-
-                                // Fetch all products
-                                if (productIds.length > 0) {
-                                    const { data: productsData, error: productsError } = await supabase
-                                        .from('products')
-                                        .select('id, product_name, slug')
-                                        .in('id', productIds);
-
-                                    if (!productsError && productsData && productsData.length > 0) {
-                                        // Create products array
-                                        products = productIds.map((productId: string, index: number) => {
-                                            const product = productsData.find(p => p.id === productId);
-                                            const quantity = quantities[index] || 1;
-
-                                            return {
-                                                name: product?.product_name || "Unknown Product",
-                                                quantity: quantity,
-                                                slug: product?.slug || undefined
-                                            };
-                                        });
-
-                                        totalQuantity = products.reduce((sum: number, product: any) => {
-                                            return sum + (Number(product.quantity) || 1);
-                                        }, 0);
-
-                                    }
-                                }
-                            } catch (parseError) {
-                            }
-                        }
-
-                        // If no products found, fallback to single product
-                        if (products.length === 0) {
-                            // Try single product ID
-                            if (order.product_id && typeof order.product_id === 'string') {
-                                try {
-                                    const { data: productData } = await supabase
-                                        .from('products')
-                                        .select('product_name, slug')
-                                        .eq('id', order.product_id)
-                                        .single();
-
-                                    if (productData) {
-                                        products = [{
-                                            name: productData.product_name,
-                                            quantity: 1,
-                                            slug: productData.slug
-                                        }];
-                                        totalQuantity = 1;
-                                    }
-                                } catch (singleError) {
-                                }
-                            }
-
-                            // Final fallback
-                            if (products.length === 0) {
-                                products = [{
-                                    name: "Standard Device Package",
-                                    quantity: 1,
-                                    slug: "standard-device-package"
-                                }];
-                                totalQuantity = 1;
-                            }
-                        }
-                    } catch (itemsErr) {
-                        // Use default product
-                        products = [{
-                            name: "Standard Device Package",
-                            quantity: 1,
-                            slug: "standard-device-package"
-                        }];
-                        totalQuantity = 1;
-                    }
+                    const totalQuantity = quantity;
 
                     const daysSinceShipped = calculateDaysShipped(order.shipped_date);
                     const daysOverdue = calculateDaysOverdue(order.shipped_date);
@@ -630,10 +534,9 @@ export default function Page() {
                         daysCountText += ` (${daysOverdue} days overdue)`;
                     }
 
-                    // In handleSendReminders function, update the date formatting:
                     const emailData = {
                         orderNumber: order.order_no,
-                        orderDate: formatDateToCustomFormat(order.order_date), // Use custom format
+                        orderDate: formatDateToCustomFormat(order.order_date),
                         customerName: customerName,
                         customerEmail: order.users.email,
 
@@ -647,37 +550,42 @@ export default function Page() {
                         salesExecutiveEmail: order.se_email || "N/A",
                         salesManager: order.sales_manager || "N/A",
                         salesManagerEmail: order.sm_email || "N/A",
+                        reseller: order.reseller || "N/A",
 
                         companyName: order.company_name || "N/A",
+                        contactName: order.contact_name || "N/A",
                         contactEmail: order.email || "N/A",
-                        shippedDate: formatDateToCustomFormat(order.shipped_date), // Use custom format
-                        daysCount: daysCountText
+                        shippingAddress: order.address || "N/A",
+                        city: order.city || "N/A",
+                        state: order.state || "N/A",
+                        zip: order.zip || "N/A",
+                        deliveryDate: formatDateToCustomFormat(order.desired_date) || "N/A",
+
+                        deviceUnits: order.dev_opportunity || 0,
+                        budgetPerDevice: order.dev_budget || 0,
+                        revenue: order.rev_opportunity || 0,
+                        crmAccount: order.crm_account || "N/A",
+                        vertical: order.vertical || "N/A",
+                        segment: order.segment || "N/A",
+                        useCase: order.use_case || "N/A",
+                        currentDevices: order.currently_running || "N/A",
+                        licenses: order.licenses || "N/A",
+                        usingCopilot: order.isCopilot || "N/A",
+                        securityFactor: order.isSecurity || "N/A",
+                        deviceProtection: order.current_protection || "N/A",
+
+                        note: order.notes || "No notes available",
+                        daysCount: daysCountText,
+                        shippedDate: formatDateToCustomFormat(order.shipped_date)
                     };
 
                     // Get email template
-                    const template = emailTemplates.returnReminderCronEmail({
-                        orderNumber: emailData.orderNumber,
-                        orderDate: emailData.orderDate,
-                        customerName: emailData.customerName,
-                        customerEmail: emailData.customerEmail,
-                        products: emailData.products,
-                        totalQuantity: emailData.totalQuantity,
-                        returnTracking: emailData.returnTracking,
-                        fileLink: emailData.fileLink,
-                        salesExecutive: emailData.salesExecutive,
-                        salesExecutiveEmail: emailData.salesExecutiveEmail,
-                        salesManager: emailData.salesManager,
-                        salesManagerEmail: emailData.salesManagerEmail,
-                        companyName: emailData.companyName,
-                        contactEmail: emailData.contactEmail,
-                        shippedDate: emailData.shippedDate,
-                        daysCount: emailData.daysCount
-                    });
+                    const template = emailTemplates.returnReminderCronEmail(emailData);
 
                     // Send email
                     await sendEmail({
                         to: order.users.email,
-                        cc: "",
+                        cc: "support@works360.com",
                         subject: template.subject,
                         text: template.text,
                         html: template.html,
@@ -699,16 +607,6 @@ export default function Page() {
                         status: 'sent'
                     });
 
-                    // Log email sent in orders table (optional)
-                    await supabase
-                        .from('orders')
-                        .update({
-                            notes: order.notes
-                                ? `${order.notes}\n[Reminder sent on ${new Date().toLocaleDateString()}]`
-                                : `[Reminder sent on ${new Date().toLocaleDateString()}]`,
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('id', order.id);
 
                     return {
                         success: true,
@@ -769,7 +667,6 @@ export default function Page() {
                 status: successful > 0 ? 'completed' : 'failed'
             });
 
-
             // Show summary toast
             if (successful > 0) {
                 toast.success(`Reminders sent successfully for ${successful} order(s)${failed > 0 ? `, ${failed} failed` : ''}`, {
@@ -808,6 +705,7 @@ export default function Page() {
             setIsSendingReminders(false);
         }
     };
+
 
     // Handle edit order click
     const handleEditOrder = (order: Order) => {
@@ -1648,7 +1546,7 @@ export default function Page() {
                                                 <span className="ml-2">Loading overdue orders...</span>
                                             </div>
                                         ) : (
-                                            "No overdue orders found. All orders are within their 45-day return period."
+                                            "No overdue orders found. All orders are within their 30-day return period."
                                         )}
                                     </TableCell>
                                 </TableRow>

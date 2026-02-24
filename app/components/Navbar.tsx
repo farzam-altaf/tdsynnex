@@ -600,7 +600,7 @@ export default function Navbar() {
                             {/* User Approvals */}
                             <button
                               onClick={() => {
-                                router.push('/users-list?_=true');
+                                router.push('/pending-users');
                                 setIsNotificationOpen(false);
                               }}
                               className="w-full text-left mb-2 py-3 px-2 rounded-md hover:bg-gray-100 transition-colors duration-200 cursor-pointer"
@@ -611,8 +611,8 @@ export default function Navbar() {
                                     <CiUser className="text-blue-600" size={16} />
                                   </div>
                                   <div>
-                                    <p className="text-sm font-medium text-gray-900">User Approvals</p>
-                                    <p className="text-xs text-gray-500">Pending user verifications</p>
+                                    <p className="text-sm font-medium text-gray-900">User Approval(s)</p>
+                                    <p className="text-xs text-gray-500">Pending user verification(s)</p>
                                   </div>
                                 </div>
                                 {pendingUserCount > 0 && (
@@ -647,8 +647,8 @@ export default function Navbar() {
                                     </svg>
                                   </div>
                                   <div>
-                                    <p className="text-sm font-medium text-gray-900">Awaiting Approvals</p>
-                                    <p className="text-xs text-gray-500">Pending order approvals</p>
+                                    <p className="text-sm font-medium text-gray-900">Awaiting Approval(s)</p>
+                                    <p className="text-xs text-gray-500">Pending order approval(s)</p>
                                   </div>
                                 </div>
                                 {pendingOrderCount > 0 && (

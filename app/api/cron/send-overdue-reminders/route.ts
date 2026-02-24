@@ -159,9 +159,9 @@ export async function GET(request: NextRequest) {
                 const shippedDate = new Date(order.shipped_date);
                 const daysSinceShipped = calculateDaysDifference(shippedDate, today);
 
-                // Skip if less than 45 days
-                if (daysSinceShipped < 45) {
-                    console.log(`⏳ Skipping order #${order.order_no}: ${daysSinceShipped} days shipped (less than 45)`);
+                // Skip if less than 35 days
+                if (daysSinceShipped < 35) {
+                    console.log(`⏳ Skipping order #${order.order_no}: ${daysSinceShipped} days shipped (less than 35)`);
                     skipped++;
                     continue;
                 }
@@ -179,7 +179,7 @@ export async function GET(request: NextRequest) {
                 let newReminderCount = reminderCount;
 
                 if (!lastReminderDate) {
-                    // First reminder - send immediately if 45+ days
+                    // First reminder - send immediately if 30+ days
                     shouldSendReminder = true;
                     newReminderCount = 1;
                 } else {

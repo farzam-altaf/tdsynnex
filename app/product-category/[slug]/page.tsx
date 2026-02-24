@@ -164,7 +164,7 @@ export default function Page() {
     const [products, setProducts] = useState<Product[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const q = searchParams.get("q");
-    
+
     // Combined filters state
     const [filters, setFilters] = useState<Record<string, string[]>>({
         formFactor: [],
@@ -187,12 +187,12 @@ export default function Page() {
     // Function to extract filters from URL
     const getFiltersFromURL = () => {
         const urlFilters: Record<string, string[]> = {};
-        
+
         // Iterate through all search params
         searchParams.forEach((value, key) => {
             // Skip non-filter parameters
             if (key === 'q' || key === 'page' || key === '_') return;
-            
+
             // Map URL parameter to filter key
             const filterKey = URL_FILTER_MAPPING[key];
             if (filterKey) {
@@ -201,41 +201,8 @@ export default function Page() {
                 urlFilters[filterKey] = values;
             }
         });
-        
-        return urlFilters;
-    };
 
-    // Update URL when filters change
-    const updateURLWithFilters = (newFilters: Record<string, string[]>) => {
-        const params = new URLSearchParams(searchParams.toString());
-        
-        // Remove all existing filter parameters
-        Object.keys(URL_FILTER_MAPPING).forEach(key => {
-            params.delete(key);
-        });
-        
-        // Add new filter parameters
-        Object.entries(newFilters).forEach(([filterKey, values]) => {
-            if (values.length > 0) {
-                // Find the URL parameter key for this filter
-                const urlKey = Object.keys(URL_FILTER_MAPPING).find(
-                    key => URL_FILTER_MAPPING[key] === filterKey
-                );
-                
-                if (urlKey) {
-                    // Join multiple values with comma
-                    params.set(urlKey, values.join(','));
-                }
-            }
-        });
-        
-        // Preserve existing query parameters like 'q'
-        const queryString = params.toString();
-        const newUrl = queryString 
-            ? `${pathname}?${queryString}`
-            : pathname;
-        
-        router.replace(newUrl, { scroll: false });
+        return urlFilters;
     };
 
     // Handle clear cart
@@ -445,15 +412,15 @@ export default function Page() {
 
             // Apply URL filters to the database query
             let hasFilters = false;
-            
+
             searchParams.forEach((value, key) => {
                 // Skip non-filter parameters
                 if (key === 'q' || key === 'page' || key === '_') return;
-                
+
                 const dbColumn = URL_TO_DB_MAPPING[key];
                 if (dbColumn) {
                     const values = value.split(',').map(v => v.trim());
-                    
+
                     if (values.length === 1) {
                         // Single value - use eq
                         productsQuery = productsQuery.eq(dbColumn, values[0]);
@@ -605,11 +572,11 @@ export default function Page() {
                 searchParams.forEach((value, key) => {
                     // Skip non-filter parameters
                     if (key === 'q' || key === 'page' || key === '_') return;
-                    
+
                     const dbColumn = URL_TO_DB_MAPPING[key];
                     if (dbColumn) {
                         const values = value.split(',').map(v => v.trim());
-                        
+
                         if (values.length === 1) {
                             query = query.eq(dbColumn, values[0]);
                         } else if (values.length > 1) {
@@ -657,9 +624,9 @@ export default function Page() {
             setProducts(productsData);
             updateFilterOptions(productsData);
 
-            // Initialize filters from URL for UI
+            // Initialize filters from URL for UI - LEKIN SIRF TAB JAB FILTERS EMPTY HO
             const urlFilters = getFiltersFromURL();
-            if (Object.keys(urlFilters).length > 0) {
+            if (Object.keys(urlFilters).length > 0 && Object.values(filters).every(arr => arr.length === 0)) {
                 setFilters(prev => ({
                     ...prev,
                     ...urlFilters
@@ -766,9 +733,9 @@ export default function Page() {
                 [filterType]: newValues
             };
 
-            // Update URL when filters change
-            updateURLWithFilters(updatedFilters);
-            
+            // REMOVE this line - no direct URL update
+            // updateURLWithFilters(updatedFilters);
+
             return updatedFilters;
         });
     };
@@ -783,25 +750,63 @@ export default function Page() {
             copilotPC: [],
             fiveGEnabled: [],
         };
-        
+
         setFilters(clearedFilters);
-        
-        // Clear URL parameters
+
+        // REMOVE this URL update logic
+        /*
         const params = new URLSearchParams(searchParams.toString());
         Object.keys(URL_FILTER_MAPPING).forEach(key => {
             params.delete(key);
         });
-        
         const queryString = params.toString();
-        const newUrl = queryString 
+        const newUrl = queryString
             ? `${pathname}?${queryString}`
             : pathname;
-        
         router.replace(newUrl, { scroll: false });
-        
+        */
+
         // Refetch data without filters
         fetchDataFromDatabase();
     };
+
+    // Update URL when filters change
+    useEffect(() => {
+        // Skip if not authenticated
+        if (!authChecked || !authInitialized) return;
+
+        const params = new URLSearchParams(searchParams.toString());
+
+        // Remove all existing filter parameters
+        Object.keys(URL_FILTER_MAPPING).forEach(key => {
+            params.delete(key);
+        });
+
+        // Add new filter parameters
+        Object.entries(filters).forEach(([filterKey, values]) => {
+            if (values.length > 0) {
+                const urlKey = Object.keys(URL_FILTER_MAPPING).find(
+                    key => URL_FILTER_MAPPING[key] === filterKey
+                );
+
+                if (urlKey) {
+                    params.set(urlKey, values.join(','));
+                }
+            }
+        });
+
+        // Preserve existing query parameters like 'q'
+        const queryString = params.toString();
+        const newUrl = queryString
+            ? `${pathname}?${queryString}`
+            : pathname;
+
+        // Only update if URL actually changed
+        const currentUrl = window.location.pathname + window.location.search;
+        if (newUrl !== currentUrl) {
+            router.replace(newUrl, { scroll: false });
+        }
+    }, [filters, pathname, router, authChecked, authInitialized]);
 
     const getActiveFilterCount = () => {
         return Object.values(filters).reduce((total, values) => total + values.length, 0);
@@ -932,22 +937,15 @@ export default function Page() {
                 {/* Fixed Filter Sidebar - Desktop */}
                 <div className="hidden lg:block w-64 flex-shrink-0 h-full top-0 overflow-y-auto bg-white border-r border-gray-200">
                     <div className="p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            {getActiveFilterCount() > 0 && (
-                                <button
-                                    onClick={clearFilters}
-                                    className="text-sm text-[#3ba1da] hover:text-[#41abd6]"
-                                >
-                                    Clear all
-                                </button>
-                            )}
-                        </div>
 
                         {isLoading ? (
                             <FiltersSidebarSkeleton />
                         ) : (
                             <div className="space-y-4">
-                                <DatabaseFilterSection filterKey="formFactor" title="Form Factor" />
+                                {/* Conditionally render Form Factor filter - hide if present in URL */}
+                                {!searchParams.has('form_factor') && (
+                                    <DatabaseFilterSection filterKey="formFactor" title="Form Factor" />
+                                )}
                                 <DatabaseFilterSection filterKey="processor" title="Processor" />
                                 <DatabaseFilterSection filterKey="screenSize" title="Screen Size" />
                                 <DatabaseFilterSection filterKey="memory" title="Memory" />
@@ -964,7 +962,7 @@ export default function Page() {
                     {/* Mobile filter button */}
                     <div className="lg:hidden py-4 px-8 flex items-center justify-between gap-3">
                         <h1 className="text-4xl text-gray-900">
-                            <span className="capitalize">{slug == "notebooks" ? "Laptops" : slug}</span>
+                            <span className="capitalize"></span>
                         </h1>
                         <button onClick={() => setShowFilters(true)} className="m-2">
                             <FaFilter size={15} />
@@ -973,34 +971,6 @@ export default function Page() {
 
                     {/* Products Section */}
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-2">
-                        {!isLoading && getActiveFilterCount() > 0 && (
-                            <div className="mb-8">
-                                <div className="flex flex-wrap gap-2 mt-4">
-                                    {Object.entries(filters).map(([key, values]) =>
-                                        values.map(value => (
-                                            <span
-                                                key={`${key}-${value}`}
-                                                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#3ba1da]/10 text-[#3ba1da] text-sm"
-                                            >
-                                                {value}
-                                                <button
-                                                    onClick={() => handleFilterChange(key, value)}
-                                                    className="ml-1 hover:text-red-500"
-                                                >
-                                                    <X size={14} />
-                                                </button>
-                                            </span>
-                                        ))
-                                    )}
-                                    <button
-                                        onClick={clearFilters}
-                                        className="text-sm text-gray-600 hover:text-[#3ba1da]"
-                                    >
-                                        Clear all
-                                    </button>
-                                </div>
-                            </div>
-                        )}
 
                         <div className="w-full lg:max-w-7xl lg:mx-auto lg:px-6">
                             {isLoading ? (
@@ -1009,7 +979,7 @@ export default function Page() {
                                 <>
                                     <div className="flex items-center justify-between sm:my-10 my-5">
                                         <div className="text-3xl font-semibold">
-                                            <span className="capitalize">{slug == "notebooks" ? "Notebooks" : slug}</span> 
+                                            <span className="capitalize"></span>
                                         </div>
                                         {(admin === profile?.role || shopManager === profile?.role) && (
                                             <div className="">
@@ -1156,14 +1126,6 @@ export default function Page() {
                 title={
                     <div className="flex items-center justify-between">
                         <span className="text-xl font-bold">Filters</span>
-                        {getActiveFilterCount() > 0 && (
-                            <button
-                                onClick={clearFilters}
-                                className="text-sm text-[#3ba1da] hover:text-[#41abd6]"
-                            >
-                                Clear all
-                            </button>
-                        )}
                     </div>
                 }
                 placement="right"
@@ -1173,7 +1135,10 @@ export default function Page() {
                 className="filter-drawer"
             >
                 <div className="space-y-6">
-                    <DatabaseFilterSection filterKey="formFactor" title="Form Factor" />
+                    {/* Conditionally render Form Factor filter - hide if present in URL */}
+                    {!searchParams.has('form_factor') && (
+                        <DatabaseFilterSection filterKey="formFactor" title="Form Factor" />
+                    )}
                     <DatabaseFilterSection filterKey="processor" title="Processor" />
                     <DatabaseFilterSection filterKey="screenSize" title="Screen Size" />
                     <DatabaseFilterSection filterKey="memory" title="Memory" />
@@ -1197,15 +1162,6 @@ export default function Page() {
                                     </span>
                                 )}
                             </div>
-                            {cartItems.length > 0 && (
-                                <button
-                                    onClick={handleClearCart}
-                                    disabled={cartUpdating}
-                                    className="text-sm text-red-500 hover:text-red-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    {cartUpdating ? 'Clearing...' : 'Clear All'}
-                                </button>
-                            )}
                         </div>
                     }
                     placement="right"

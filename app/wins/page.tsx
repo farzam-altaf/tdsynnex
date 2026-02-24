@@ -935,7 +935,7 @@ export default function Page() {
 
             const result = await sendEmail({
                 to: oData.submitted_by,
-                cc: "",
+                cc: "support@works360.com",
                 subject: template.subject,
                 text: template.text,
                 html: template.html,

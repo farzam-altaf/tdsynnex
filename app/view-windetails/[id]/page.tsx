@@ -333,12 +333,12 @@ export default function WinDetailsPage() {
                         </TableRow>
 
                         {/* Product Type */}
-                        <TableRow>
+                        {/* <TableRow>
                             <TableCell className="w-[65%] font-semibold">Product Type</TableCell>
                             <TableCell className="w-[35%] border-l">
                                 {win.isOther ? "Other Product" : "Standard Product"}
                             </TableCell>
-                        </TableRow>
+                        </TableRow> */}
 
                         {/* Reseller Name */}
                         <TableRow>

@@ -212,11 +212,15 @@ export default function Page() {
 
                                     <div>
                                         <label className="text-sm text-gray-600">Inventory Owner</label>
-                                        <input
-                                            value={item.inventory_owner}
+                                        <select
+                                            value={item.inventory_owner || ""}
                                             onChange={(e) => updateItem(index, "inventory_owner", e.target.value)}
                                             className="mt-1 w-full border rounded-xl px-3 py-2"
-                                        />
+                                        >
+                                            <option value="">Select owner</option>
+                                            <option value="Program">Program</option>
+                                            <option value="Global">Global</option>
+                                        </select>
                                     </div>
                                 </div>
                             </motion.div>

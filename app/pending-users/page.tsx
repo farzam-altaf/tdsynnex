@@ -59,6 +59,8 @@ import { emailTemplates, sendEmail } from "@/lib/email"
 import { logger, logAuth, logError, logSuccess, logWarning, logInfo } from "@/lib/logger"
 import { toast } from "sonner"
 import { AprovedUserCC } from "@/lib/emailconst"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 // Define User type based on your Supabase table
 export type User = {
@@ -73,20 +75,12 @@ export type User = {
     isVerified: boolean
 }
 
-export default function UsersList() {
+export default function Page() {
     const router = useRouter();
     const { profile, isLoggedIn, loading } = useAuth();
     const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
-
-    // Modal states
-    const [editUser, setEditUser] = useState<User | null>(null);
-    const [changeRoleUser, setChangeRoleUser] = useState<User | null>(null);
-    const [selectedRole, setSelectedRole] = useState<string>("");
-    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-    const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
-    const [isUnverifiedOnly, setIsUnverifiedOnly] = useState(false);
 
     // Table states
     const [sorting, setSorting] = useState<SortingState>([])
@@ -100,7 +94,7 @@ export default function UsersList() {
     const superSubscriberRole = process.env.NEXT_PUBLIC_SUPERSUBSCRIBER;
     const subscriberRole = process.env.NEXT_PUBLIC_SUBSCRIBER;
 
-    const allowedRoles = [adminRole].filter(Boolean);
+    const allowedRoles = [superSubscriberRole, adminRole].filter(Boolean);
     const viewRoles = [superSubscriberRole].filter(Boolean);
 
     const columnDisplayNames: Record<string, string> = {
@@ -125,26 +119,23 @@ export default function UsersList() {
 
     // Check if current user is authorized
     const isAuthorized = profile?.role && allowedRoles.includes(profile.role);
-    const isViewAuthorized = profile?.role && viewRoles.includes(profile.role);
-    const pathname = usePathname();
-    const searchParams = useSearchParams();
 
-    const source = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/users-list`;
+
+    const source = `${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/pending-users`;
 
     // Handle auth check
     useEffect(() => {
         if (loading) return;
 
         if (!isLoggedIn || !profile?.isVerified) {
-            let redirectUrl = '/login/?redirect_to=users-list';
+            let redirectUrl = '/login/?redirect_to=pending-users';
 
-            // If URL has ?_=true parameter, include it in redirect URL
             if (typeof window !== 'undefined') {
                 const urlParams = new URLSearchParams(window.location.search);
                 const hasUnverifiedParam = urlParams.get('_') === 'true';
 
                 if (hasUnverifiedParam) {
-                    redirectUrl = '/login/?redirect_to=users-list?_=true';
+                    redirectUrl = '/login/?redirect_to=pending-users';
                 }
             }
 
@@ -189,20 +180,7 @@ export default function UsersList() {
             return;
         }
 
-        // Log successful access
-        logAuth(
-            'page_access',
-            `User accessed users list page`,
-            profile.id,
-            {
-                role: profile.role,
-                isUnverifiedOnly: searchParams.get('_') === 'true'
-            },
-            'completed',
-            source
-        );
-
-    }, [loading, isLoggedIn, profile, router, isAuthorized, source, searchParams]);
+    }, [loading, isLoggedIn, profile, router, isAuthorized, source]);
 
     // Update fetchUsers to use searchParams
     const fetchUsers = async () => {
@@ -211,19 +189,12 @@ export default function UsersList() {
             setIsLoading(true);
             setError(null);
 
-            // Use searchParams hook instead of window.location
-            const hasUnverifiedParam = searchParams.get('_') === 'true';
-            setIsUnverifiedOnly(hasUnverifiedParam);
 
             let query = supabase
                 .from('users')
                 .select('*')
-                .order('registered_at', { ascending: false });
-
-            // If URL has ?_=true, only fetch unverified users
-            if (hasUnverifiedParam) {
-                query = query.eq('isVerified', false);
-            }
+                .order('registered_at', { ascending: false })
+                .eq('isVerified', false);
 
             const { data, error: supabaseError } = await query;
 
@@ -234,18 +205,6 @@ export default function UsersList() {
             if (data) {
                 setUsers(data as User[]);
                 const executionTime = Date.now() - startTime;
-                logSuccess(
-                    'db',
-                    'users_fetch_success',
-                    `Successfully fetched ${data.length} users`,
-                    {
-                        count: data.length,
-                        isUnverifiedOnly: hasUnverifiedParam,
-                        executionTime
-                    },
-                    profile?.id,
-                    source
-                );
             }
         } catch (err: unknown) {
             const executionTime = Date.now() - startTime;
@@ -275,162 +234,7 @@ export default function UsersList() {
         }
     };
 
-    // Update useEffect to depend on searchParams
-    useEffect(() => {
-        if (!loading && isLoggedIn && profile?.isVerified && isAuthorized) {
-            fetchUsers();
-        }
-    }, [loading, isLoggedIn, profile, isAuthorized, searchParams]);
 
-    // Handle edit user
-    const handleEditUser = (user: User) => {
-        setEditUser(user);
-        setIsEditDialogOpen(true);
-        logInfo(
-            'user',
-            'edit_user_clicked',
-            `Edit user clicked for: ${user.email}`,
-            {
-                userId: user.id,
-                email: user.email,
-                currentName: `${user.firstName} ${user.lastName}`
-            },
-            profile?.id,
-            source
-        );
-    };
-
-    const handleSaveEdit = async () => {
-        if (!editUser) return;
-
-        const startTime = Date.now();
-        try {
-            const { error } = await supabase
-                .from('users')
-                .update({
-                    firstName: editUser.firstName,
-                    lastName: editUser.lastName,
-                    email: editUser.email,
-                })
-                .eq('id', editUser.id);
-
-            if (error) throw error;
-
-            const executionTime = Date.now() - startTime;
-            logSuccess(
-                'user',
-                'user_updated',
-                `User updated: ${editUser.email}`,
-                {
-                    userId: editUser.id,
-                    email: editUser.email,
-                    oldName: `${editUser.firstName} ${editUser.lastName}`,
-                    newName: `${editUser.firstName} ${editUser.lastName}`,
-                    executionTime,
-                    updatedBy: profile?.email
-                },
-                profile?.id,
-                source
-            );
-
-            fetchUsers(); // Refresh data
-            setIsEditDialogOpen(false);
-            setEditUser(null);
-            toast.success("User updated successfully!");
-        } catch (error: any) {
-            const executionTime = Date.now() - startTime;
-            setError('Failed to update user');
-            logError(
-                'db',
-                'user_update_failed',
-                `Failed to update user ${editUser.email}`,
-                {
-                    error: error.message,
-                    userId: editUser.id,
-                    executionTime
-                },
-                profile?.id,
-                source
-            );
-            toast.error("Failed to update user");
-        }
-    };
-
-    // Handle change role
-    const handleChangeRole = (user: User) => {
-        setChangeRoleUser(user);
-        setSelectedRole(user.role);
-        setIsRoleDialogOpen(true);
-        logInfo(
-            'user',
-            'change_role_clicked',
-            `Change role clicked for: ${user.email}`,
-            {
-                userId: user.id,
-                email: user.email,
-                currentRole: user.role
-            },
-            profile?.id,
-            source
-        );
-    };
-
-    const handleSaveRole = async () => {
-        if (!changeRoleUser || !selectedRole) return;
-
-        const startTime = Date.now();
-        try {
-            const { error } = await supabase
-                .from('users')
-                .update({ role: selectedRole })
-                .eq('id', changeRoleUser.id);
-
-            if (error) throw error;
-
-            const executionTime = Date.now() - startTime;
-            logSuccess(
-                'user',
-                'role_changed',
-                `Role changed for ${changeRoleUser.email}`,
-                {
-                    userId: changeRoleUser.id,
-                    email: changeRoleUser.email,
-                    oldRole: changeRoleUser.role,
-                    newRole: selectedRole,
-                    executionTime,
-                    changedBy: profile?.email
-                },
-                profile?.id,
-                source
-            );
-
-            fetchUsers(); // Refresh data
-            setIsRoleDialogOpen(false);
-            setChangeRoleUser(null);
-            setSelectedRole("");
-            toast.success("Role updated successfully!");
-        } catch (error: any) {
-            const executionTime = Date.now() - startTime;
-            setError('Failed to update role');
-            logError(
-                'db',
-                'role_change_failed',
-                `Failed to change role for ${changeRoleUser.email}`,
-                {
-                    error: error.message,
-                    userId: changeRoleUser.id,
-                    oldRole: changeRoleUser.role,
-                    newRole: selectedRole,
-                    executionTime
-                },
-                profile?.id,
-                source
-            );
-            toast.error("Failed to update role");
-        }
-    };
-
-    // Handle verify user
     const handleVerifyUser = async (userId: string, email: string) => {
         const startTime = Date.now();
         try {
@@ -456,12 +260,14 @@ export default function UsersList() {
                 source
             );
 
-            sendApprovedEmail(email);
+            // Send approval email
+            await sendApprovedEmail(email);
+
             fetchUsers(); // Refresh data
             toast.success("User approved successfully!");
         } catch (error: any) {
             const executionTime = Date.now() - startTime;
-            setError('Failed to verify user');
+            setError('Failed to approve user');
             logError(
                 'db',
                 'user_approval_failed',
@@ -479,53 +285,14 @@ export default function UsersList() {
         }
     };
 
-    const handleUnverifyUser = async (userId: string, email: string) => {
-        const startTime = Date.now();
-        try {
-            const { error } = await supabase
-                .from('users')
-                .update({ isVerified: false })
-                .eq('id', userId);
-
-            if (error) throw error;
-
-            const executionTime = Date.now() - startTime;
-            logWarning(
-                'user',
-                'user_rejected',
-                `User rejected: ${email}`,
-                {
-                    userId,
-                    email,
-                    executionTime,
-                    rejectedBy: profile?.email
-                },
-                profile?.id,
-                source
-            );
-
-            sendRejectedEmail(email)
-            fetchUsers(); // Refresh data
-            toast.success("User rejected successfully!");
-        } catch (error: any) {
-            const executionTime = Date.now() - startTime;
-            setError('Failed to unverify user');
-            logError(
-                'db',
-                'user_rejection_failed',
-                `Failed to reject user ${email}`,
-                {
-                    error: error.message,
-                    userId,
-                    email,
-                    executionTime
-                },
-                profile?.id,
-                source
-            );
-            toast.error("Failed to reject user");
+    // Update useEffect to depend on searchParams
+    useEffect(() => {
+        if (!loading && isLoggedIn && profile?.isVerified && isAuthorized) {
+            fetchUsers();
         }
-    };
+    }, [loading, isLoggedIn, profile, isAuthorized]);
+
+
 
     const sendApprovedEmail = async (userEmail: string) => {
         try {
@@ -583,6 +350,8 @@ export default function UsersList() {
     const sendRejectedEmail = async (userEmail: string) => {
         try {
             const template = emailTemplates.rejectedUserEmail(userEmail);
+
+            
 
             const result = await sendEmail({
                 to: userEmail,
@@ -732,26 +501,6 @@ export default function UsersList() {
             },
             cell: ({ row }) => <div className="text-left ps-2 lowercase">{row.getValue("email")}</div>,
         },
-
-        // Role column
-        {
-            accessorKey: "role",
-            header: ({ column }) => {
-                return (
-                    <Button
-                        variant="ghost"
-                        className="hover:bg-transparent hover:text-current cursor-pointer justify-start w-full"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                    >
-                        Role
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                )
-            },
-            cell: ({ row }) => (
-                <div className="text-left ps-2 capitalize">{row.getValue("role")}</div>
-            ),
-        },
         {
             accessorKey: "isVerified",
             header: ({ column }) => {
@@ -789,143 +538,87 @@ export default function UsersList() {
             },
         },
         {
-            accessorKey: "login_at",
+            id: "actions",
             header: ({ column }) => {
                 return (
-                    <div className="text-left ps-2 font-medium">Last Login</div>
+                    <div className="text-left ps-2 font-medium">Actions</div>
                 )
             },
             cell: ({ row }) => {
-                const date = row.getValue("login_at") as string | null;
-                return (
-                    <div className="text-left ps-2">
-                        {formatDateToCustomFormat(date)}
-                    </div>
-                )
-            },
-        },
-        {
-            accessorKey: "login_count",
-            header: ({ column }) => {
-                return (
-                    <Button
-                        variant="ghost"
-                        className="hover:bg-transparent hover:text-current cursor-pointer justify-start w-full"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                    >
-                        Login Count
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                )
-            },
-            cell: ({ row }) => {
-                const count = row.getValue("login_count") as number | null;
-                return <div className="text-left ps-2">{count || 0}</div>
-            },
-        },
+                const user = row.original;
+                const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
+                return (
+                    <TooltipProvider>
+                        <div className="flex space-x-2 ps-2">
+                            {/* Approve Button with Tooltip */}
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        onClick={() => handleVerifyUser(user.id, user.email)}
+                                        className="bg-[#0A4647] hover:bg-[#0a3a3b] text-white cursor-pointer"
+                                        size="sm"
+                                    >
+                                        <CheckCircle className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Approve User</p>
+                                </TooltipContent>
+                            </Tooltip>
+
+                            {/* Delete Button with Alert Dialog */}
+                            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <AlertDialogTrigger asChild>
+                                            <Button
+                                                className="text-red-600 hover:bg-red-600 border hover:text-white border-red-600 bg-white cursor-pointer"
+                                                size="sm"
+                                            >
+                                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>Delete User</p>
+                                    </TooltipContent>
+                                </Tooltip>
+
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This action cannot be undone. This will permanently delete the user
+                                            <span className="font-semibold text-red-600 block mt-2">
+                                                {user.email}
+                                            </span>
+                                            and remove their data from our servers.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
+                                        <AlertDialogAction
+                                            onClick={() => {
+                                                setIsDeleteDialogOpen(false);
+                                                handleDeleteUser(user.id, user.email);
+                                            }}
+                                            className="bg-red-600 hover:bg-red-700 text-white cursor-pointer"
+                                        >
+                                            Delete
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
+                    </TooltipProvider>
+                )
+            },
+        },
     ]
 
-    if (!isViewAuthorized) {
-        columns.unshift(
-            {
-                id: "actions",
-                enableHiding: false,
-                cell: ({ row }) => {
-                    const user = row.original;
-
-                    // Only show actions for authorized users
-                    if (!isAuthorized) return null;
-
-                    return (
-                        <div className="flex space-x-2 ps-2">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
-                                        <span className="sr-only">Open menu</span>
-                                        <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                    <DropdownMenuItem
-                                        className="cursor-pointer"
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(user.email);
-                                            logInfo(
-                                                'user',
-                                                'email_copied',
-                                                `Email copied to clipboard: ${user.email}`,
-                                                {
-                                                    email: user.email
-                                                },
-                                                profile?.id,
-                                                source
-                                            );
-                                        }}
-                                    >
-                                        Copy email
-                                    </DropdownMenuItem>
-
-                                    {smRole !== profile?.role && (
-                                        <>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem
-                                                className="cursor-pointer"
-                                                onClick={() => handleEditUser(user)}
-                                            >
-                                                <Edit className="mr-2 h-4 w-4" />
-                                                Edit User
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                className="cursor-pointer"
-                                                onClick={() => handleChangeRole(user)}
-                                            >
-                                                <Key className="mr-2 h-4 w-4" />
-                                                Change Role
-                                            </DropdownMenuItem>
-                                            {!user.isVerified ? (
-                                                <>
-                                                    <DropdownMenuItem
-                                                        onClick={() => handleVerifyUser(user.id, user.email)}
-                                                        className="text-green-600 cursor-pointer"
-                                                    >
-                                                        <CheckCircle className="mr-2 h-4 w-4" />
-                                                        Approve User
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        onClick={() => {
-                                                            if (confirm(`Are you sure you want to delete ${user.email}?`)) {
-                                                                handleDeleteUser(user.id, user.email);
-                                                            }
-                                                        }}
-                                                        className="text-red-600 cursor-pointer"
-                                                    >
-                                                        <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                        </svg>
-                                                        Delete User
-                                                    </DropdownMenuItem>
-                                                </>
-                                            ) : (
-                                                <DropdownMenuItem
-                                                    onClick={() => handleUnverifyUser(user.id, user.email)}
-                                                    className="text-red-600 cursor-pointer"
-                                                >
-                                                    <XCircle className="mr-2 h-4 w-4" />
-                                                    Reject User
-                                                </DropdownMenuItem>
-                                            )}
-                                        </>
-                                    )}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                    )
-                },
-            }
-        )
-    }
     const [globalFilter, setGlobalFilter] = useState<string>("")
     // Initialize table
     const table = useReactTable({
@@ -1012,18 +705,6 @@ export default function UsersList() {
             // Download file
             downloadCSV(csvString, `users_${new Date().toISOString().split('T')[0]}.csv`);
 
-            logSuccess(
-                'export',
-                'csv_export_success',
-                `CSV exported with ${users.length} records`,
-                {
-                    recordCount: users.length,
-                    isUnverifiedOnly,
-                },
-                profile?.id,
-                source
-            );
-
             toast.success("CSV exported successfully!");
         } catch (error: any) {
             setError('Failed to export CSV');
@@ -1091,7 +772,6 @@ export default function UsersList() {
             'Manually refreshing users list',
             {
                 currentCount: users.length,
-                isUnverifiedOnly
             },
             profile?.id,
             source
@@ -1101,18 +781,7 @@ export default function UsersList() {
 
     // Handle view toggle
     const handleViewToggle = (viewType: 'all' | 'pending') => {
-        const newPath = viewType === 'pending' ? '/users-list?_=true' : '/users-list';
-        logInfo(
-            'navigation',
-            'view_toggle',
-            `Toggled view to: ${viewType}`,
-            {
-                from: isUnverifiedOnly ? 'pending' : 'all',
-                to: viewType
-            },
-            profile?.id,
-            source
-        );
+        const newPath = viewType === 'pending' ? '/pending-users' : '/pending-users';
         router.push(newPath);
     };
 
@@ -1139,33 +808,8 @@ export default function UsersList() {
                 <div className="flex flex-col">
                     <h1 className="sm:text-3xl text-xl font-bold">
                     </h1>
-                    {isUnverifiedOnly && (
-                        <p className="text-sm text-gray-600 mt-1">
-                            Showing {users.length} pending user approval{users.length !== 1 ? 's' : ''}
-                        </p>
-                    )}
                 </div>
                 <div className="flex gap-2">
-                    {isUnverifiedOnly && (
-                        <Button
-                            variant="outline"
-                            disabled={isLoading}
-                            onClick={() => handleViewToggle('all')}
-                            className="cursor-pointer"
-                        >
-                            {isLoading ? "Loading..." : "View All Users"}
-                        </Button>
-                    )}
-                    {!isUnverifiedOnly && (
-                        <Button
-                            variant="outline"
-                            disabled={isLoading}
-                            onClick={() => handleViewToggle('pending')}
-                            className="cursor-pointer"
-                        >
-                            {isLoading ? "Loading..." : "View Pending Approvals"}
-                        </Button>
-                    )}
                     <Button
                         variant="outline"
                         onClick={handleRefresh}
@@ -1410,131 +1054,6 @@ export default function UsersList() {
                     </div>
                 </div>
             </div>
-
-            {/* Edit User Dialog */}
-            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                <DialogContent className="sm:max-w-106.25">
-                    <DialogHeader>
-                        <DialogTitle>Edit User</DialogTitle>
-                        <DialogDescription>
-                            Make changes to user details here.
-                        </DialogDescription>
-                    </DialogHeader>
-                    {editUser && (
-                        <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="firstName" className="text-right">
-                                    First Name
-                                </Label>
-                                <Input
-                                    id="firstName"
-                                    value={editUser.firstName}
-                                    onChange={(e) => setEditUser({ ...editUser, firstName: e.target.value })}
-                                    className="col-span-3 selection:bg-blue-500 selection:text-white"
-                                />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="lastName" className="text-right">
-                                    Last Name
-                                </Label>
-                                <Input
-                                    id="lastName"
-                                    value={editUser.lastName}
-                                    onChange={(e) => setEditUser({ ...editUser, lastName: e.target.value })}
-                                    className="col-span-3 selection:bg-blue-500 selection:text-white"
-                                />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="email" className="text-right">
-                                    Email
-                                </Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    value={editUser.email}
-                                    onChange={(e) => setEditUser({ ...editUser, email: e.target.value })}
-                                    className="col-span-3 selection:bg-blue-500 selection:text-white"
-                                />
-                            </div>
-                        </div>
-                    )}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => {
-                            setIsEditDialogOpen(false);
-                            logInfo(
-                                'ui',
-                                'edit_dialog_cancelled',
-                                'Edit user dialog cancelled',
-                                {
-                                    userId: editUser?.id,
-                                    email: editUser?.email
-                                },
-                                profile?.id,
-                                source
-                            );
-                        }} className="cursor-pointer">
-                            Cancel
-                        </Button>
-                        <Button onClick={handleSaveEdit} className="bg-[#0A4647] hover:bg-[#093636] cursor-pointer">
-                            Save changes
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Change Role Dialog */}
-            <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
-                <DialogContent className="sm:max-w-106.25">
-                    <DialogHeader>
-                        <DialogTitle>Change User Role</DialogTitle>
-                        <DialogDescription>
-                            Select a new role for {changeRoleUser?.firstName} {changeRoleUser?.lastName}
-                        </DialogDescription>
-                    </DialogHeader>
-                    {changeRoleUser && (
-                        <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="role" className="text-right">
-                                    Role
-                                </Label>
-                                <Select value={selectedRole} onValueChange={setSelectedRole} >
-                                    <SelectTrigger className="col-span-3 cursor-pointer">
-                                        <SelectValue placeholder="Select a role" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {roleOptions.map((option) => (
-                                            <SelectItem key={option.value} value={option.value} className="cursor-pointer">
-                                                {option.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    )}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => {
-                            setIsRoleDialogOpen(false);
-                            logInfo(
-                                'ui',
-                                'role_dialog_cancelled',
-                                'Change role dialog cancelled',
-                                {
-                                    userId: changeRoleUser?.id,
-                                    email: changeRoleUser?.email
-                                },
-                                profile?.id,
-                                source
-                            );
-                        }} className="cursor-pointer">
-                            Cancel
-                        </Button>
-                        <Button onClick={handleSaveRole} className="bg-[#0A4647] hover:bg-[#093636] cursor-pointer">
-                            Update Role
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     )
 }

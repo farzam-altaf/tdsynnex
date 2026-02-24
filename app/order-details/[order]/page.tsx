@@ -1924,7 +1924,7 @@ export default function Page() {
 
             await sendEmail({
                 to: orderData.order_by_user?.email,
-                cc: "",
+                cc: "support@works360.com",
                 subject: template.subject,
                 text: template.text,
                 html: template.html,
@@ -2534,7 +2534,7 @@ export default function Page() {
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 cursor-pointer"
+                        className="group h-6 w-6 p-0 cursor-pointer"
                         // In renderStatusDropdown function, update the onClick handler
                         onClick={() => {
                             // Directly call handleEditClick instead of going through the function
@@ -3207,7 +3207,7 @@ export default function Page() {
                                                 </TableCell>
                                             </TableRow>
                                             <TableRow>
-                                                <TableCell className="font-semibold">Return Date</TableCell>
+                                                <TableCell className="font-semibold">Expected Return Date</TableCell>
                                                 <TableCell className="border-l">
                                                     <div className="flex items-center">
                                                         {order.shipped_date ? (
