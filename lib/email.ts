@@ -224,7 +224,7 @@ export const emailTemplates = {
                         <!-- HEADER -->
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color: white; margin: 20px 0 0; font-size: 24px; font-weight: 500;">New User
                                     Registration</h1>
@@ -252,7 +252,7 @@ export const emailTemplates = {
                                     <tr>
                                         <td align="center"
                                             style="background-color:#0A4647; padding:8px 22px; border-radius:6px;">
-                                            <a href="https://tdsynnex-surface.com/pending-users"
+                                            <a href="https://tdsynnex.vercel.app/pending-users"
                                                 style="color:#ffffff; text-decoration:none; font-size:12px; font-family:Arial, sans-serif; display:inline-block;">
                                                 Review Pending User(s)
                                             </a>
@@ -348,7 +348,7 @@ export const emailTemplates = {
                     <!-- HEADER -->
                     <tr>
                         <td style="background:#0A4647; padding:30px; text-align:center;">
-                            <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                            <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                 style="max-width:400px; margin-bottom:24px; width:220px;" />
                             <h1 style="color: white; margin: 20px 0 0; font-size: 24px; font-weight: 500;">New User
                                 Registration</h1>
@@ -613,7 +613,7 @@ export const emailTemplates = {
                         <!-- HEADER -->
                         <tr>
                             <td style="background:#0A4647; padding:32px 30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX"
                                     style="max-width:400px; margin-bottom:24px; width:220px;">
                                 <h1
                                     style="color:#ffffff; margin:0; font-size:24px; font-weight:500; letter-spacing:-0.2px;">
@@ -1061,7 +1061,7 @@ export const emailTemplates = {
                         <!-- HEADER -->
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     New Order #${orderNumber} | TD SYNNEX SURFACE
@@ -1482,7 +1482,7 @@ export const emailTemplates = {
                         <!-- HEADER -->
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Order Approved #${orderNumber} | TD SYNNEX SURFACE
@@ -1876,7 +1876,7 @@ export const emailTemplates = {
                         <!-- HEADER -->
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Order Rejected #${orderNumber} | TD SYNNEX SURFACE
@@ -2292,7 +2292,7 @@ Best regards,
                         <!-- HEADER -->
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Order Returned #${orderNumber} | TD SYNNEX SURFACE
@@ -2701,7 +2701,7 @@ Best regards,
                         <!-- HEADER -->
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Order Shipped #${orderNumber} | TD SYNNEX SURFACE
@@ -3209,7 +3209,7 @@ Best regards,
                         <!-- HEADER -->
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     25-Day Return Reminder – Order #${orderNumber} (${companyName}) | TD SYNNEX SURFACE
@@ -3683,7 +3683,7 @@ Best regards,
                         <!-- HEADER -->
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Return Reminder Notification Order #${orderNumber} (${companyName}) | TD SYNNEX
@@ -3995,7 +3995,7 @@ Best regards,
                             <!-- HEADER -->
                             <tr>
                                 <td style="background:#0A4647; padding:30px; text-align:center;">
-                                    <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                    <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                         style="max-width:400px; margin-bottom:24px; width:220px;" />
                                     <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                         Overdue Reminder Notification Order #${orderNumber} (${companyName}) | TD SYNNEX
@@ -4389,7 +4389,7 @@ Best regards,
                         <!-- HEADER -->
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Report a Win | TD SYNNEX SURFACE
@@ -4541,7 +4541,7 @@ Best regards,
                         <!-- HEADER -->
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Product Subscribed | TD SYNNEX SURFACE
@@ -4620,7 +4620,7 @@ Best regards,
                         <!-- HEADER -->
                         <tr>
                             <td style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Product Back In Stock | TD SYNNEX SURFACE
@@ -4692,7 +4692,7 @@ Best regards,
                         <tr>
                             <td
                                 style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Account Approved | TD SYNNEX SURFACE
@@ -4718,7 +4718,7 @@ Best regards,
 
                                 <!-- CTA Button -->
                                 <div style="text-align:center; margin:35px 0;">
-                                    <a href="https://tdsynnex-surface.com/login"
+                                    <a href="https://tdsynnex.vercel.app/login"
                                         style="background:#0A4647; color:#ffffff; padding:14px 36px; text-decoration:none; border-radius:6px; font-size:16px; font-weight:bold; display:inline-block;">
                                         Login to Portal
                                     </a>
@@ -4767,7 +4767,7 @@ Best regards,
                         <tr>
                             <td
                                 style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; margin-bottom:24px; width:220px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Account Update | TD SYNNEX SURFACE
@@ -4841,7 +4841,7 @@ Best regards,
                         <tr>
                             <td
                                 style="background:#0A4647; padding:30px; text-align:center;">
-                                <img src="https://tdsynnex-surface.com/logo-w.png" alt="TD SYNNEX Logo"
+                                <img src="https://tdsynnex.vercel.app/logo-w.png" alt="TD SYNNEX Logo"
                                     style="max-width:400px; width:220px;  margin-bottom:24px;" />
                                 <h1 style="color:#ffffff; margin:0; font-size:26px;">
                                     Reset Your Password
