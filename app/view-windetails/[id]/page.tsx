@@ -20,7 +20,7 @@ export type Win = {
     isOther: boolean
     otherDesc: string
     reseller: string
-    orderHash: string // Yehi field aap use kar rahe hain
+    orderHash: string
     resellerAccount: string
     customerName: string
     units: number
@@ -28,9 +28,12 @@ export type Win = {
     purchaseType: string
     purchaseDate: string
     notes: string
-    product_id?: string | string[] // Can be string or array
+    product_id?: string
     order_id?: string
-    products?: any
+    product?: {
+        product_name?: string
+        sku?: string
+    } | null
     orders?: any
 }
 
@@ -78,21 +81,26 @@ export default function WinDetailsPage() {
             // First, fetch the win record with LEFT JOIN on orders
             const { data: winData, error: winError } = await supabase
                 .from('wins')
-                .select(`
-                    *,
-                    orders:order_id (
-                        order_no,
-                        company_name,
-                        reseller,
-                        crm_account,
-                        order_date
-                    )
-                `)
+                .select('*, orders:order_id ( order_no, company_name, reseller, crm_account, order_date )')
                 .eq('id', winId)
                 .single();
 
             if (winError) {
                 throw winError;
+            }
+
+            let productRecord: { product_name?: string; sku?: string } | null = null;
+
+            if (winData?.product_id) {
+                const { data: product, error: productError } = await supabase
+                    .from('products')
+                    .select('product_name, sku')
+                    .eq('id', winData.product_id)
+                    .single();
+
+                if (!productError && product) {
+                    productRecord = product;
+                }
             }
 
             if (winData) {
@@ -121,24 +129,24 @@ export default function WinDetailsPage() {
                 }
 
                 // Fetch products if productIds exist
-                let productsData = null;
-                if (productIds.length > 0) {
-                    const { data: products, error: productsError } = await supabase
-                        .from('products')
-                        .select('id, product_name, sku')
-                        .in('id', productIds);
+                // let productsData = null;
+                // if (productIds.length > 0) {
+                //     const { data: products, error: productsError } = await supabase
+                //         .from('products')
+                //         .select('id, product_name, sku')
+                //         .in('id', productIds);
 
-                    if (!productsError && products) {
-                        productsData = products;
-                    }
-                }
+                //     if (!productsError && products) {
+                //         productsData = products;
+                //     }
+                // }
 
                 // Combine all data
                 const combinedData = {
-                    ...winRecord,
-                    products: productsData,
-                    // orders already included in the join
+                    ...winData,
+                    product: productRecord, // ab win.product safe hai
                 };
+                setWin(combinedData);
 
                 setWin(combinedData);
             }
@@ -228,24 +236,6 @@ export default function WinDetailsPage() {
         return new Intl.NumberFormat('en-US').format(num);
     };
 
-    // Helper to get device names - UPDATED for multiple products
-    const getDeviceNames = () => {
-        // If isOther is true, show otherDesc
-        if (win.isOther && win.otherDesc) {
-            return win.otherDesc;
-        }
-
-        // For multiple products
-        if (win.products && Array.isArray(win.products) && win.products.length > 0) {
-            if (win.products.length === 1) {
-                return win.products[0]?.sku || win.products[0]?.sku || "Unknown Product";
-            } else {
-                return win.products.map((p: any) => p.sku || p.sku || "Unknown Product").join(", ");
-            }
-        }
-
-        return "-";
-    };
 
     // Helper to get Synnex order number - FIXED: Use orderHash instead of synnexOrderHash
     const getSynnexOrderNumber = () => {
@@ -308,37 +298,20 @@ export default function WinDetailsPage() {
                         </TableRow>
 
                         {/* Device Name */}
-                        {/* Device Name */}
                         <TableRow>
                             <TableCell className="w-[65%] font-semibold">
-                                {!win.isOther ? `Device Name${win.products && Array.isArray(win.products) && win.products.length > 1 ? 's' : ''}` : 'Device Part #'}
+                                {!win.isOther ? "Device Name" : "Device Part #"}
                             </TableCell>
+
                             <TableCell className="w-[35%] border-l">
-                                {win.products && Array.isArray(win.products) && win.products.length > 0 ? (
-                                    win.products.length === 1 ? (
-                                        <div>{win.products[0]?.sku || "Unknown Product"}</div>
-                                    ) : (
-                                        <div>
-                                            {win.products.map((product: any, index: number) => (
-                                                <div key={product.id || index} className="mb-1">
-                                                    {product.sku || "Unknown Product"}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )
+                                {win.product ? (
+                                    `${win.product.product_name} (${win.product.sku})`
                                 ) : (
-                                    <div>{win.otherDesc || "Unknown Product"}</div>
+                                    win.otherDesc || "Unknown Product"
                                 )}
                             </TableCell>
                         </TableRow>
 
-                        {/* Product Type */}
-                        {/* <TableRow>
-                            <TableCell className="w-[65%] font-semibold">Product Type</TableCell>
-                            <TableCell className="w-[35%] border-l">
-                                {win.isOther ? "Other Product" : "Standard Product"}
-                            </TableCell>
-                        </TableRow> */}
 
                         {/* Reseller Name */}
                         <TableRow>
@@ -420,32 +393,6 @@ export default function WinDetailsPage() {
                     </TableBody>
                 </Table>
 
-                {/* Product Details Table (for multiple products) */}
-                {win.products && Array.isArray(win.products) && win.products.length > 1 && (
-                    <div className="mt-8">
-                        <h2 className="text-xl font-bold mb-4">Product Details</h2>
-                        <Table className="border">
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }}>
-                                        Product Name
-                                    </TableHead>
-                                    <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }}>
-                                        SKU
-                                    </TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {win.products.map((product: any, index: number) => (
-                                    <TableRow key={product.id || index}>
-                                        <TableCell>{product.product_name || "Unknown Product"}</TableCell>
-                                        <TableCell>{product.sku || "-"}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                )}
             </div>
         </div>
     )
