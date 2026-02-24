@@ -1,26 +1,26 @@
-export const UserRegisterEmail = ["farzam.altaf@works360.com","farzamaltaf888@gmail.com"];
+export const UserRegisterEmail = ["farzam.altaf@works360.com","faizan@works360.com", "support@works360.com"];
 
-export const UserRegCC = ["farzam.altaf@works360.com","farzamaltaf888@gmail.com"];
+export const UserRegCC = ["farzam.altaf@works360.com","faizan@works360.com", "support@works360.com"];
 
-export const AprovedUserCC = ["farzam.altaf@works360.com","farzamaltaf888@gmail.com"];
+export const AprovedUserCC = ["farzam.altaf@works360.com","faizan@works360.com", "support@works360.com"];
 
-export const NewOrderEmail = ["farzam.altaf@works360.com","farzamaltaf888@gmail.com"];
+export const NewOrderEmail = ["farzam.altaf@works360.com","faizan@works360.com", "support@works360.com"];
 
-export const ProcessingEmail = ["farzam.altaf@works360.com","farzamaltaf888@gmail.com"];
+export const ProcessingEmail = ["farzam.altaf@works360.com","faizan@works360.com", "support@works360.com"];
 
-export const ApprovedEmail = ["farzam.altaf@works360.com","farzamaltaf888@gmail.com"];
+export const ApprovedEmail = ["farzam.altaf@works360.com","faizan@works360.com", "support@works360.com"];
 
-export const ShippedEmail = ["farzam.altaf@works360.com","farzamaltaf888@gmail.com"];
+export const ShippedEmail = ["farzam.altaf@works360.com","faizan@works360.com", "support@works360.com"];
 
-export const ReturnedEmail = ["farzam.altaf@works360.com","farzamaltaf888@gmail.com"];
+export const ReturnedEmail = ["farzam.altaf@works360.com","faizan@works360.com", "support@works360.com"];
 
-export const ReturnReminderEmail = ["farzam.altaf@works360.com","farzamaltaf888@gmail.com"];
+export const ReturnReminderEmail = ["farzam.altaf@works360.com","faizan@works360.com", "support@works360.com"];
 
-export const OverDueReminderEmail = ["farzam.altaf@works360.com","farzamaltaf888@gmail.com"];
+export const OverDueReminderEmail = ["farzam.altaf@works360.com","faizan@works360.com", "support@works360.com"];
 
-export const WaitlistEmailCC = ["farzam.altaf@works360.com","farzamaltaf888@gmail.com"];
+export const WaitlistEmailCC = ["farzam.altaf@works360.com","faizan@works360.com", "support@works360.com"];
 
-export const BackInStockCCEmail = ["farzam.altaf@works360.com","farzamaltaf888@gmail.com"];
+export const BackInStockCCEmail = ["farzam.altaf@works360.com","faizan@works360.com", "support@works360.com"];
 
 // Live Emails
 
