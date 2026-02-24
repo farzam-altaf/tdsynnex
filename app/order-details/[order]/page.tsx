@@ -260,6 +260,7 @@ export default function Page() {
             const { data, error } = await supabase
                 .from('products')
                 .select('id, product_name, sku')
+                .eq('post_status', 'Publish')
                 .order('product_name');
 
             if (error) throw error;
@@ -422,7 +423,7 @@ export default function Page() {
                                     <SelectContent>
                                         {allProducts.map(product => (
                                             <SelectItem key={product.id} value={product.id}>
-                                                {product.product_name}
+                                                {product.product_name} ({product.sku})
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -1379,12 +1380,35 @@ export default function Page() {
             }
 
             if (field === "order_status" && editedValue === process.env.NEXT_PUBLIC_STATUS_SHIPPED) {
-                if (!order.tracking || !order.tracking_link || !order.return_tracking || !order.return_tracking_link) {
+                // Check tracking details
+                const missingTrackingFields = [];
+                if (!order.tracking) missingTrackingFields.push('Tracking Number');
+                if (!order.tracking_link) missingTrackingFields.push('Tracking Link');
+                if (!order.return_tracking) missingTrackingFields.push('Return Tracking Number');
+                if (!order.return_tracking_link) missingTrackingFields.push('Return Tracking Link');
+
+                // NEW: Check return label
+                const missingReturnLabel = !order.return_label;
+
+                if (missingTrackingFields.length > 0 || missingReturnLabel) {
+                    let errorMessage = "";
+
+                    if (missingTrackingFields.length > 0) {
+                        errorMessage += `Please fill: ${missingTrackingFields.join(', ')}`;
+                    }
+
+                    if (missingReturnLabel) {
+                        if (errorMessage) errorMessage += " and ";
+                        errorMessage += `<span style="color: red; font-weight: bold;">Upload Return Label</span>`;
+                    }
+
+                    errorMessage += " before marking as Shipped";
+
                     await logActivity({
                         type: 'validation',
                         level: 'warning',
-                        action: 'order_shipped_missing_tracking',
-                        message: `Cannot mark order ${order.order_no} as shipped - missing tracking details`,
+                        action: 'order_shipped_missing_requirements',
+                        message: `Cannot mark order ${order.order_no} as shipped - missing requirements`,
                         userId: profile?.id || null,
                         orderId: order.id,
                         details: {
@@ -1393,15 +1417,21 @@ export default function Page() {
                                 tracking: !order.tracking,
                                 tracking_link: !order.tracking_link,
                                 return_tracking: !order.return_tracking,
-                                return_tracking_link: !order.return_tracking_link
+                                return_tracking_link: !order.return_tracking_link,
+                                return_label: !order.return_label
                             }
                         },
                         status: 'pending'
                     });
 
-                    toast.error("Please fill Tracking & Return Tracking details before marking as Shipped", {
-                        duration: 5000,
-                    });
+                    // Show HTML toast with red highlighted return label
+                    toast.error(
+                        <div dangerouslySetInnerHTML={{ __html: errorMessage }} />,
+                        {
+                            duration: 5000,
+                            style: { background: "white", color: "black", border: "1px solid #ef4444" }
+                        }
+                    );
 
                     setIsModalOpen(true);
                     setPendingStatusChange({
@@ -2654,6 +2684,9 @@ export default function Page() {
 
     // Tracking section with modal
     const renderTrackingSection = () => {
+        // Check if return label is missing
+        const isReturnLabelMissing = !order.return_label;
+
         return (
             <div className="space-y-6">
                 <div>
@@ -2761,7 +2794,22 @@ export default function Page() {
                                                             />
                                                         </div>
                                                     </div>
-                                                    <div className="flex justify-end space-x-2">
+                                                    {/* NEW: Warning message for missing return label */}
+                                                    {isReturnLabelMissing && (
+                                                        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+                                                            <div className="flex items-start">
+                                                                <span className="text-red-600 mr-2">⚠️</span>
+                                                                <div>
+                                                                    <strong className="text-red-700">Return Label Required:</strong>
+                                                                    <p className="text-red-600 text-sm mt-1">
+                                                                        After saving tracking details, please upload the Return Label below.
+                                                                        Order cannot be marked as Shipped without Return Label.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex justify-end space-x-2 pt-4">
                                                         <Button
                                                             variant="outline"
                                                             onClick={() => setIsModalOpen(false)}
@@ -2815,7 +2863,14 @@ export default function Page() {
                     <Table className="border">
                         <TableHeader>
                             <TableRow>
-                                <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }} colSpan={2}>Return Label</TableHead>
+                                <TableHead style={{ backgroundColor: '#0A4647', color: 'white' }} colSpan={2}>
+                                    Return Label
+                                    {isReturnLabelMissing && (
+                                        <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded">
+                                            Required
+                                        </span>
+                                    )}
+                                </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>

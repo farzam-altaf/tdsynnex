@@ -977,10 +977,13 @@ export default function Page() {
                                 <ProductsGridSkeleton />
                             ) : filteredProducts.length > 0 ? (
                                 <>
-                                    <div className="flex items-center justify-between sm:my-10 my-5">
+                                    <div className={`flex items-center sm:my-10 my-5 ${!(admin === profile?.role || shopManager === profile?.role) ? 'justify-center' : 'justify-between'}`}>
                                         <div className="text-3xl font-semibold">
-                                            <span className="capitalize"></span>
+                                            <span className="capitalize">
+                                                {slug === "notebooks" ? "Notebooks" : slug === "2in1s" ? "2in1s" : "Devices"}
+                                            </span>
                                         </div>
+
                                         {(admin === profile?.role || shopManager === profile?.role) && (
                                             <div className="">
                                                 <div className="flex justify-center md:justify-start">

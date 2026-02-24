@@ -243,7 +243,7 @@ export default function Page() {
       setConfirmPassword("");
       setReseller("");
 
-      toast.success("Registration successful! Please wait for admin approval.", {
+      toast.success("Registration successful! Please wait for PM approval.", {
         style: { background: "black", color: "white" }
       });
 

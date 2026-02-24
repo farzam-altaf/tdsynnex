@@ -389,6 +389,10 @@ export default function Navbar() {
       ...publicNavigation,
       // Add 'Report a Win' for all logged in users EXCEPT shopManager
       ...(profile?.role !== shopManager ? [{ name: 'Report a Win', href: '/wins' }] : []),
+      ...(profile?.role === shopManager ? [
+        { name: 'Orders', href: '/order-details' },
+        { name: 'Live Inventory', href: '/live+inventory' }
+      ] : []),
       // Add '360Dashboard' only for admin and superSubscriber
       ...((profile?.role === admin || profile?.role === superSubscriber)
         ? [{ name: '360Dashboard', href: '/360dashboard' }]

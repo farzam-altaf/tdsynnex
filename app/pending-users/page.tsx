@@ -351,7 +351,7 @@ export default function Page() {
         try {
             const template = emailTemplates.rejectedUserEmail(userEmail);
 
-            
+
 
             const result = await sendEmail({
                 to: userEmail,
@@ -502,26 +502,6 @@ export default function Page() {
             cell: ({ row }) => <div className="text-left ps-2 lowercase">{row.getValue("email")}</div>,
         },
         {
-            accessorKey: "isVerified",
-            header: ({ column }) => {
-                return (
-                    <div className="text-left ps-2 font-medium">Approved</div>
-                )
-            },
-            cell: ({ row }) => {
-                const isVerified = row.getValue("isVerified") as boolean;
-                return (
-                    <div className="text-left ps-2 capitalize">
-                        {isVerified ? (
-                            <span className="text-green-600 font-medium">Yes</span>
-                        ) : (
-                            <span className="text-red-600 font-medium">No</span>
-                        )}
-                    </div>
-                )
-            },
-        },
-        {
             accessorKey: "registered_at",
             header: ({ column }) => {
                 return (
@@ -567,51 +547,24 @@ export default function Page() {
                                 </TooltipContent>
                             </Tooltip>
 
-                            {/* Delete Button with Alert Dialog */}
-                            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <AlertDialogTrigger asChild>
-                                            <Button
-                                                className="text-red-600 hover:bg-red-600 border hover:text-white border-red-600 bg-white cursor-pointer"
-                                                size="sm"
-                                            >
-                                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            </Button>
-                                        </AlertDialogTrigger>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>Delete User</p>
-                                    </TooltipContent>
-                                </Tooltip>
-
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            This action cannot be undone. This will permanently delete the user
-                                            <span className="font-semibold text-red-600 block mt-2">
-                                                {user.email}
-                                            </span>
-                                            and remove their data from our servers.
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
-                                        <AlertDialogAction
-                                            onClick={() => {
-                                                setIsDeleteDialogOpen(false);
-                                                handleDeleteUser(user.id, user.email);
-                                            }}
-                                            className="bg-red-600 hover:bg-red-700 text-white cursor-pointer"
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <AlertDialogTrigger asChild>
+                                        <Button
+                                            onClick={() => handleDeleteUser(user.id, user.email)}
+                                            className="text-red-600 hover:bg-red-600 border hover:text-white border-red-600 bg-white cursor-pointer"
+                                            size="sm"
                                         >
-                                            Delete
-                                        </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
+                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Delete User</p>
+                                </TooltipContent>
+                            </Tooltip>
                         </div>
                     </TooltipProvider>
                 )
