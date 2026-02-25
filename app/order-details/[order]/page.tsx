@@ -261,6 +261,7 @@ export default function Page() {
                 .from('products')
                 .select('id, product_name, sku')
                 .eq('post_status', 'Publish')
+                .neq('stock_quantity', 0)
                 .order('product_name');
 
             if (error) throw error;
@@ -1954,7 +1955,7 @@ export default function Page() {
 
             await sendEmail({
                 to: orderData.order_by_user?.email,
-                cc: "support@works360.com",
+                cc: "support@tdsynnex-surface.com, melissaabney@microsoft.com",
                 subject: template.subject,
                 text: template.text,
                 html: template.html,
@@ -3200,8 +3201,11 @@ export default function Page() {
 
                 <div className="lg:w-[28%] space-y-6">
                     <div>
-                        {!isSubscriber && order.order_status === "Awaiting Approval" && (
+                        {!isSubscriber && !isSMRole && order.order_status === "Awaiting Approval" && (
                             <div className="mb-40"></div>
+                        )}
+                        {isSMRole && order.order_status === "Awaiting Approval" && (
+                            <div className="mb-28"></div>
                         )}
                         <Table className="border">
                             <TableHeader>

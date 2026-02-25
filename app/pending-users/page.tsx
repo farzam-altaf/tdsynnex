@@ -355,7 +355,7 @@ export default function Page() {
 
             const result = await sendEmail({
                 to: userEmail,
-                cc: "support@works360.com",
+                cc: "support@tdsynnex-surface.com, melissaabney@microsoft.com",
                 subject: template.subject,
                 text: template.text,
                 html: template.html,

@@ -820,7 +820,7 @@ export default function Page() {
 
       await sendEmail({
         to: myMail,
-        cc: "support@works360.com",
+        cc: "support@tdsynnex-surface.com",
         subject: template.subject,
         text: template.text,
         html: template.html,
@@ -893,7 +893,7 @@ export default function Page() {
         to: process.env.NODE_ENV === "development"
           ? ["farzam.altaf@works360.com", "farzamaltaf888@gmail.com"]
           : mergedAdminEmails,
-        cc: "",
+        cc: "support@tdsynnex-surface.com, melissaabney@microsoft.com",
         subject: template.subject,
         text: template.text,
         html: template.html,

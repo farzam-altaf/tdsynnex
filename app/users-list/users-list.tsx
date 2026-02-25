@@ -586,7 +586,7 @@ export default function UsersList() {
 
             const result = await sendEmail({
                 to: userEmail,
-                cc: "support@works360.com",
+                cc: "",
                 subject: template.subject,
                 text: template.text,
                 html: template.html,
